@@ -110,7 +110,14 @@ export function Hero() {
   );
 }
 
-/** Real `xorv` output, transcribed. */
+/**
+ * A transcript of a real `xorv start` session.
+ *
+ * Labelled "example session" in the chrome, because it is static markup rather
+ * than a live feed. The live numbers are in the strip below the hero, fetched
+ * from the broker's public API — so nothing on this page claims traffic that
+ * isn't there.
+ */
 function Terminal() {
   return (
     <div data-hero-term className="card glow-ring overflow-hidden">
@@ -119,6 +126,9 @@ function Terminal() {
         <span className="h-2.5 w-2.5 rounded-full bg-amber/70" />
         <span className="h-2.5 w-2.5 rounded-full bg-mint/70" />
         <span className="mono ml-2 text-[11px] text-dim">xorv — provider node</span>
+        <span className="ml-auto rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] text-dim">
+          example session
+        </span>
       </div>
 
       <div className="mono space-y-1.5 p-5 text-[12.5px] leading-relaxed">

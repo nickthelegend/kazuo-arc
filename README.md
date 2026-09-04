@@ -87,9 +87,11 @@ success rate, which is what the matcher sorts on.
 xorv/
 ├── packages/
 │   ├── cli/          xorv — the provider node (published to npm as `xorv`)
+│   ├── mcp/          @xorv/mcp — Xorv as an MCP server, so agents can buy capacity
 │   └── protocol/     @xorv/protocol — shared types, money math, Hedera + x402 wiring
 ├── services/
-│   └── broker/       @xorv/broker — registry, matching, x402 gating, self-hosted facilitator
+│   └── broker/       @xorv/broker — registry, matching, x402 gating, self-hosted
+│                     facilitator, HCS audit trail, SQLite, metrics
 ├── apps/
 │   ├── app/          xorv-app — the job board (Next.js)
 │   └── landing/      xorv-landing — marketing site (Next.js + GSAP)
@@ -153,10 +155,17 @@ The provider node. Full docs in [`packages/cli/README.md`](packages/cli/README.m
 | `xorv init` | Interactive setup — probes your agent CLIs, generates or imports a payout account |
 | `xorv start` | Go live: register, hold the control channel, run jobs, live earnings dashboard |
 | `xorv run "…"` | The buyer side — post a job and pay for it over x402 |
-| `xorv status` | Who's live on the network, and what they charge |
-| `xorv earnings` | What this machine has made, with sparklines and on-chain balance |
+| `xorv test` | Run a real job through each adapter **locally and free** — proves the node will actually earn |
 | `xorv doctor` | Every reason this node might not be earning, each with the fix |
+| `xorv earnings` | What this machine has made, with sparklines and on-chain balance |
+| `xorv jobs` | Jobs this node has run |
+| `xorv price` | Show or change what this node charges |
+| `xorv status` | Who's live on the network, and what they charge |
+| `xorv pause` / `resume` | Stop taking new jobs without going offline |
+| `xorv cancel <job>` | Stop a running job |
 | `xorv wallet` | Balances, USDC association, key rotation |
+| `xorv logs` / `config` | Local job log; current configuration (key redacted) |
+| `xorv completion` | Shell completions for bash, zsh, fish |
 
 ### Adapters
 
@@ -166,6 +175,70 @@ because it never calls an API on your behalf.
 `claude-code` · `codex` · `grok` · `opencode` · `openai-compatible` (Ollama, LM Studio, vLLM,
 OpenRouter…) · `echo` (built in, always works — exercises the whole payment path with nothing
 installed)
+
+---
+
+## For agents: the MCP server
+
+This is the part x402 was actually invented for. An agent that needs work done
+finds capacity, pays for it, and gets the result — no human, no account, no card.
+
+```bash
+claude mcp add xorv -- npx -y @xorv/mcp
+```
+
+```bash
+XORV_PAYER_ID=0.0.xxxxx    # the account the agent spends from
+XORV_PAYER_KEY=...
+XORV_MAX_USD=0.05          # hard ceiling per call, enforced client-side too
+```
+
+Five tools: `xorv_list_providers`, `xorv_network_status`, `xorv_quote`,
+`xorv_run_job`, `xorv_get_job`. Only `run_job` spends, and it refuses anything
+over the ceiling — a model that can spend without a bound is a model that can
+empty an account through a loop it didn't mean to write.
+
+A real call returns the answer plus its proof:
+
+```
+Reply with a haiku about paying for compute.
+> …
+
+---
+Paid $0.0010 to nivesh-macbook (0.0.9848438)
+Transaction: https://hashscan.io/testnet/transaction/0.0.9842030-1785476993-771264136
+HCS receipt: https://hashscan.io/testnet/transaction/0.0.9842030-1785477001-566190167
+```
+
+---
+
+## Tests
+
+```bash
+pnpm test    # 195 tests, no credentials, no network
+```
+
+Unit tests for money math, key parsing, the matcher and the terminal layout —
+plus a **full-lifecycle integration suite** that boots a real HTTP server, the
+real Hono app, the real x402 resource server and the real WebSocket hub, and
+drives a fake provider through quote → pay → dispatch → stream → result →
+receipt. Only the two pieces that touch Hedera are stubbed.
+
+They earn their keep: writing them turned up five real bugs, including a stale
+provider status being read by the guard that decides whether a quoted node is
+still alive enough to be paid.
+
+---
+
+## Deploying the broker
+
+```bash
+docker compose up -d
+```
+
+Persists to a volume, health-checks itself, and runs as a non-root user. Set
+`XORV_TRUST_PROXY=1` behind a reverse proxy so rate limiting sees real client
+IPs. `/metrics` speaks Prometheus.
 
 ---
 
@@ -243,6 +316,18 @@ A few decisions that aren't obvious:
   frozen by the *payer's* client; submitting one mutates the submitting client's internal state, and
   reusing it makes every payment after the first fail deep inside the SDK. This one cost real
   debugging time.
+
+---
+
+## Documentation
+
+| | |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | How it's put together, and why the awkward parts are that way |
+| [SECURITY.md](SECURITY.md) | The provider risk stated plainly, key handling, and known limitations |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Setup, and how to write an adapter |
+| [CHANGELOG.md](CHANGELOG.md) | What shipped |
+| [packages/cli/README.md](packages/cli/README.md) | Full CLI reference |
 
 ---
 

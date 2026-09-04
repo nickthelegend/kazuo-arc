@@ -1,4 +1,8 @@
 export const REPO_URL = "https://github.com/nickthelegend/xorv";
+/** Public broker the live-stats strip reads. Optional: the page works without it. */
+export const BROKER_URL = (
+  process.env.NEXT_PUBLIC_XORV_BROKER_URL ?? "http://localhost:8402"
+).replace(/\/+$/, "");
 export const APP_URL = process.env.NEXT_PUBLIC_XORV_APP_URL ?? "http://localhost:3002";
 export const LOOM_URL = "https://loompad.tech";
 export const X402_URL = "https://x402.org";
