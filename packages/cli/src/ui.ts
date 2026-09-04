@@ -180,23 +180,76 @@ export function box(lines: string[], opts: BoxOptions = {}): string {
   return [top, ...body, edge("╰" + "─".repeat(inner + 2) + "╯")].join("\n");
 }
 
-/** Wrap on word boundaries, preserving colour by only breaking on spaces. */
+/**
+ * Wrap on word boundaries, hard-breaking anything that has none.
+ *
+ * The hard break is not a nicety. Boxes are drawn by padding each line to a
+ * fixed width, so a single token wider than the box — a HashScan URL, a
+ * transaction id, a sha-256 — pushes the right-hand border out and the frame
+ * comes apart. Preferring word boundaries keeps prose readable; falling back to
+ * a character break keeps the geometry true regardless of the content.
+ */
 export function wrap(text: string, max: number): string[] {
+  if (max <= 0) return [text];
   if (visibleLength(text) <= max) return [text];
-  const words = text.split(" ");
+
   const lines: string[] = [];
   let line = "";
-  for (const word of words) {
+
+  const flush = (): void => {
+    if (line) lines.push(line);
+    line = "";
+  };
+
+  for (const word of text.split(" ")) {
+    // A token that can never fit gets split across as many rows as it needs.
+    if (visibleLength(word) > max) {
+      flush();
+      for (const chunk of hardBreak(word, max)) lines.push(chunk);
+      continue;
+    }
     const candidate = line ? `${line} ${word}` : word;
     if (visibleLength(candidate) > max && line) {
-      lines.push(line);
+      flush();
       line = word;
     } else {
       line = candidate;
     }
   }
-  if (line) lines.push(line);
-  return lines;
+  flush();
+  return lines.length > 0 ? lines : [""];
+}
+
+/**
+ * Split a token into `max`-wide pieces, counting only visible characters.
+ *
+ * Walks the string rather than slicing it, so an ANSI escape rides along with
+ * the character it colours instead of being counted as width or cut in half.
+ */
+function hardBreak(token: string, max: number): string[] {
+  const pieces: string[] = [];
+  let piece = "";
+  let visible = 0;
+  let i = 0;
+
+  while (i < token.length) {
+    const escape = /^\[[0-9;]*m/.exec(token.slice(i));
+    if (escape) {
+      piece += escape[0];
+      i += escape[0].length;
+      continue;
+    }
+    piece += token[i];
+    visible += 1;
+    i += 1;
+    if (visible === max) {
+      pieces.push(piece);
+      piece = "";
+      visible = 0;
+    }
+  }
+  if (piece) pieces.push(piece);
+  return pieces;
 }
 
 /** Aligned key/value block: `label   value`. */

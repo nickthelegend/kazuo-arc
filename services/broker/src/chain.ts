@@ -26,7 +26,28 @@ export interface PublishResult {
   sequenceNumber?: string;
 }
 
-export class Chain {
+/**
+ * What the HTTP layer actually needs from the chain.
+ *
+ * Stated as an interface so the app can be booted against a stub in tests. The
+ * alternative — reaching for the real `Chain` — means every integration test
+ * needs Hedera credentials, a network round-trip and real HBAR, which is a good
+ * way to end up with no integration tests at all.
+ */
+export interface ChainLike {
+  readonly network: string;
+  readonly operatorId: string;
+  readonly settlementClient: Client;
+  describeTopics(): Record<string, { id: string; url: string } | null>;
+  counts(): { registry: number; heartbeat: number; receipts: number };
+  lastPublishError(): string | null;
+  publishRegistration(provider: Provider): Promise<PublishResult | null>;
+  publishHeartbeat(data: HcsHeartbeat): Promise<PublishResult | null>;
+  publishReceipt(data: HcsJobReceipt): Promise<PublishResult | null>;
+  close(): void;
+}
+
+export class Chain implements ChainLike {
   /** Client for the audit trail (HCS writes). */
   readonly client: Client;
   /**

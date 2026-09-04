@@ -25,6 +25,7 @@ import { paymentMiddleware } from "@x402/hono";
 import { x402ResourceServer } from "@x402/core/server";
 import type { RoutesConfig } from "@x402/core/server";
 import type { HTTPRequestContext } from "@x402/core/http";
+import type { FacilitatorClient } from "@x402/core/server";
 import type { Network } from "@x402/core/types";
 import { ExactHederaScheme } from "@x402/hedera/exact/server";
 import {
@@ -55,7 +56,7 @@ import {
   type RegisterRequest,
 } from "@xorv/protocol";
 import type { BrokerConfig } from "./config.js";
-import type { Chain } from "./chain.js";
+import type { ChainLike } from "./chain.js";
 import type { Hub } from "./hub.js";
 import { JobStore, type Quote } from "./jobs.js";
 import { Registry } from "./registry.js";
@@ -65,11 +66,18 @@ const HEARTBEAT_PUBLISH_EVERY = 20;
 
 export interface AppDeps {
   config: BrokerConfig;
-  chain: Chain;
+  chain: ChainLike;
   registry: Registry;
   jobs: JobStore;
   /** Set after the HTTP server exists, since the hub needs it to upgrade. */
   getHub: () => Hub | null;
+  /**
+   * Override the facilitator.
+   *
+   * Production builds one from config; tests pass a stub so the whole HTTP
+   * path can be exercised without Hedera credentials or a real transfer.
+   */
+  facilitator?: FacilitatorClient;
 }
 
 export function createApp(deps: AppDeps) {
@@ -80,14 +88,17 @@ export function createApp(deps: AppDeps) {
   /** Jobs whose HCS receipt is already on the topic — see publishReceiptWhenReady. */
   const publishedReceipts = new Set<string>();
 
-  const { facilitator, description: facilitatorDescription, feePayer } = buildFacilitator({
-    mode: config.facilitatorMode,
-    network: config.network,
-    // Deliberately not chain.client — see Chain.settlementClient.
-    client: chain.settlementClient,
-    feePayerId: config.operatorId,
-    feePayerKey: config.operatorKey,
-  });
+  const built = deps.facilitator
+    ? { facilitator: deps.facilitator, description: "injected (test)", feePayer: config.operatorId }
+    : buildFacilitator({
+        mode: config.facilitatorMode,
+        network: config.network,
+        // Deliberately not chain.client — see Chain.settlementClient.
+        client: chain.settlementClient,
+        feePayerId: config.operatorId,
+        feePayerKey: config.operatorKey,
+      });
+  const { facilitator, description: facilitatorDescription, feePayer } = built;
 
   const x402Server = new x402ResourceServer(facilitator).register(
     "hedera:*" as Network,

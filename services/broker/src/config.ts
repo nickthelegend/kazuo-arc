@@ -28,6 +28,8 @@ export interface BrokerConfig {
   feeBps: number;
   /** "self" runs the facilitator in-process; "hosted" or a URL calls one out. */
   facilitatorMode: string;
+  /** SQLite file for durable jobs and earnings; "off" disables persistence. */
+  dbFile: string | null;
 }
 
 function required(name: string): string {
@@ -68,5 +70,6 @@ export function loadConfig(): BrokerConfig {
       .filter(Boolean),
     feeBps: Number(process.env.XORV_FEE_BPS ?? 0),
     facilitatorMode: process.env.XORV_FACILITATOR?.trim() || "self",
+    dbFile: process.env.XORV_DB?.trim() || path.resolve(here, "../../../data/xorv.db"),
   };
 }

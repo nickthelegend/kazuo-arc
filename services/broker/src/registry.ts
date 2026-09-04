@@ -20,6 +20,7 @@ import {
   newId,
 } from "@xorv/protocol";
 import { randomBytes } from "node:crypto";
+import { MemoryPersistence, type PersistedProviderStats, type Persistence } from "./store.js";
 
 export interface ProviderRecord extends Provider {
   /** Bearer token this node authenticates with. Never leaves the broker. */
@@ -41,6 +42,38 @@ export class Registry {
   private providers = new Map<string, ProviderRecord>();
   private byToken = new Map<string, string>();
   private byNodeId = new Map<string, string>();
+  private readonly persistence: Persistence;
+  /**
+   * Lifetime stats from disk, keyed by the node's stable id.
+   *
+   * Membership doesn't survive a restart — a provider is only real while it's
+   * heartbeating — but *earnings* must. An operator watching a number go up
+   * should not see it reset because we deployed.
+   */
+  private restoredStats: Map<string, PersistedProviderStats>;
+
+  constructor(persistence: Persistence = new MemoryPersistence()) {
+    this.persistence = persistence;
+    this.restoredStats = persistence.loadStats();
+  }
+
+  /** How many providers' lifetime stats came back from disk. */
+  get restoredStatsCount(): number {
+    return this.restoredStats.size;
+  }
+
+  private persistStats(provider: ProviderRecord): void {
+    try {
+      this.persistence.saveStats(
+        provider.nodeId,
+        provider.label,
+        provider.accountId,
+        provider.stats,
+      );
+    } catch (err) {
+      console.error("[broker] failed to persist stats:", err instanceof Error ? err.message : err);
+    }
+  }
 
   /**
    * Register, or re-register, a node.
@@ -70,13 +103,15 @@ export class Registry {
       region: req.region ?? null,
       // Earnings and job counts belong to the operator, not to a process
       // lifetime — a restart must not zero them.
-      stats: existing?.stats ?? {
-        jobsCompleted: 0,
-        jobsFailed: 0,
-        earnedUsdcMicros: 0,
-        earnedTinybars: 0,
-        avgDurationMs: 0,
-      },
+      stats:
+        existing?.stats ??
+        stripKeys(this.restoredStats.get(req.nodeId)) ?? {
+          jobsCompleted: 0,
+          jobsFailed: 0,
+          earnedUsdcMicros: 0,
+          earnedTinybars: 0,
+          avgDurationMs: 0,
+        },
       token: existing?.token ?? randomBytes(24).toString("base64url"),
       available: Object.fromEntries(req.capabilities.map((c) => [c.id, true])),
       uptimeSeconds: 0,
@@ -90,13 +125,25 @@ export class Registry {
     return record;
   }
 
+  /**
+   * Look up a provider, with its status recomputed.
+   *
+   * Status is a function of the clock, not a stored fact — it is only ever
+   * correct at the moment you ask. Returning the record without re-deriving it
+   * handed callers a stale value, and one of those callers is the guard that
+   * decides whether a quoted provider is still alive enough to be paid. A node
+   * that had gone silent could still be sold.
+   */
   get(id: string): ProviderRecord | undefined {
-    return this.providers.get(id);
+    const provider = this.providers.get(id);
+    if (!provider) return undefined;
+    provider.status = deriveStatus(provider);
+    return provider;
   }
 
   byAuthToken(token: string): ProviderRecord | undefined {
     const id = this.byToken.get(token);
-    return id ? this.providers.get(id) : undefined;
+    return id ? this.get(id) : undefined;
   }
 
   heartbeat(
@@ -192,6 +239,7 @@ export class Registry {
     } else {
       provider.stats.jobsFailed += 1;
     }
+    this.persistStats(provider);
   }
 
   /** Drop providers that have been silent long enough to be gone for good. */
@@ -232,4 +280,12 @@ function successScore(provider: ProviderRecord): number {
   const total = jobsCompleted + jobsFailed;
   if (total === 0) return 0.5;
   return jobsCompleted / total;
+}
+
+
+/** Drop the identity columns, leaving just the ProviderStats shape. */
+function stripKeys(row: PersistedProviderStats | undefined) {
+  if (!row) return undefined;
+  const { nodeId: _n, label: _l, accountId: _a, ...stats } = row;
+  return stats;
 }

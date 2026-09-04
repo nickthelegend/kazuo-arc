@@ -8,6 +8,7 @@
  * matcher ran twice, a poster could be quoted one node and pay another.
  */
 
+import { MemoryPersistence, type Persistence } from "./store.js";
 import {
   JOB_TIMEOUT_MS,
   QUOTE_TTL_SECONDS,
@@ -50,6 +51,40 @@ type Listener = (job: Job, event: JobEvent | null) => void;
 export class JobStore {
   private quotes = new Map<string, Quote>();
   private jobs = new Map<string, Job>();
+  /** Monotonic insertion order, for deterministic sorting within a millisecond. */
+  private sequence = new Map<string, number>();
+  private nextSequence = 0;
+  private readonly persistence: Persistence;
+
+  /**
+   * Rehydrates from the durable store on construction.
+   *
+   * Quotes are deliberately *not* restored: a quote is a short-lived promise
+   * about a provider that is live right now, and after a restart no provider is
+   * live yet. Reviving one would let someone pay for a node that isn't there.
+   */
+  constructor(persistence: Persistence = new MemoryPersistence()) {
+    this.persistence = persistence;
+    for (const job of persistence.loadJobs().reverse()) {
+      this.jobs.set(job.id, job);
+      this.sequence.set(job.id, this.nextSequence++);
+    }
+  }
+
+  /** How many jobs came back from disk — reported at boot. */
+  get restoredCount(): number {
+    return this.jobs.size;
+  }
+
+  private persist(job: Job): void {
+    try {
+      this.persistence.saveJob(job);
+    } catch (err) {
+      // The job already ran and was already paid for; a disk problem must not
+      // turn that into a failed request.
+      console.error("[broker] failed to persist job:", err instanceof Error ? err.message : err);
+    }
+  }
   private listeners = new Set<Listener>();
   /** Per-job subscribers, for the live stream a poster watches. */
   private jobListeners = new Map<string, Set<Listener>>();
@@ -94,6 +129,7 @@ export class JobStore {
       events: [],
     };
     this.jobs.set(job.id, job);
+    this.sequence.set(job.id, this.nextSequence++);
     quote.jobId = job.id;
     this.emit(job, null);
     return job;
@@ -103,9 +139,19 @@ export class JobStore {
     return this.jobs.get(id);
   }
 
-  /** Newest first, optionally filtered by provider. */
+  /**
+   * Newest first, optionally filtered by provider.
+   *
+   * Ordered by an insertion sequence rather than by `createdAt` alone. Two jobs
+   * posted in the same millisecond are common under load and in tests, and a
+   * timestamp tie leaves the sort to fall back on Map insertion order — which
+   * is *oldest* first, the exact opposite of what the feed should show.
+   */
   list(opts: { limit?: number; providerId?: string } = {}): Job[] {
-    let all = [...this.jobs.values()].sort((a, b) => b.createdAt - a.createdAt);
+    let all = [...this.jobs.values()].sort((a, b) => {
+      const bySeq = (this.sequence.get(b.id) ?? 0) - (this.sequence.get(a.id) ?? 0);
+      return b.createdAt - a.createdAt || bySeq;
+    });
     if (opts.providerId) all = all.filter((j) => j.providerId === opts.providerId);
     return all.slice(0, opts.limit ?? 50);
   }
@@ -205,6 +251,11 @@ export class JobStore {
   }
 
   private emit(job: Job, event: JobEvent | null): void {
+    // One write-through point rather than a save() sprinkled at every call
+    // site: every mutation already funnels through emit, so persistence can't
+    // be forgotten when a new transition is added.
+    this.persist(job);
+
     for (const listener of this.listeners) {
       // One broken subscriber (a browser that navigated away mid-write) must
       // not take down the emit loop for everyone else.

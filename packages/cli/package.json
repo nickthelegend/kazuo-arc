@@ -20,7 +20,10 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
@@ -41,7 +44,9 @@
     "build": "tsc -p tsconfig.json && chmod +x dist/index.js",
     "dev": "tsx src/index.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hiero-ledger/sdk": "2.85.0",
@@ -57,6 +62,7 @@
     "@types/node": "^22.13.4",
     "@types/ws": "^8.18.1",
     "tsx": "^4.23.1",
-    "typescript": "~5.9.0"
+    "typescript": "~5.9.0",
+    "vitest": "^3.2.4"
   }
 }
