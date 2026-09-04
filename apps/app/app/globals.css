@@ -1,0 +1,206 @@
+@import "tailwindcss";
+
+/*
+  Xorv is dark-only by design, not by omission. The product is a terminal, a
+  ledger and a live network graph — surfaces that read as instruments. There is
+  no light palette to fall back to, so the tokens below are the whole system.
+*/
+:root {
+  color-scheme: dark;
+
+  --background: #07070b;
+  --surface: #0d0e14;
+  --surface-2: #12131b;
+  --foreground: #e9eaf2;
+  --muted: #8a90a6;
+  --dim: #5c6279;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
+
+  --violet: #7c5cff;
+  --indigo: #636cff;
+  --azure: #3daaff;
+  --cyan: #3ddcff;
+  --mint: #50f0c8;
+  --amber: #ffb84c;
+  --rose: #ff5a78;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-dim: var(--dim);
+  --color-border: var(--border);
+  --color-violet: var(--violet);
+  --color-azure: var(--azure);
+  --color-cyan: var(--cyan);
+  --color-mint: var(--mint);
+  --color-amber: var(--amber);
+  --color-rose: var(--rose);
+  --font-sans: var(--font-inter);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--violet) 55%, transparent);
+  color: #fff;
+}
+
+/* Scrollbar, so it belongs to the page rather than to the OS. */
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+::-webkit-scrollbar-thumb {
+  background: #22242f;
+  border-radius: 999px;
+  border: 3px solid var(--background);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2e3140;
+}
+
+/* --- type ---------------------------------------------------------------- */
+
+.grad-text {
+  background-image: linear-gradient(105deg, #ffffff 0%, #cfe4ff 45%, #8fb8ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* With tight leading, bg-clip:text rasterizes at the box bounds and shears
+     the descenders off g/y/p. Extend the paint box, cancel the layout cost. */
+  padding-bottom: 0.14em;
+  margin-bottom: -0.14em;
+}
+
+.grad-brand {
+  background-image: linear-gradient(100deg, var(--violet) 0%, var(--azure) 52%, var(--cyan) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  padding-bottom: 0.14em;
+  margin-bottom: -0.14em;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* --- surfaces ------------------------------------------------------------ */
+
+.card {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.card-hover {
+  transition:
+    border-color 0.35s ease,
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s ease;
+}
+.card-hover:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-3px);
+  box-shadow: 0 18px 50px -24px rgba(124, 92, 255, 0.45);
+}
+
+/* Hairline that fades at both ends — section separators. */
+.rule {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(255, 255, 255, 0.12) 22%,
+    rgba(255, 255, 255, 0.12) 78%,
+    transparent
+  );
+}
+
+/* --- backdrops ----------------------------------------------------------- */
+
+.grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  /* Fade the grid toward the edges so it reads as depth, not wallpaper. */
+  mask-image: radial-gradient(78% 62% at 50% 34%, #000 40%, transparent 100%);
+  -webkit-mask-image: radial-gradient(78% 62% at 50% 34%, #000 40%, transparent 100%);
+}
+
+.aurora {
+  background:
+    radial-gradient(46% 42% at 22% 18%, rgba(124, 92, 255, 0.3), transparent 68%),
+    radial-gradient(40% 38% at 78% 26%, rgba(61, 220, 255, 0.22), transparent 66%),
+    radial-gradient(52% 46% at 50% 92%, rgba(80, 240, 200, 0.12), transparent 70%);
+  filter: blur(20px);
+}
+
+.glow-ring {
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 60px -18px rgba(124, 92, 255, 0.6);
+}
+
+/* --- motion -------------------------------------------------------------- */
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee-track {
+  animation: marquee 42s linear infinite;
+  width: max-content;
+}
+.marquee-mask {
+  mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+.live-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track,
+  .live-dot {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
