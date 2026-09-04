@@ -11,6 +11,17 @@ import { earningsCommand } from "./commands/earnings.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { runCommand } from "./commands/run.js";
 import { walletAssociate, walletNew, walletShow } from "./commands/wallet.js";
+import {
+  cancelCommand,
+  completionCommand,
+  configCommand,
+  jobsCommand,
+  logsCommand,
+  pauseCommand,
+  priceCommand,
+  resumeCommand,
+  testCommand,
+} from "./commands/manage.js";
 import * as ui from "./ui.js";
 
 const VERSION = "0.1.0";
@@ -93,6 +104,62 @@ program
   .option("-y, --yes", "skip the confirmation")
   .option("--json", "machine-readable output")
   .action(wrap(runCommand));
+
+program
+  .command("jobs")
+  .description("jobs this node has run")
+  .option("--all", "every job on the network, not just this node's")
+  .option("--limit <n>", "how many to show", "20")
+  .option("--json", "machine-readable output")
+  .action(wrap(jobsCommand));
+
+program
+  .command("price [capability] [usd]")
+  .description("show or change what this node charges")
+  .option("--json", "machine-readable output")
+  .action(wrap(priceCommand));
+
+program
+  .command("test")
+  .description("run a real job through each adapter locally — free, and proves the node works")
+  .option("--prompt <text>", "prompt to test with")
+  .option("--adapter <kind>", "test only this adapter")
+  .action(wrap(testCommand));
+
+program
+  .command("logs")
+  .description("this machine's local job log")
+  .option("--limit <n>", "how many rows to read", "50")
+  .option("--json", "machine-readable output")
+  .action(wrap(logsCommand));
+
+program
+  .command("config")
+  .description("show this node's configuration")
+  .option("--path", "print the config file path and exit")
+  .option("--json", "machine-readable output (key redacted)")
+  .action(wrap(configCommand));
+
+program
+  .command("pause")
+  .description("stop taking new jobs, without going offline")
+  .action(wrap(pauseCommand));
+
+program
+  .command("resume")
+  .description("start taking jobs again")
+  .action(wrap(resumeCommand));
+
+program
+  .command("cancel <jobId>")
+  .description("stop a running job (does not refund)")
+  .option("--broker <url>", "broker to call")
+  .action(wrap(cancelCommand));
+
+program
+  .command("completion [shell]")
+  .description("print shell completions (bash, zsh, fish)")
+  .action(wrap(completionCommand));
 
 const wallet = program.command("wallet").description("the payout account");
 wallet

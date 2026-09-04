@@ -2,7 +2,7 @@
   "name": "xorv",
   "version": "0.1.0",
   "private": true,
-  "description": "Xorv — a decentralized AI capacity network. Rent out your idle Claude/Codex/Grok subscription, get paid per job in USDC over x402 on Hedera.",
+  "description": "Xorv \u2014 a decentralized AI capacity network. Rent out your idle Claude/Codex/Grok subscription, get paid per job in USDC over x402 on Hedera.",
   "license": "MIT",
   "author": "Nivesh Gajengi <niveshgajengi@gmail.com>",
   "homepage": "https://github.com/nickthelegend/xorv#readme",
@@ -19,13 +19,14 @@
     "build": "pnpm -r --filter=./packages/** --filter=./services/** build",
     "build:all": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
+    "test": "pnpm -r --filter=./packages/** --filter=./services/** test",
     "broker": "pnpm --filter @xorv/broker dev",
     "app": "pnpm --filter xorv-app dev",
     "landing": "pnpm --filter xorv-landing dev",
     "cli": "pnpm --filter xorv dev",
     "setup:hedera": "pnpm --filter @xorv/broker setup",
-    "demo": "pnpm --filter @xorv/broker demo"
+    "demo": "pnpm --filter @xorv/broker demo",
+    "mcp": "pnpm --filter @xorv/mcp dev"
   },
   "keywords": [
     "x402",

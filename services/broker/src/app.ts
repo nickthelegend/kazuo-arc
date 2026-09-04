@@ -60,6 +60,8 @@ import type { ChainLike } from "./chain.js";
 import type { Hub } from "./hub.js";
 import { JobStore, type Quote } from "./jobs.js";
 import { Registry } from "./registry.js";
+import { bodyLimit, rateLimit, requestLog } from "./guards.js";
+import { Metrics } from "./metrics.js";
 
 /** Publish one heartbeat in this many to HCS — see Chain.publishHeartbeat. */
 const HEARTBEAT_PUBLISH_EVERY = 20;
@@ -78,6 +80,7 @@ export interface AppDeps {
    * path can be exercised without Hedera credentials or a real transfer.
    */
   facilitator?: FacilitatorClient;
+  metrics?: Metrics;
 }
 
 export function createApp(deps: AppDeps) {
@@ -87,6 +90,7 @@ export function createApp(deps: AppDeps) {
   const heartbeatCounters = new Map<string, number>();
   /** Jobs whose HCS receipt is already on the topic — see publishReceiptWhenReady. */
   const publishedReceipts = new Set<string>();
+  const metrics = deps.metrics ?? new Metrics();
 
   const built = deps.facilitator
     ? { facilitator: deps.facilitator, description: "injected (test)", feePayer: config.operatorId }
@@ -126,8 +130,31 @@ export function createApp(deps: AppDeps) {
 
   app.onError((err, c) => {
     console.error("[broker]", err);
+    metrics.inc("xorv_errors_total", { path: c.req.path });
     return c.json({ error: err instanceof Error ? err.message : "internal error" }, 500);
   });
+
+  app.use("*", requestLog());
+  // 256KB is far above a 20k-char prompt and far below anything worth parsing.
+  app.use("*", bodyLimit(256 * 1024));
+
+  // Quoting is free, unauthenticated and reserves a provider — the obvious
+  // thing to abuse. The paid route needs no limit of its own: it costs money.
+  app.use("/api/quotes", rateLimit({ limit: 30, windowMs: 60_000 }));
+  app.use("/api/providers/register", rateLimit({ limit: 10, windowMs: 60_000 }));
+
+  app.get("/metrics", (c) =>
+    c.text(
+      metrics.render({
+        registry,
+        jobs,
+        chain,
+        connected: deps.getHub()?.connectedCount() ?? 0,
+      }),
+      200,
+      { "Content-Type": "text/plain; version=0.0.4; charset=utf-8" },
+    ),
+  );
 
   // Access log for the paid route only. The 402 dance is two requests that look
   // identical except for one header, and "did the client actually retry with a
@@ -314,6 +341,7 @@ export function createApp(deps: AppDeps) {
     // Fetch the rate before the quote exists, so the HBAR figure the quote
     // commits to is the same one the client is shown.
     const rate = await rates.get().catch(() => null);
+    metrics.inc('xorv_quotes_total');
     const quote = jobs.createQuote({
       request: { ...body, prompt: body.prompt, maxPriceUsdMicros: maxPrice },
       providerId: match.provider.id,
@@ -431,6 +459,7 @@ export function createApp(deps: AppDeps) {
     const quote = jobs.getQuote(c.req.param("quoteId") ?? "");
     if (!quote) return c.json({ error: "quote expired during payment" }, 409);
 
+    metrics.inc('xorv_payments_total');
     const job = jobs.createJob(quote);
     // The payment record is filled in from the settle response by the hook
     // below; dispatch does not wait on it.
@@ -510,6 +539,36 @@ export function createApp(deps: AppDeps) {
     const job = jobs.get(c.req.param("id"));
     if (!job) return c.json({ error: "not found" }, 404);
     return c.json({ job: publicJob(job, { events: true }) });
+  });
+
+  /**
+   * Stop a running job.
+   *
+   * Knowing the job id is the authorisation — ids are 72 bits of randomness and
+   * are only ever handed to the buyer who paid. That is a capability URL, and
+   * it is the same trust model as the stream endpoint next to it.
+   *
+   * This does **not** refund. Settlement already happened (see the note at the
+   * top of this file), and the provider may have already burned real quota. It
+   * stops the work and frees their slot.
+   */
+  app.post("/api/jobs/:id/cancel", (c) => {
+    const job = jobs.get(c.req.param("id"));
+    if (!job) return c.json({ error: "not found" }, 404);
+    if (job.status === "completed" || job.status === "failed") {
+      return c.json({ error: `job is already ${job.status}`, status: job.status }, 409);
+    }
+
+    const reason = "cancelled by the buyer";
+    if (job.providerId) {
+      deps.getHub()?.send(job.providerId, { type: "job.cancel", jobId: job.id, reason });
+      registry.jobFinished(job.providerId, { ok: false, durationMs: jobs.runtimeMs(job) });
+    }
+    jobs.addEvent(job.id, { at: Date.now(), kind: "status", text: reason });
+    jobs.fail(job.id, reason);
+    metrics.inc("xorv_jobs_cancelled_total");
+
+    return c.json({ ok: true, jobId: job.id, status: "failed", refunded: false });
   });
 
   /** Server-sent events: the poster watches their job run, token by token. */
@@ -700,6 +759,8 @@ export function createApp(deps: AppDeps) {
 
     const earned = earnings(job);
     registry.jobFinished(providerId, { ok: true, durationMs, ...earned });
+    metrics.inc('xorv_jobs_completed_total');
+    metrics.observe('xorv_job_duration', durationMs);
     void publishReceiptWhenReady(job.id, durationMs, true);
   }
 
@@ -764,6 +825,7 @@ export function createApp(deps: AppDeps) {
     const job = jobs.get(jobId);
     if (!job) return;
     registry.jobFinished(providerId, { ok: false, durationMs });
+    metrics.inc('xorv_jobs_failed_total');
 
     // One free retry elsewhere before the poster is told it failed.
     if (job.status !== "completed" && reassign(job)) return;

@@ -22,6 +22,7 @@ import {
 import { createAdapter } from "./adapters/index.js";
 import { makeJobDir, removeJobDir, type JobAdapter } from "./adapters/base.js";
 import { appendEarning, resolveBrokerUrl, type NodeConfig } from "./config.js";
+import { isPaused } from "./commands/manage.js";
 
 export interface RegisterResult {
   providerId: string;
@@ -88,6 +89,12 @@ export class ProviderNode extends EventEmitter<ProviderNodeEvents> {
   };
   /** Public URL of this node, when a tunnel is up. */
   publicUrl: string | null = null;
+  private wasPaused = false;
+
+  /** True while `xorv pause` is in effect. */
+  get paused(): boolean {
+    return this.wasPaused;
+  }
 
   constructor(config: NodeConfig) {
     super();
@@ -207,12 +214,21 @@ export class ProviderNode extends EventEmitter<ProviderNodeEvents> {
 
   private async heartbeat(): Promise<void> {
     if (!this.providerId || !this.token) return;
+    // A paused node stays registered and keeps heartbeating — it just stops
+    // advertising capacity, so the matcher skips it. Going offline instead
+    // would drop it out of the fleet view and look like a crash.
+    const paused = isPaused();
     const available: Record<string, boolean> = {};
     for (const capability of this.config.capabilities) {
       const running = [...this.running.values()].filter(
         (job) => job.capabilityId === capability.id,
       ).length;
-      available[capability.id] = running < Math.max(1, capability.maxConcurrency);
+      available[capability.id] =
+        !paused && running < Math.max(1, capability.maxConcurrency);
+    }
+    if (paused !== this.wasPaused) {
+      this.log(paused ? "warn" : "ok", paused ? "paused — not taking new jobs" : "resumed");
+      this.wasPaused = paused;
     }
 
     try {
