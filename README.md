@@ -181,8 +181,18 @@ Everything below is real and checkable.
 | Heartbeat topic | [`0.0.9848246`](https://hashscan.io/testnet/topic/0.0.9848246) |
 | Receipts topic | [`0.0.9848247`](https://hashscan.io/testnet/topic/0.0.9848247) |
 
-Example settled job — [transfer](https://hashscan.io/testnet/transaction/0.0.9842030-1785475156-150213566)
-· [HCS receipt](https://hashscan.io/testnet/transaction/0.0.9842030-1785475156-278830202)
+**A real Claude Code job, paid for over x402.** Prompt in, working Python out, $0.0100 moved from
+buyer to provider on-chain:
+
+| | |
+|---|---|
+| Job | `job_2eHjgDqDuMyv` · adapter `claude-code` · $0.0100 |
+| Payment | [`0.0.9842030@1785475549.131327424`](https://hashscan.io/testnet/transaction/0.0.9842030-1785475549-131327424) — buyer `0.0.9848440` → provider `0.0.9848438` |
+| HCS receipt | [`0.0.9842030@1785475558.951801626`](https://hashscan.io/testnet/transaction/0.0.9842030-1785475558-951801626) |
+
+Earlier echo-adapter settlements on the same topics:
+[transfer](https://hashscan.io/testnet/transaction/0.0.9842030-1785475156-150213566)
+· [receipt](https://hashscan.io/testnet/transaction/0.0.9842030-1785475156-278830202)
 
 Each receipt carries the job id, both accounts, the amount, the settlement transaction id and a
 **SHA-256 of the result** — so the payload stays private while the record stays verifiable.
