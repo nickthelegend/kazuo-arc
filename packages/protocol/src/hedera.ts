@@ -74,12 +74,32 @@ export function hederaReadClient(network: string): Client {
 export interface AccountBalances {
   hbarTinybars: string;
   usdcUnits: string;
+  /** True when the account has explicitly associated the USDC token. */
   usdcAssociated: boolean;
+  /**
+   * -1 means unlimited automatic association, 0 means none, n means n slots.
+   * See `canReceiveUsdc` for why this matters more than `usdcAssociated`.
+   */
+  maxAutoAssociations: number;
+  /**
+   * Can this account actually be paid in USDC right now?
+   *
+   * Explicit association is only one of two ways to say yes. Since HIP-904 an
+   * account can carry automatic association slots, and a token lands in one of
+   * those without any prior opt-in. Reporting on `usdcAssociated` alone tells an
+   * operator with unlimited auto-association that they can't be paid, and sends
+   * them to run a transaction they don't need — which is exactly the wrong
+   * advice, and costs them HBAR to follow.
+   *
+   * This mirrors what `@x402/hedera`'s preflight checks before it will settle.
+   */
+  canReceiveUsdc: boolean;
 }
 
 interface MirrorTokenBalance {
   tokens?: Array<{ token_id: string; balance: number }>;
   balance?: { balance: number; tokens?: Array<{ token_id: string; balance: number }> };
+  max_automatic_token_associations?: number;
 }
 
 /**
@@ -100,10 +120,19 @@ export async function fetchBalances(network: string, accountId: string): Promise
   const balance = body.balance;
   const tokens = balance?.tokens ?? body.tokens ?? [];
   const usdc = tokens.find((t) => t.token_id === token);
+  const maxAutoAssociations = body.max_automatic_token_associations ?? 0;
+  const associated = Boolean(usdc);
+
   return {
     hbarTinybars: String(balance?.balance ?? 0),
     usdcUnits: String(usdc?.balance ?? 0),
-    usdcAssociated: Boolean(usdc),
+    usdcAssociated: associated,
+    maxAutoAssociations,
+    // -1 is unlimited; a positive number is slots, and an account can only be
+    // holding as many tokens as it has slots used, so any positive value with
+    // room left also works.
+    canReceiveUsdc:
+      associated || maxAutoAssociations === -1 || maxAutoAssociations > tokens.length,
   };
 }
 

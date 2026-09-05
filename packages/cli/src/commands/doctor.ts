@@ -92,12 +92,22 @@ export async function doctorCommand(): Promise<void> {
         label: `balance ${hbar.toFixed(4)} ℏ · ${formatUsd(Number(balances.usdcUnits))} USDC`,
         detail: hbar === 0 ? "no HBAR needed — the facilitator pays gas for settlements" : undefined,
       });
+      // `canReceiveUsdc`, not `usdcAssociated`: an account with automatic
+      // association slots can be paid without ever opting in explicitly, and
+      // telling that operator to run `wallet associate` sends them to spend
+      // HBAR on a transaction they do not need.
       payoutChecks.push({
-        level: balances.usdcAssociated ? "ok" : "bad",
-        label: balances.usdcAssociated
-          ? `associated with USDC (${usdcTokenId(config.network)})`
-          : "NOT associated with USDC — USDC-priced jobs will be rejected before payment",
-        fix: balances.usdcAssociated ? undefined : "xorv wallet associate",
+        level: balances.canReceiveUsdc ? "ok" : "bad",
+        label: balances.canReceiveUsdc
+          ? balances.usdcAssociated
+            ? `associated with USDC (${usdcTokenId(config.network)})`
+            : `can receive USDC via automatic association (${
+                balances.maxAutoAssociations === -1
+                  ? "unlimited slots"
+                  : `${balances.maxAutoAssociations} slots`
+              })`
+          : "cannot receive USDC — no association and no automatic slots, so USDC payments will be rejected before they settle",
+        fix: balances.canReceiveUsdc ? undefined : "xorv wallet associate",
       });
     } catch (err) {
       spin.stop();

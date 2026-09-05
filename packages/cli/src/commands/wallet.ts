@@ -1,13 +1,16 @@
 /**
  * `xorv wallet` — the payout account.
  *
- * The one operation here that genuinely matters is `associate`. On Hedera an
- * account cannot receive a token it has not opted into, and the failure mode is
- * nasty for a marketplace: the payment fails at consensus with
- * TOKEN_NOT_ASSOCIATED_TO_ACCOUNT *after* the job has been matched. x402's
- * preflight catches it earlier and refuses the payment, which is better but
- * still means the provider silently gets no USDC work. So this is a one-liner,
- * and `doctor` shouts about it.
+ * The question that matters is "can this account actually be paid in USDC?",
+ * and it has two possible yeses. Explicit association is one. The other is
+ * automatic association slots (HIP-904), where a token lands without any prior
+ * opt-in — which is how every account `pnpm setup:hedera` creates is
+ * configured.
+ *
+ * Reporting only on explicit association told those operators they could not be
+ * paid and sent them to spend HBAR on a transaction they did not need. So both
+ * this and `doctor` read `canReceiveUsdc`, which mirrors what x402's own
+ * preflight checks before it will settle.
  */
 
 import { PrivateKey } from "@hiero-ledger/sdk";
@@ -18,7 +21,7 @@ import {
   hashscanAccount,
   hashscanToken,
   hederaClient,
-  isTokenAssociated,
+
   networkLabel,
   parsePrivateKey,
   usdcTokenId,
@@ -42,9 +45,11 @@ export async function walletShow(): Promise<void> {
           ["usdc", ui.c.money(formatUsd(Number(balances.usdcUnits)))],
           ["hbar", `${(Number(balances.hbarTinybars) / 1e8).toFixed(4)} ℏ`],
           [
-            "usdc assoc.",
-            balances.usdcAssociated
-              ? ui.c.ok("yes")
+            "can be paid",
+            balances.canReceiveUsdc
+              ? `${ui.c.ok("yes")} ${ui.c.muted(
+                  balances.usdcAssociated ? "(associated)" : "(automatic association)",
+                )}`
               : `${ui.c.bad("no")} ${ui.c.muted("→ xorv wallet associate")}`,
           ],
           ["token", ui.c.muted(`${usdcTokenId(config.network)}  ${hashscanToken(config.network, usdcTokenId(config.network))}`)],
@@ -66,9 +71,19 @@ export async function walletAssociate(): Promise<void> {
 
   console.log(ui.banner("associate USDC"));
 
-  const already = await isTokenAssociated(config.network, config.accountId, token).catch(() => false);
-  if (already) {
+  const balances = await fetchBalances(config.network, config.accountId).catch(() => null);
+  if (balances?.usdcAssociated) {
     ui.ok(`${config.accountId} is already associated with USDC (${token})`);
+    ui.blank();
+    return;
+  }
+  if (balances?.canReceiveUsdc) {
+    // Spending HBAR to opt into a token the account would auto-associate
+    // anyway is pure waste, so say so rather than doing it.
+    ui.ok(`${config.accountId} can already receive USDC via automatic association`);
+    ui.muted(
+      `  ${balances.maxAutoAssociations === -1 ? "unlimited" : balances.maxAutoAssociations} automatic slot(s) — no transaction needed`,
+    );
     ui.blank();
     return;
   }

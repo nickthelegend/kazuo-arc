@@ -215,7 +215,7 @@ HCS receipt: https://hashscan.io/testnet/transaction/0.0.9842030-1785477001-5661
 ## Tests
 
 ```bash
-pnpm test    # 195 tests, no credentials, no network
+pnpm test    # 203 tests, no credentials, no network
 ```
 
 Unit tests for money math, key parsing, the matcher and the terminal layout —
