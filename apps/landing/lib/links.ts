@@ -30,6 +30,7 @@ export const CHAIN = {
 
 export const NAV = [
   { label: "How it works", href: "#how" },
+  { label: "The network", href: "#bento" },
   { label: "Earn", href: "#earn" },
   { label: "Adapters", href: "#adapters" },
   { label: "Receipts", href: "#ledger" },

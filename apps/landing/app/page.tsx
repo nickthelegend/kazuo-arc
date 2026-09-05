@@ -1,6 +1,7 @@
 import { Navbar } from "@/components/navbar";
 import { Hero } from "@/components/sections/hero";
 import { How } from "@/components/sections/how";
+import { Bento } from "@/components/sections/bento";
 import { Earn } from "@/components/sections/earn";
 import { Adapters } from "@/components/sections/adapters";
 import { Ledger } from "@/components/sections/ledger";
@@ -15,6 +16,7 @@ export default function Home() {
       <main>
         <Hero />
         <How />
+        <Bento />
         <Earn />
         <Adapters />
         <Ledger />

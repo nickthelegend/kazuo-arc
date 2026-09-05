@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { EASE, useEntrance } from "@/lib/motion";
 import {
   BROKER_URL,
   NETWORK,
@@ -49,6 +51,7 @@ export function JobView({ jobId, initial }: { jobId: string; initial: Job | null
   const [job, setJob] = useState<Job | null>(initial);
   const [events, setEvents] = useState<JobEvent[]>(initial?.events ?? []);
   const [streaming, setStreaming] = useState(false);
+  const animate = useEntrance();
   const logRef = useRef<HTMLDivElement | null>(null);
 
   const terminal = job?.status === "completed" || job?.status === "failed";
@@ -112,16 +115,23 @@ export function JobView({ jobId, initial }: { jobId: string; initial: Job | null
           </p>
         </div>
 
-        {job.result ? (
-          <section>
+        <AnimatePresence>
+          {job.result ? (
+            <motion.section
+              key="result"
+              initial={animate ? { opacity: 0, y: 8 } : false}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.34, ease: EASE }}
+            >
             <h2 className="mb-2.5 text-[13px] font-medium text-fg">Result</h2>
             <Panel className="p-4">
               <pre className="mono max-h-[32rem] overflow-auto whitespace-pre-wrap break-words text-[12.5px] leading-relaxed text-fg-2">
                 {job.result}
               </pre>
             </Panel>
-          </section>
-        ) : null}
+            </motion.section>
+          ) : null}
+        </AnimatePresence>
 
         {job.error ? (
           <section>
@@ -150,10 +160,19 @@ export function JobView({ jobId, initial }: { jobId: string; initial: Job | null
                 events.map((event, i) => {
                   const g = GLYPH[event.kind] ?? GLYPH.status;
                   return (
-                    <div key={`${event.at}-${i}`} className="flex gap-2.5">
+                    <motion.div
+                      key={`${event.at}-${i}`}
+                      // A short rise, no stagger: these arrive one at a time from
+                      // a live socket, and staggering a stream would make the log
+                      // lag behind the work it is reporting.
+                      initial={animate ? { opacity: 0, y: 4 } : false}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.14, ease: EASE }}
+                      className="flex gap-2.5"
+                    >
                       <span className={cn("shrink-0 select-none", g.tone)}>{g.mark}</span>
                       <span className={cn("min-w-0 break-words", g.tone)}>{event.text}</span>
-                    </div>
+                    </motion.div>
                   );
                 })
               )}

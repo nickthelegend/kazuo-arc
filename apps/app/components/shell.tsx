@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Mark } from "@/components/mark";
+import { Connect } from "@/components/connect";
 import { api, type NetworkInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -104,14 +105,17 @@ export function Shell({ children }: { children: React.ReactNode }) {
               ? "Job"
               : (NAV.find((n) => n.href === pathname)?.label ?? "Jobs")}
           </span>
-          <Link
-            href="https://github.com/nickthelegend/xorv"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ml-auto text-[13px] text-fg-3 transition-colors hover:text-fg"
-          >
-            GitHub
-          </Link>
+          <div className="ml-auto flex items-center gap-3">
+            <Link
+              href="https://github.com/nickthelegend/xorv"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hidden text-[13px] text-fg-3 transition-colors hover:text-fg sm:block"
+            >
+              GitHub
+            </Link>
+            <Connect />
+          </div>
         </header>
 
         <main className="mx-auto w-full max-w-5xl flex-1 px-5 py-8 lg:px-8 lg:py-10">{children}</main>

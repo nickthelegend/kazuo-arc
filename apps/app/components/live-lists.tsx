@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { EASE, useEntrance } from "@/lib/motion";
 import { api, formatAgo, formatUsd, type Job, type Provider } from "@/lib/api";
 import { Empty, Skeleton, Status } from "@/components/ui";
 
@@ -112,6 +114,7 @@ export function ProviderList() {
 export function JobList({ limit = 15 }: { limit?: number }) {
   const load = useCallback(() => api.jobs(limit), [limit]);
   const { data: jobs, error } = usePoll<Job[]>(load);
+  const animate = useEntrance();
 
   if (error) return <Empty title="Can't reach the broker" />;
   if (!jobs) return <Skeleton rows={3} />;
@@ -126,8 +129,19 @@ export function JobList({ limit = 15 }: { limit?: number }) {
 
   return (
     <ul className="border-t border-[var(--line)]">
+      <AnimatePresence initial={false}>
       {jobs.map((job) => (
-        <li key={job.id} className="border-b border-[var(--line)]">
+        <motion.li
+          key={job.id}
+          layout={animate}
+          // Keyed on the job id, so a five-second poll that returns the same
+          // rows doesn't re-animate them — only a genuinely new job enters.
+          initial={animate ? { opacity: 0, height: 0 } : false}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={animate ? { opacity: 0, height: 0 } : undefined}
+          transition={{ duration: 0.22, ease: EASE }}
+          className="overflow-hidden border-b border-[var(--line)]"
+        >
           <Link
             href={`/jobs/${job.id}`}
             className="flex items-start justify-between gap-4 py-4 transition-opacity hover:opacity-70"
@@ -149,8 +163,9 @@ export function JobList({ limit = 15 }: { limit?: number }) {
               {formatUsd(job.priceUsdMicros)}
             </span>
           </Link>
-        </li>
+        </motion.li>
       ))}
+      </AnimatePresence>
     </ul>
   );
 }

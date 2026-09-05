@@ -143,15 +143,3 @@ export function LiveDot({ className }: { className?: string }) {
     </span>
   );
 }
-
-/** A shell command, presented as something you copy rather than read. */
-export function Command({ children }: { children: string }) {
-  return (
-    <div className="mono flex items-center gap-3 rounded-lg border border-[var(--line)] bg-surface px-4 py-3 text-[13px]">
-      <span aria-hidden className="select-none text-fg-4">
-        $
-      </span>
-      <code className="text-fg">{children}</code>
-    </div>
-  );
-}

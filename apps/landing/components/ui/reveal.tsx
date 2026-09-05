@@ -13,9 +13,11 @@ import { EASE, useEntrance } from "@/lib/motion";
  * register as the content settling, not as an animation you were asked to
  * watch.
  *
- * When motion can't run (reduced-motion, or a backgrounded tab where rAF never
- * fires) this renders the plain element in its final state. Content is never
- * held at opacity 0 waiting for a frame that may not come.
+ * Always renders the same element. Only the `initial` prop varies, so enabling
+ * motion never remounts the subtree — swapping between a plain `div` and a
+ * `motion.div` is what let already-visible content get re-hidden. When motion
+ * is off, `initial={false}` tells the library to start at the settled values
+ * and skip the transition entirely.
  */
 export function Reveal({
   children,
@@ -30,20 +32,15 @@ export function Reveal({
   const inView = useInView(ref, { once: true, margin: "0px 0px -12% 0px" });
   const animate = useEntrance();
 
-  if (!animate) {
-    return (
-      <div ref={ref} className={className}>
-        {children}
-      </div>
-    );
-  }
+  const hidden = { opacity: 0, y: 14 };
+  const shown = { opacity: 1, y: 0 };
 
   return (
     <motion.div
       ref={ref}
       className={cn(className)}
-      initial={{ opacity: 0, y: 14 }}
-      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 14 }}
+      initial={animate ? hidden : false}
+      animate={animate && !inView ? hidden : shown}
       transition={{ duration: 0.55, ease: EASE, delay }}
     >
       {children}

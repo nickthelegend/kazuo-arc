@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start -p 3002",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "clsx": "^2.1.1",
@@ -21,7 +23,10 @@
     "@x402/core": "~2.20.0",
     "@x402/fetch": "~2.20.0",
     "@x402/hedera": "~2.20.0",
-    "@xorv/protocol": "workspace:*"
+    "@xorv/protocol": "workspace:*",
+    "@privy-io/react-auth": "^2.13.0",
+    "@privy-io/server-auth": "^1.20.0",
+    "viem": "^2.23.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -31,7 +36,8 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.4"
   },
   "description": "Xorv job board \u2014 post AI jobs, pay per job in USDC over x402 on Hedera, watch them run live."
 }

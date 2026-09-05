@@ -1,5 +1,6 @@
 import { Reveal } from "@/components/ui/reveal";
-import { Button, Command, Section } from "@/components/ui/kit";
+import { Button, Section } from "@/components/ui/kit";
+import { Command } from "@/components/ui/command";
 import { REPO_URL } from "@/lib/links";
 
 /**
