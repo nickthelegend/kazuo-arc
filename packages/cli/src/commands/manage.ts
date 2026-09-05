@@ -228,6 +228,7 @@ export async function testCommand(opts: { prompt?: string; adapter?: string }): 
 
   fs.mkdirSync(config.sandboxDir, { recursive: true, mode: 0o700 });
   let failures = 0;
+  let belowCost = 0;
 
   for (const capability of targets) {
     const spin = ui.spinner(`${capability.displayName} — running "${prompt.slice(0, 40)}"…`);
@@ -236,6 +237,7 @@ export async function testCommand(opts: { prompt?: string; adapter?: string }): 
     const timer = setTimeout(() => controller.abort(), 120_000);
     const cwd = makeJobDir(config.sandboxDir, `selftest-${capability.id}-${Date.now()}`);
     const started = Date.now();
+    let reportedCost: number | null = null;
 
     try {
       if (!(await adapter.available())) {
@@ -251,11 +253,36 @@ export async function testCommand(opts: { prompt?: string; adapter?: string }): 
         signal: controller.signal,
         emit: () => {},
         model: capability.model ?? null,
+        onCost: (usd) => {
+          reportedCost = usd;
+        },
       });
       spin.succeed(
         `${capability.displayName} — ok in ${formatDuration(Date.now() - started)}`,
       );
       ui.muted(`  ${result.replace(/\s+/g, " ").slice(0, 120)}`);
+
+      // The whole reason this command exists beyond "does it run". A provider
+      // cannot see that they're selling below cost until the subscription bill
+      // arrives, and by then they've done it a thousand times.
+      if (reportedCost !== null) {
+        const costMicros = Math.round((reportedCost as number) * 1_000_000);
+        const margin = capability.priceUsdMicros - costMicros;
+        if (margin < 0) {
+          belowCost += 1;
+          ui.bad(
+            `  selling at ${formatUsd(capability.priceUsdMicros)} but this job cost you ` +
+              `${formatUsd(costMicros)} — losing ${formatUsd(-margin)} per job`,
+          );
+          ui.muted(
+            `  raise it: xorv price ${capability.id} ${(costMicros * 1.4 / 1_000_000).toFixed(2)}`,
+          );
+        } else {
+          ui.muted(
+            `  cost ${formatUsd(costMicros)} · price ${formatUsd(capability.priceUsdMicros)} · margin ${formatUsd(margin)}`,
+          );
+        }
+      }
     } catch (err) {
       spin.fail(
         `${capability.displayName} — ${err instanceof Error ? err.message : String(err)}`,
@@ -268,17 +295,30 @@ export async function testCommand(opts: { prompt?: string; adapter?: string }): 
   }
 
   ui.blank();
-  if (failures === 0) {
+  if (failures === 0 && belowCost === 0) {
     console.log(
       ui.box(
         [
-          `${ui.glyph.ok()} ${ui.c.bold("every capability works")}`,
+          `${ui.glyph.ok()} ${ui.c.bold("every capability works, and every price covers its cost")}`,
           "",
           `  This node will earn. ${ui.c.accent("xorv start")} to go live.`,
         ],
         { title: "healthy" },
       ),
     );
+  } else if (failures === 0) {
+    console.log(
+      ui.box(
+        [
+          `${ui.glyph.warn()} ${ui.c.bold(`${belowCost} capability(s) priced below cost`)}`,
+          "",
+          "  Everything runs, but you would lose money on every job you win.",
+          `  Raise the prices above, or run ${ui.c.accent("xorv price")} to see them all.`,
+        ],
+        { title: "check your pricing", color: ui.BRAND.amber },
+      ),
+    );
+    process.exitCode = 1;
   } else {
     console.log(
       ui.box(

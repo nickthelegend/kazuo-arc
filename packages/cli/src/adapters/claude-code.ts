@@ -119,6 +119,7 @@ export class ClaudeCodeAdapter implements JobAdapter {
       const cost = event.total_cost_usd;
       if (typeof cost === "number") {
         input.emit({ kind: "status", text: `provider cost $${cost.toFixed(4)}` });
+        input.onCost?.(cost);
       }
       // `result` carries the final answer even when no assistant block did.
       const text = event.result;

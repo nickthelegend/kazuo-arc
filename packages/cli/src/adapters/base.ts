@@ -41,6 +41,15 @@ export interface RunInput {
   signal: AbortSignal;
   emit: EmitEvent;
   model?: string | null;
+  /**
+   * What the job actually cost the provider, in USD, when the CLI reports it.
+   *
+   * Only Claude Code volunteers a dollar figure; Codex reports tokens and the
+   * rest report nothing. It exists so `xorv test` can tell an operator that
+   * they are selling below cost, which is otherwise invisible until the
+   * subscription bill arrives.
+   */
+  onCost?: (usd: number) => void;
 }
 
 export interface JobAdapter {

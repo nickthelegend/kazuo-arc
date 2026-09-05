@@ -175,14 +175,27 @@ export function readEarnings(limit = 500): EarningRow[] {
   return rows;
 }
 
-/** Suggested defaults for a capability, so the wizard can offer sane prices. */
+/**
+ * Suggested defaults for a capability.
+ *
+ * These are priced from what the jobs actually cost. A measured Claude Code
+ * run — one small function, six seconds — reported `total_cost_usd` of $0.16,
+ * so the original $0.01 default had every provider selling at a sixteenth of
+ * cost and losing money on every job they won. A default that loses money is a
+ * bug in the default, not a decision for the market.
+ *
+ * Agentic coding jobs are not micropayments; simple generation is. The spread
+ * below reflects that, and `xorv test` warns when a configured price is under
+ * the cost the CLI reports.
+ */
 export function defaultCapability(adapter: AdapterKind): Capability {
   const presets: Record<AdapterKind, { name: string; price: number }> = {
-    "claude-code": { name: "Claude Code", price: 10_000 },
-    codex: { name: "Codex", price: 8_000 },
-    grok: { name: "Grok Code", price: 6_000 },
-    opencode: { name: "OpenCode", price: 5_000 },
-    "openai-compatible": { name: "OpenAI-compatible endpoint", price: 4_000 },
+    "claude-code": { name: "Claude Code", price: 250_000 },
+    codex: { name: "Codex", price: 200_000 },
+    grok: { name: "Grok Code", price: 100_000 },
+    opencode: { name: "OpenCode", price: 50_000 },
+    // Local models cost electricity, not tokens — this one can be genuinely tiny.
+    "openai-compatible": { name: "OpenAI-compatible endpoint", price: 5_000 },
     echo: { name: "Echo (test)", price: 1_000 },
   };
   const preset = presets[adapter];
