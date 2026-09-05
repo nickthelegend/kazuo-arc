@@ -2,40 +2,32 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 /**
- * The Xorv mark, inline.
+ * The Xorv mark, monochrome.
  *
- * Inline SVG rather than <Image>: the mark appears in the nav on first paint,
- * it's under a kilobyte, and shipping it as markup means no request, no layout
- * shift and no flash of missing logo. Gradient ids are suffixed per instance so
- * two marks on one page can't collide in the SVG id namespace.
+ * Two beams crossing but stopping short of centre, so a diamond of negative
+ * space opens where they would meet — supply and demand routed through a hub
+ * rather than colliding. The four terminals are nodes.
+ *
+ * Rendered in `currentColor` rather than the brand gradient. On a page built
+ * from black, white and one hairline, a two-stop gradient in the top-left
+ * corner would be the only decorative colour anywhere, and it would read as
+ * decoration. The form carries the identity; the colour was never doing the
+ * work.
  */
-export function Mark({ className, id = "nav" }: { className?: string; id?: string }) {
-  const beam = `xb-${id}`;
-  const beam2 = `xb2-${id}`;
-  const core = `xc-${id}`;
+export function Mark({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 64 64" className={cn("h-7 w-7", className)} aria-hidden="true">
-      <defs>
-        <linearGradient id={beam} x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#7C5CFF" />
-          <stop offset="0.5" stopColor="#4C9BFF" />
-          <stop offset="1" stopColor="#3DDCFF" />
-        </linearGradient>
-        <linearGradient id={beam2} x1="56" y1="8" x2="8" y2="56" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#3DDCFF" />
-          <stop offset="0.55" stopColor="#5BC8FF" />
-          <stop offset="1" stopColor="#7C5CFF" />
-        </linearGradient>
-        <linearGradient id={core} x1="26" y1="26" x2="38" y2="38" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor="#9F8BFF" />
-          <stop offset="1" stopColor="#50F0C8" />
-        </linearGradient>
-      </defs>
-      <g strokeLinecap="round" fill="none" strokeWidth="7">
-        <path d="M14 14 L27 27" stroke={`url(#${beam})`} />
-        <path d="M37 37 L50 50" stroke={`url(#${beam})`} />
-        <path d="M50 14 L37 27" stroke={`url(#${beam2})`} />
-        <path d="M27 37 L14 50" stroke={`url(#${beam2})`} />
+    <svg
+      viewBox="0 0 64 64"
+      className={cn("h-6 w-6", className)}
+      fill="none"
+      stroke="currentColor"
+      aria-hidden="true"
+    >
+      <g strokeLinecap="round" strokeWidth="7">
+        <path d="M14 14 L27 27" />
+        <path d="M37 37 L50 50" />
+        <path d="M50 14 L37 27" />
+        <path d="M27 37 L14 50" />
       </g>
       <rect
         x="27.6"
@@ -44,23 +36,28 @@ export function Mark({ className, id = "nav" }: { className?: string; id?: strin
         height="8.8"
         rx="2.2"
         transform="rotate(45 32 32)"
-        fill={`url(#${core})`}
+        fill="currentColor"
+        stroke="none"
       />
-      <g>
-        <circle cx="14" cy="14" r="3.1" fill="#7C5CFF" />
-        <circle cx="50" cy="50" r="3.1" fill="#3DDCFF" />
-        <circle cx="50" cy="14" r="3.1" fill="#3DDCFF" />
-        <circle cx="14" cy="50" r="3.1" fill="#7C5CFF" />
+      <g fill="currentColor" stroke="none">
+        <circle cx="14" cy="14" r="3.1" />
+        <circle cx="50" cy="50" r="3.1" />
+        <circle cx="50" cy="14" r="3.1" />
+        <circle cx="14" cy="50" r="3.1" />
       </g>
     </svg>
   );
 }
 
-export function Logo({ className, id }: { className?: string; id?: string }) {
+export function Logo({ className }: { className?: string }) {
   return (
-    <Link href="/" className={cn("group flex items-center gap-2.5", className)}>
-      <Mark id={id} className="h-7 w-7 transition-transform duration-500 group-hover:rotate-90" />
-      <span className="text-lg font-semibold tracking-tight text-white">Xorv</span>
+    <Link
+      href="/"
+      className={cn("group flex items-center gap-2.5 text-fg", className)}
+      aria-label="Xorv, home"
+    >
+      <Mark className="h-[22px] w-[22px] transition-transform duration-[600ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:rotate-90" />
+      <span className="text-[15px] font-semibold tracking-[-0.02em]">Xorv</span>
     </Link>
   );
 }

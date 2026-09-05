@@ -12,85 +12,84 @@ import {
   type Job,
   type JobEvent,
 } from "@/lib/api";
-import { Card, ExternalLink, Field, StatusBadge } from "@/components/ui";
+import { Button, Empty, Ext, Panel, Row, Status } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
-const EVENT_STYLE: Record<JobEvent["kind"], { glyph: string; className: string }> = {
-  status: { glyph: "·", className: "text-dim" },
-  message: { glyph: "▸", className: "text-foreground" },
-  tool_call: { glyph: "⚙", className: "text-cyan" },
-  file_edit: { glyph: "✎", className: "text-amber" },
-  reasoning: { glyph: "…", className: "text-dim italic" },
-  error: { glyph: "✖", className: "text-rose" },
+/**
+ * Event glyphs.
+ *
+ * Monochrome. What kind of step this was is carried by the mark and the
+ * indent, not by six different colours competing with the one thing on this
+ * page that colour is reserved for — whether the job succeeded.
+ */
+const GLYPH: Record<JobEvent["kind"], { mark: string; tone: string }> = {
+  status: { mark: "·", tone: "text-fg-4" },
+  message: { mark: "▸", tone: "text-fg-2" },
+  tool_call: { mark: "⌘", tone: "text-fg-3" },
+  file_edit: { mark: "✎", tone: "text-fg-3" },
+  reasoning: { mark: "…", tone: "text-fg-4 italic" },
+  error: { mark: "✕", tone: "text-fail" },
 };
 
 function hashscanTx(transactionId: string): string {
   const net = NETWORK === "hedera:mainnet" ? "mainnet" : "testnet";
-  return `https://hashscan.io/${net}/transaction/${transactionId.replace("@", "-").replace(/\.(\d+)$/, "-$1")}`;
+  return `https://hashscan.io/${net}/transaction/${transactionId
+    .replace("@", "-")
+    .replace(/\.(\d+)$/, "-$1")}`;
 }
 
 /**
  * One job, live.
  *
- * Subscribes to the broker's SSE stream while the job is in flight and stops
- * as soon as it reaches a terminal state — a finished job is a static document,
+ * Subscribes to the broker's SSE stream while the job is in flight and stops as
+ * soon as it reaches a terminal state — a finished job is a static document,
  * and holding an event stream open for it wastes a connection on both ends.
  */
 export function JobView({ jobId, initial }: { jobId: string; initial: Job | null }) {
   const [job, setJob] = useState<Job | null>(initial);
   const [events, setEvents] = useState<JobEvent[]>(initial?.events ?? []);
-  const [connected, setConnected] = useState(false);
+  const [streaming, setStreaming] = useState(false);
   const logRef = useRef<HTMLDivElement | null>(null);
 
   const terminal = job?.status === "completed" || job?.status === "failed";
 
   useEffect(() => {
     if (terminal) return;
-
     const source = new EventSource(`${BROKER_URL}/api/jobs/${jobId}/stream`);
 
-    source.addEventListener("open", () => setConnected(true));
-
+    source.addEventListener("open", () => setStreaming(true));
     source.addEventListener("snapshot", (e) => {
       const next = JSON.parse((e as MessageEvent).data) as Job;
       setJob(next);
       if (next.events) setEvents(next.events);
     });
-
     source.addEventListener("event", (e) => {
-      const event = JSON.parse((e as MessageEvent).data) as JobEvent;
-      setEvents((prev) => [...prev, event]);
+      setEvents((prev) => [...prev, JSON.parse((e as MessageEvent).data) as JobEvent]);
     });
-
-    source.addEventListener("job", (e) => {
-      setJob(JSON.parse((e as MessageEvent).data) as Job);
-    });
-
+    source.addEventListener("job", (e) => setJob(JSON.parse((e as MessageEvent).data) as Job));
     source.addEventListener("done", (e) => {
       const next = JSON.parse((e as MessageEvent).data) as Job;
       setJob(next);
       if (next.events) setEvents(next.events);
       source.close();
-      setConnected(false);
+      setStreaming(false);
       // The HCS receipt is written a beat after settlement, so one delayed
       // refetch turns "publishing…" into a real link without polling forever.
       setTimeout(() => {
         void api.job(jobId).then(setJob).catch(() => {});
       }, 6_000);
     });
-
-    source.addEventListener("error", () => setConnected(false));
+    source.addEventListener("error", () => setStreaming(false));
 
     return () => source.close();
   }, [jobId, terminal]);
 
-  // Keep the newest line in view while the job is running.
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [events.length]);
 
   if (!job) {
-    return <Card>Job not found. It may have expired, or the broker restarted.</Card>;
+    return <Empty title="Job not found" hint="It may have expired, or the broker restarted." />;
   }
 
   const elapsed =
@@ -101,151 +100,151 @@ export function JobView({ jobId, initial }: { jobId: string; initial: Job | null
         : 0;
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[1.35fr_1fr]">
-      <div className="space-y-5">
-        <Card>
+    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+      <div className="min-w-0 space-y-6">
+        <div>
           <div className="flex items-center justify-between gap-3">
-            <StatusBadge status={job.status} />
-            <span className="mono text-[11px] text-dim">{job.id}</span>
+            <Status status={job.status} />
+            <span className="mono text-[11.5px] text-fg-4">{job.id}</span>
           </div>
-          <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+          <p className="mt-3 whitespace-pre-wrap text-[14.5px] leading-relaxed text-fg">
             {job.prompt}
           </p>
-        </Card>
+        </div>
 
         {job.result ? (
-          <Card>
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">Result</h2>
-            <pre className="mono mt-3 max-h-[30rem] overflow-auto whitespace-pre-wrap break-words text-[13px] leading-relaxed text-foreground">
-              {job.result}
-            </pre>
-          </Card>
+          <section>
+            <h2 className="mb-2.5 text-[13px] font-medium text-fg">Result</h2>
+            <Panel className="p-4">
+              <pre className="mono max-h-[32rem] overflow-auto whitespace-pre-wrap break-words text-[12.5px] leading-relaxed text-fg-2">
+                {job.result}
+              </pre>
+            </Panel>
+          </section>
         ) : null}
 
         {job.error ? (
-          <Card className="border-rose/25 bg-rose/[0.05]">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-rose">Failed</h2>
-            <p className="mt-2 text-sm text-rose">{job.error}</p>
-          </Card>
+          <section>
+            <h2 className="mb-2.5 text-[13px] font-medium text-fail">Failed</h2>
+            <Panel className="border-fail/25 bg-fail/[0.04] p-4">
+              <p className="text-[13.5px] leading-relaxed text-fail">{job.error}</p>
+            </Panel>
+          </section>
         ) : null}
 
-        <Card>
-          <div className="flex items-center justify-between">
-            <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">
-              Execution log
-            </h2>
-            {connected ? (
-              <span className="inline-flex items-center gap-1.5 text-[11px] text-cyan">
-                <span className="live-dot h-1 w-1 rounded-full bg-cyan" />
+        <section>
+          <div className="mb-2.5 flex items-center justify-between">
+            <h2 className="text-[13px] font-medium text-fg">Execution log</h2>
+            {streaming ? (
+              <span className="inline-flex items-center gap-1.5 text-[11.5px] text-fg-3">
+                <span className="breathe h-1.5 w-1.5 rounded-full bg-live" />
                 streaming
               </span>
             ) : null}
           </div>
-
-          <div ref={logRef} className="mono mt-3 max-h-72 space-y-1 overflow-auto text-[12px]">
-            {events.length === 0 ? (
-              <p className="text-dim">waiting for the provider…</p>
-            ) : (
-              events.map((event, i) => {
-                const style = EVENT_STYLE[event.kind] ?? EVENT_STYLE.status;
-                return (
-                  <div key={`${event.at}-${i}`} className="flex gap-2">
-                    <span className={cn("shrink-0", style.className)}>{style.glyph}</span>
-                    <span className={cn("min-w-0 break-words", style.className)}>{event.text}</span>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </Card>
+          <Panel className="p-4">
+            <div ref={logRef} className="mono max-h-72 space-y-1 overflow-auto text-[12px]">
+              {events.length === 0 ? (
+                <p className="text-fg-4">waiting for the provider…</p>
+              ) : (
+                events.map((event, i) => {
+                  const g = GLYPH[event.kind] ?? GLYPH.status;
+                  return (
+                    <div key={`${event.at}-${i}`} className="flex gap-2.5">
+                      <span className={cn("shrink-0 select-none", g.tone)}>{g.mark}</span>
+                      <span className={cn("min-w-0 break-words", g.tone)}>{event.text}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </Panel>
+        </section>
       </div>
 
-      <div className="space-y-5">
-        <Card>
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">Provider</h2>
-          <p className="mt-2 text-sm font-medium text-foreground">
-            {job.providerLabel ?? "unassigned"}
-          </p>
+      <div className="space-y-6">
+        <Panel className="p-4">
+          <h2 className="text-[13px] font-medium text-fg">Provider</h2>
+          <p className="mt-2 text-[14px] text-fg-2">{job.providerLabel ?? "unassigned"}</p>
           {job.providerAccountId ? (
-            <p className="mono mt-1 text-[11px]">
-              <ExternalLink href={hashscanAccount(job.providerAccountId)}>
-                {job.providerAccountId} ↗
-              </ExternalLink>
+            <p className="mono mt-1 text-[11.5px] text-fg-4">
+              <Ext href={hashscanAccount(job.providerAccountId)}>{job.providerAccountId} ↗</Ext>
             </p>
           ) : null}
-          <div className="mt-4 border-t border-[var(--border)] pt-2">
-            <Field label="price">{formatUsd(job.priceUsdMicros)}</Field>
-            <Field label="took">{elapsed ? formatDuration(elapsed) : "—"}</Field>
-            <Field label="events">{job.eventCount}</Field>
+          <div className="mt-3 border-t border-[var(--line)] pt-1">
+            <Row label="price">
+              <span className="tnum">{formatUsd(job.priceUsdMicros)}</span>
+            </Row>
+            <Row label="took">{elapsed ? formatDuration(elapsed) : "—"}</Row>
+            <Row label="events">
+              <span className="tnum">{job.eventCount}</span>
+            </Row>
           </div>
-        </Card>
+        </Panel>
 
-        <Card className={cn(job.payment && "border-mint/25")}>
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">
-            On-chain receipt
-          </h2>
+        <Panel className={cn("p-4", job.payment && "border-[var(--line-2)]")}>
+          <h2 className="text-[13px] font-medium text-fg">On-chain receipt</h2>
 
           {job.payment ? (
             <>
-              <p className="mt-2 text-lg font-semibold text-mint">
+              <p className="tnum mt-2 text-[18px] font-semibold text-fg">
                 {formatUsd(job.priceUsdMicros)}{" "}
-                <span className="text-xs font-normal text-muted">
+                <span className="text-[12px] font-normal text-fg-3">
                   in {job.payment.asset.toUpperCase()}
                 </span>
               </p>
-              <div className="mt-3 border-t border-[var(--border)] pt-2">
-                <Field label="payer">
-                  <ExternalLink href={hashscanAccount(job.payment.payer)}>
-                    {job.payment.payer}
-                  </ExternalLink>
-                </Field>
-                <Field label="paid to">
-                  <ExternalLink href={hashscanAccount(job.payment.payTo)}>
-                    {job.payment.payTo}
-                  </ExternalLink>
-                </Field>
-                <Field label="amount">
-                  {job.payment.amount} {job.payment.asset === "hbar" ? "tℏ" : "µUSDC"}
-                </Field>
-                <Field label="network">{job.payment.network}</Field>
+              <div className="mt-3 border-t border-[var(--line)] pt-1">
+                <Row label="payer">
+                  <Ext href={hashscanAccount(job.payment.payer)}>{job.payment.payer}</Ext>
+                </Row>
+                <Row label="paid to">
+                  <Ext href={hashscanAccount(job.payment.payTo)}>{job.payment.payTo}</Ext>
+                </Row>
+                <Row label="amount">
+                  <span className="tnum">
+                    {job.payment.amount} {job.payment.asset === "hbar" ? "tℏ" : "µUSDC"}
+                  </span>
+                </Row>
+                <Row label="network">{job.payment.network}</Row>
               </div>
 
-              <Link
-                href={job.payment.hashscanUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 block rounded-lg border border-mint/30 bg-mint/[0.07] px-3 py-2.5 text-center text-xs font-medium text-mint transition-colors hover:bg-mint/[0.12]"
-              >
-                View transfer on HashScan ↗
-              </Link>
-
-              {job.receiptConsensusAt ? (
-                <Link
-                  href={hashscanTx(job.receiptConsensusAt)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-2 block rounded-lg border border-[var(--border)] px-3 py-2.5 text-center text-xs text-muted transition-colors hover:text-foreground"
-                >
-                  View HCS receipt ↗
-                </Link>
-              ) : (
-                <p className="mt-2 text-center text-[11px] text-dim">
-                  HCS receipt publishing…
-                </p>
-              )}
+              <div className="mt-4 space-y-2">
+                <Button href={job.payment.hashscanUrl} variant="secondary" external className="w-full">
+                  View transfer on HashScan
+                </Button>
+                {job.receiptConsensusAt ? (
+                  <Button
+                    href={hashscanTx(job.receiptConsensusAt)}
+                    variant="ghost"
+                    external
+                    className="w-full justify-center"
+                  >
+                    View HCS receipt
+                  </Button>
+                ) : (
+                  <p className="text-center text-[11.5px] text-fg-4">HCS receipt publishing…</p>
+                )}
+              </div>
 
               {job.resultHash ? (
-                <p className="mono mt-3 break-all text-[10px] leading-relaxed text-dim">
+                <p className="mono mt-3 break-all text-[10.5px] leading-relaxed text-fg-4">
                   sha256 {job.resultHash}
                 </p>
               ) : null}
             </>
           ) : (
-            <p className="mt-2 text-xs text-muted">
+            <p className="mt-2 text-[12.5px] leading-relaxed text-fg-3">
               Settling on Hedera — this usually takes about three seconds.
             </p>
           )}
-        </Card>
+        </Panel>
+
+        <Link
+          href="/"
+          className="block text-[12.5px] text-fg-4 transition-colors hover:text-fg-2"
+        >
+          ← all jobs
+        </Link>
       </div>
     </div>
   );

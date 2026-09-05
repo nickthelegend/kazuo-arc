@@ -26,7 +26,8 @@
     "@xorv/protocol": "workspace:*",
     "dotenv": "^16.4.7",
     "hono": "^4.7.0",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "mongodb": "^6.13.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.4",

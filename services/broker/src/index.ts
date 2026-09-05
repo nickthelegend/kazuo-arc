@@ -12,10 +12,35 @@ import { Hub } from "./hub.js";
 import { JobStore } from "./jobs.js";
 import { Registry } from "./registry.js";
 import { openPersistence } from "./store.js";
+import { LayeredPersistence } from "./store-mongo.js";
 
 const config = loadConfig();
 const chain = new Chain(config);
-const persistence = openPersistence(config.dbFile);
+
+// SQLite is always present — it is the write that cannot fail. Mongo layers on
+// top as the restore source, so the broker's history survives losing the box.
+const local = openPersistence(config.dbFile);
+const layered = config.mongoUri
+  ? new LayeredPersistence({
+      local,
+      uri: config.mongoUri,
+      dbName: config.mongoDb,
+      onStatus: (message) => console.warn(`[broker] ${message}`),
+    })
+  : null;
+
+let mongoStatus = "not configured";
+if (layered) {
+  const result = await layered.connect();
+  mongoStatus = result.ok
+    ? `connected (${result.jobs} jobs, ${result.providers} providers restored)`
+    : `unreachable — running on local disk (${result.error})`;
+  if (!result.ok) {
+    console.warn(`[broker] mongodb ${mongoStatus}`);
+  }
+}
+
+const persistence = layered ?? local;
 const registry = new Registry(persistence);
 const jobs = new JobStore(persistence);
 
@@ -42,10 +67,11 @@ const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
   line("fee", config.feeBps === 0 ? "0% — providers keep everything" : `${config.feeBps / 100}%`);
   line(
     "storage",
-    persistence.kind === "sqlite"
-      ? `${persistence.location} (${jobs.restoredCount} jobs, ${registry.restoredStatsCount} providers restored)`
-      : persistence.location,
+    local.kind === "sqlite"
+      ? `${local.location} (${jobs.restoredCount} jobs, ${registry.restoredStatsCount} providers restored)`
+      : local.location,
   );
+  line("mongodb", mongoStatus);
   for (const [kind, topic] of Object.entries(topics)) {
     line(`hcs:${kind}`, topic ? topic.id : "not configured");
   }
@@ -58,9 +84,19 @@ hub = new Hub(server as unknown as HttpServer, registry, hubHandlers);
 
 const sweeper = setInterval(sweep, 15_000);
 
+// Drain anything Mongo missed while it was unreachable. Cheap when the queue is
+// empty, which is the normal case.
+const mongoRetry = layered
+  ? setInterval(() => {
+      void layered.retryPending();
+    }, 30_000)
+  : null;
+mongoRetry?.unref?.();
+
 function shutdown(signal: string): void {
   console.log(`\n[broker] ${signal} — shutting down`);
   clearInterval(sweeper);
+  if (mongoRetry) clearInterval(mongoRetry);
   hub?.close();
   chain.close();
   persistence.close();

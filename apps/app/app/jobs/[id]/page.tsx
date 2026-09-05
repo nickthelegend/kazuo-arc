@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { JobView } from "@/components/job-view";
+import { PageHeader } from "@/components/ui";
 import { api, type Job } from "@/lib/api";
 
 export const dynamic = "force-dynamic";
@@ -18,9 +18,7 @@ export default async function JobPage({ params }: { params: Promise<{ id: string
 
   return (
     <>
-      <Link href="/" className="mb-5 inline-block text-xs text-muted transition-colors hover:text-foreground">
-        ← all jobs
-      </Link>
+      <PageHeader title="Job" sub={initial?.providerLabel ? `Ran on ${initial.providerLabel}.` : undefined} />
       <JobView jobId={id} initial={initial} />
     </>
   );

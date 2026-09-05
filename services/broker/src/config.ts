@@ -30,6 +30,9 @@ export interface BrokerConfig {
   facilitatorMode: string;
   /** SQLite file for durable jobs and earnings; "off" disables persistence. */
   dbFile: string | null;
+  /** MongoDB URI. When set, it becomes the restore source; SQLite stays the write guarantee. */
+  mongoUri: string | null;
+  mongoDb: string;
 }
 
 function required(name: string): string {
@@ -71,5 +74,7 @@ export function loadConfig(): BrokerConfig {
     feeBps: Number(process.env.XORV_FEE_BPS ?? 0),
     facilitatorMode: process.env.XORV_FACILITATOR?.trim() || "self",
     dbFile: process.env.XORV_DB?.trim() || path.resolve(here, "../../../data/xorv.db"),
+    mongoUri: process.env.XORV_MONGO_URI?.trim() || null,
+    mongoDb: process.env.XORV_MONGO_DB?.trim() || "xorv",
   };
 }

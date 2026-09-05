@@ -1,92 +1,85 @@
 import { Reveal } from "@/components/ui/reveal";
 import { Section, SectionHeading } from "@/components/ui/kit";
 
+/**
+ * What a node can sell.
+ *
+ * A table, because this is reference material — six rows with the same three
+ * facts each. Six cards would take four times the space to say the same thing
+ * and would imply a hierarchy that isn't there.
+ */
 const ADAPTERS = [
   {
     name: "Claude Code",
     id: "claude-code",
-    detail: "Streams tool calls, file edits and extended thinking back to the buyer as the job runs.",
+    reports: "Tool calls, file edits, extended thinking",
     live: true,
   },
-  {
-    name: "Codex",
-    id: "codex",
-    detail: "Found on PATH or inside Codex.app. Reports shell commands and file changes per turn.",
-    live: true,
-  },
-  {
-    name: "Grok Code",
-    id: "grok",
-    detail: "Answer plus reasoning. Grok's headless mode reports no tool steps, so Xorv claims none.",
-    live: true,
-  },
-  {
-    name: "OpenCode",
-    id: "opencode",
-    detail: "Any provider OpenCode is configured against, driven through its run command.",
-    live: true,
-  },
+  { name: "Codex", id: "codex", reports: "Shell commands, file changes", live: true },
+  { name: "Grok Code", id: "grok", reports: "Answer and reasoning", live: true },
+  { name: "OpenCode", id: "opencode", reports: "Answer", live: true },
   {
     name: "OpenAI-compatible",
     id: "openai-compatible",
-    detail: "Ollama, LM Studio, vLLM, OpenRouter, or an internal gateway. Sell a local GPU too.",
+    reports: "Answer — Ollama, LM Studio, vLLM, OpenRouter",
     live: true,
   },
-  {
-    name: "Echo",
-    id: "echo",
-    detail: "Built in, always available. Exercises the entire payment path with nothing installed.",
-    live: false,
-  },
+  { name: "Echo", id: "echo", reports: "Built in — exercises the payment path", live: false },
 ];
 
 export function Adapters() {
   return (
-    <Section id="adapters">
+    <Section id="adapters" className="border-t border-[var(--line)]">
       <Reveal>
         <SectionHeading
-          eyebrow="Adapters"
-          title={
-            <>
-              Sell whatever you&rsquo;ve{" "}
-              <span className="grad-brand">already got</span>
-            </>
-          }
-          sub="An adapter drives a CLI you have installed and signed in. Xorv never asks for an API key, because it never calls an API on your behalf."
+          title="Sell whatever you've already got"
+          sub="An adapter drives a CLI you have installed and signed in. Writing a new one is a class with two methods."
         />
       </Reveal>
 
-      <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {ADAPTERS.map((adapter, i) => (
-          <Reveal key={adapter.id} delay={i * 0.05}>
-            <div className="card card-hover h-full p-6">
-              <div className="flex items-start justify-between gap-3">
-                <h3 className="text-[15px] font-semibold tracking-tight text-foreground">
-                  {adapter.name}
-                </h3>
-                {adapter.live ? (
-                  <span className="mt-0.5 inline-flex items-center gap-1.5 rounded-full border border-mint/25 bg-mint/[0.07] px-2 py-0.5 text-[10px] font-medium text-mint">
-                    <span className="h-1 w-1 rounded-full bg-mint" />
-                    live
-                  </span>
-                ) : (
-                  <span className="mt-0.5 rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] text-dim">
-                    test
-                  </span>
-                )}
-              </div>
-              <p className="mono mt-1 text-[11px] text-dim">{adapter.id}</p>
-              <p className="mt-3 text-sm leading-relaxed text-muted">{adapter.detail}</p>
-            </div>
-          </Reveal>
-        ))}
-      </div>
+      <Reveal delay={0.06}>
+        <div className="mx-auto mt-14 max-w-3xl overflow-x-auto">
+          <table className="w-full min-w-[34rem] text-left">
+            <thead>
+              <tr className="border-b border-[var(--line)]">
+                <th scope="col" className="pb-3 text-[12px] font-medium text-fg-4">
+                  Adapter
+                </th>
+                <th scope="col" className="pb-3 text-[12px] font-medium text-fg-4">
+                  Identifier
+                </th>
+                <th scope="col" className="pb-3 text-[12px] font-medium text-fg-4">
+                  Streams back
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {ADAPTERS.map((adapter) => (
+                <tr
+                  key={adapter.id}
+                  className="border-b border-[var(--line)] transition-colors hover:bg-white/[0.02]"
+                >
+                  <td className="py-4 pr-6 align-top">
+                    <span className="text-[14.5px] font-medium text-fg">{adapter.name}</span>
+                    {!adapter.live ? (
+                      <span className="ml-2 text-[11px] text-fg-4">test</span>
+                    ) : null}
+                  </td>
+                  <td className="mono py-4 pr-6 align-top text-[12.5px] text-fg-3">{adapter.id}</td>
+                  <td className="py-4 align-top text-[13.5px] leading-relaxed text-fg-2">
+                    {adapter.reports}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Reveal>
 
       <Reveal delay={0.1}>
-        <p className="mt-8 text-center text-sm text-dim">
-          Writing a new adapter is one class with two methods —{" "}
-          <span className="mono text-muted">available()</span> and{" "}
-          <span className="mono text-muted">run()</span>.
+        <p className="measure mx-auto mt-10 text-center text-[13.5px] leading-relaxed text-fg-3">
+          Grok&rsquo;s headless mode reports no tool steps, so Xorv claims none. Inferring edits by
+          diffing the directory would put guesses in the job log wearing the same clothes as facts.
         </p>
       </Reveal>
     </Section>

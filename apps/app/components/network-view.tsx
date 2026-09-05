@@ -2,29 +2,26 @@
 
 import { useEffect, useState } from "react";
 import { api, formatUsd, type NetworkInfo } from "@/lib/api";
-import { Card, Empty, ExternalLink, Field } from "@/components/ui";
+import { Empty, Ext, Panel, Row, Skeleton } from "@/components/ui";
 
 interface Receipt {
   consensusAt: string;
   sequence: number;
-  payload: unknown;
+  payload: {
+    data?: {
+      jobId?: string;
+      providerAccountId?: string;
+      payer?: string;
+      amount?: string;
+      asset?: string;
+      transactionId?: string;
+      durationMs?: number;
+      ok?: boolean;
+    };
+  } | null;
 }
 
-interface ReceiptPayload {
-  kind?: string;
-  at?: number;
-  data?: {
-    jobId?: string;
-    providerAccountId?: string;
-    payer?: string;
-    amount?: string;
-    asset?: string;
-    transactionId?: string;
-    resultHash?: string;
-    durationMs?: number;
-    ok?: boolean;
-  };
-}
+const HBAR = "0.0.0";
 
 export function NetworkView() {
   const [info, setInfo] = useState<NetworkInfo | null>(null);
@@ -39,7 +36,10 @@ export function NetworkView() {
         const [net, rec] = await Promise.all([api.network(), api.receipts()]);
         if (!alive) return;
         setInfo(net);
-        setReceipts(rec.receipts);
+        // The broker types the topic payload as `unknown` on purpose — a
+        // message on a public topic could have been written by anyone. Narrow
+        // it here, where we know what shape our own receipts take.
+        setReceipts(rec.receipts as Receipt[]);
         setTopic(rec.topic);
         setError(null);
       } catch (err) {
@@ -57,138 +57,116 @@ export function NetworkView() {
   if (error && !info) return <Empty title="Can't reach the broker" hint={error} />;
 
   return (
-    <div className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Providers live" value={String(info?.stats.providersLive ?? "—")} />
-        <Stat label="Jobs completed" value={String(info?.stats.jobsCompleted ?? "—")} />
-        <Stat label="Settled" value={formatUsd(info?.stats.paidUsdMicros ?? 0)} />
-        <Stat
-          label="HBAR price"
-          value={info?.hbarRate ? `$${(info.hbarRate.centsPerHbar / 100).toFixed(4)}` : "—"}
-        />
-      </div>
+    <div className="space-y-8">
+      {/* Facts, as a definition list. Four numbers in four boxes would say
+          "we have metrics" without saying anything true. */}
+      <Panel className="p-5">
+        <h2 className="text-[13px] font-medium text-fg">Settlement</h2>
+        <p className="measure mt-1.5 text-[12.5px] leading-relaxed text-fg-3">
+          The facilitator co-signs and pays the network fee on every settlement, which is why a
+          buyer needs no HBAR at all.
+        </p>
+        <div className="mt-4 border-t border-[var(--line)] pt-1">
+          <Row label="network">{info?.network ?? "—"}</Row>
+          <Row label="facilitator">{info?.facilitator.description ?? "—"}</Row>
+          <Row label="fee payer">{info?.facilitator.feePayer ?? "—"}</Row>
+          <Row label="usdc">
+            {info ? (
+              <Ext
+                href={`https://hashscan.io/${
+                  info.network === "hedera:mainnet" ? "mainnet" : "testnet"
+                }/token/${info.usdc}`}
+              >
+                {info.usdc} ↗
+              </Ext>
+            ) : (
+              "—"
+            )}
+          </Row>
+          <Row label="providers live">
+            <span className="tnum">{info?.stats.providersLive ?? "—"}</span>
+          </Row>
+          <Row label="jobs settled">
+            <span className="tnum">{info?.stats.jobsCompleted ?? "—"}</span>
+          </Row>
+          <Row label="paid to providers">
+            <span className="tnum">{info ? formatUsd(info.stats.paidUsdMicros) : "—"}</span>
+          </Row>
+        </div>
+      </Panel>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card>
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">
-            Facilitator
-          </h2>
-          <p className="mt-2 text-sm text-foreground">{info?.facilitator.description ?? "—"}</p>
-          <p className="mt-1 text-xs leading-relaxed text-muted">
-            The facilitator co-signs and pays the network fee on every settlement, which is why a
-            buyer needs no HBAR at all.
-          </p>
-          <div className="mt-4 border-t border-[var(--border)] pt-2">
-            <Field label="fee payer">{info?.facilitator.feePayer ?? "—"}</Field>
-            <Field label="network">{info?.network ?? "—"}</Field>
-            <Field label="usdc">
-              {info ? (
-                <ExternalLink
-                  href={`https://hashscan.io/${info.network === "hedera:mainnet" ? "mainnet" : "testnet"}/token/${info.usdc}`}
+      <Panel className="p-5">
+        <h2 className="text-[13px] font-medium text-fg">Consensus topics</h2>
+        <p className="measure mt-1.5 text-[12.5px] leading-relaxed text-fg-3">
+          Append-only, publicly readable, ordered by consensus timestamp. You don&rsquo;t have to
+          trust this dashboard — read them yourself.
+        </p>
+        <div className="mt-4 border-t border-[var(--line)]">
+          {info
+            ? Object.entries(info.topics).map(([kind, t]) => (
+                <div
+                  key={kind}
+                  className="flex items-center justify-between gap-4 border-b border-[var(--line)] py-3"
                 >
-                  {info.usdc} ↗
-                </ExternalLink>
-              ) : (
-                "—"
-              )}
-            </Field>
-          </div>
-        </Card>
-
-        <Card>
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">
-            Consensus topics
-          </h2>
-          <p className="mt-2 text-xs leading-relaxed text-muted">
-            Append-only, publicly readable, ordered by consensus timestamp.
-          </p>
-          <div className="mt-4 space-y-2">
-            {info
-              ? Object.entries(info.topics).map(([kind, t]) => (
-                  <div
-                    key={kind}
-                    className="flex items-center justify-between rounded-lg border border-[var(--border)] px-3 py-2"
-                  >
-                    <div>
-                      <p className="text-xs capitalize text-foreground">{kind}</p>
-                      <p className="mono text-[11px] text-dim">{t?.id ?? "not configured"}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-mint">
-                        {info.hcsPublished[kind as keyof NetworkInfo["hcsPublished"]] ?? 0}
-                      </p>
-                      {t ? (
-                        <ExternalLink href={t.url}>
-                          <span className="text-[11px]">open ↗</span>
-                        </ExternalLink>
-                      ) : null}
-                    </div>
+                  <div>
+                    <p className="text-[13px] capitalize text-fg-2">{kind}</p>
+                    <p className="mono text-[11.5px] text-fg-4">{t?.id ?? "not configured"}</p>
                   </div>
-                ))
-              : null}
-          </div>
-        </Card>
-      </div>
+                  <div className="text-right">
+                    <p className="tnum text-[13px] text-fg">
+                      {info.hcsPublished[kind as keyof NetworkInfo["hcsPublished"]] ?? 0}
+                    </p>
+                    {t ? (
+                      <p className="text-[11.5px] text-fg-4">
+                        <Ext href={t.url}>open ↗</Ext>
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            : null}
+        </div>
+      </Panel>
 
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">
-            Receipts from the ledger
-          </h2>
+          <h2 className="text-[13px] font-medium text-fg">Receipts from the ledger</h2>
           {topic ? (
-            <ExternalLink href={topic.url}>
-              <span className="text-[11px]">topic {topic.id} ↗</span>
-            </ExternalLink>
+            <span className="text-[11.5px] text-fg-4">
+              <Ext href={topic.url}>topic {topic.id} ↗</Ext>
+            </span>
           ) : null}
         </div>
 
         {!receipts ? (
-          <div className="card h-40 animate-pulse bg-white/[0.02]" />
+          <Skeleton rows={3} />
         ) : receipts.length === 0 ? (
           <Empty
             title="No receipts yet"
             hint="Every completed job writes one here, read straight from a Hedera mirror node."
           />
         ) : (
-          <div className="space-y-2">
+          <ul className="border-t border-[var(--line)]">
             {receipts.map((receipt) => {
-              const payload = receipt.payload as ReceiptPayload | null;
-              const data = payload?.data;
+              const d = receipt.payload?.data ?? {};
               return (
-                <Card key={receipt.sequence} className="p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="mono truncate text-xs text-foreground">
-                        {data?.jobId ?? `seq ${receipt.sequence}`}
-                      </p>
-                      <p className="mono mt-1 truncate text-[11px] text-dim">
-                        {data?.payer} → {data?.providerAccountId}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-mint">
-                        {data?.amount} {data?.asset === "0.0.0" ? "tℏ" : "µUSDC"}
-                      </p>
-                      <p className="text-[11px] text-dim">
-                        {data?.ok ? "ok" : "failed"} · seq {receipt.sequence}
-                      </p>
-                    </div>
-                  </div>
-                </Card>
+                <li
+                  key={receipt.sequence}
+                  className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-[var(--line)] py-3.5"
+                >
+                  <span className="mono text-[12.5px] text-fg-2">{d.jobId ?? "—"}</span>
+                  <span className="mono truncate text-[11.5px] text-fg-4">
+                    {d.payer} → {d.providerAccountId}
+                  </span>
+                  <span className="mono tnum text-[12.5px] text-fg-2">
+                    {d.amount} {d.asset === HBAR ? "tℏ" : "µUSDC"}
+                  </span>
+                </li>
               );
             })}
-          </div>
+          </ul>
         )}
       </section>
     </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <Card className="p-4">
-      <p className="text-[11px] uppercase tracking-[0.14em] text-dim">{label}</p>
-      <p className="mt-1.5 text-2xl font-semibold tracking-tight text-foreground">{value}</p>
-    </Card>
   );
 }

@@ -1,188 +1,122 @@
 "use client";
 
-import { useRef } from "react";
-import { gsap, useGSAP, shouldAnimate } from "@/lib/gsap";
-import { Button, Pill } from "@/components/ui/kit";
+import { useEffect, useRef, useState } from "react";
+import { motion } from "motion/react";
+import { EASE, useEntrance } from "@/lib/motion";
+import { Button, LiveDot, Pill } from "@/components/ui/kit";
+import { NodePanel } from "@/components/ui/node-panel";
 import { APP_URL, REPO_URL } from "@/lib/links";
 
 /**
- * The hero.
+ * The hero, and the page's one authored motion moment.
  *
- * One promise, stated plainly, plus the two commands that make it true. The
- * terminal on the right is the real output of `xorv start` and `xorv run` —
- * not a mock of a product that doesn't exist.
+ * Everything below it uses a single restrained reveal. Giving each section its
+ * own entrance is how a page ends up twitching rather than having a rhythm.
+ *
+ * The headline sets in plain white. Weight and scale carry the emphasis —
+ * a gradient fill here would be the loudest thing on a page whose entire
+ * argument is restraint.
  */
 export function Hero() {
-  const scope = useRef<HTMLDivElement | null>(null);
+  const animate = useEntrance();
 
-  useGSAP(
-    () => {
-      // Nothing to do when we shouldn't animate: the markup is already in its
-      // final state, which is the whole point of fromTo rather than from.
-      if (!shouldAnimate()) return;
-
-      const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
-      const rise = (opacity: number, y: number) => ({ opacity, y });
-
-      tl.fromTo("[data-hero-badge]", rise(0, 14), { ...rise(1, 0), duration: 0.5 })
-        // Lines rise in sequence, so the headline reads as it assembles.
-        .fromTo(
-          "[data-hero-line]",
-          rise(0, 26),
-          { ...rise(1, 0), duration: 0.75, stagger: 0.1 },
-          "-=0.22",
-        )
-        .fromTo("[data-hero-sub]", rise(0, 18), { ...rise(1, 0), duration: 0.6 }, "-=0.42")
-        .fromTo("[data-hero-cta]", rise(0, 16), { ...rise(1, 0), duration: 0.55 }, "-=0.36")
-        .fromTo("[data-hero-chain]", { opacity: 0 }, { opacity: 1, duration: 0.6 }, "-=0.3")
-        .fromTo(
-          "[data-hero-term]",
-          { opacity: 0, y: 30, scale: 0.985 },
-          { opacity: 1, y: 0, scale: 1, duration: 0.85 },
-          "-=0.75",
-        )
-        .fromTo(
-          "[data-term-line]",
-          { opacity: 0, x: -8 },
-          { opacity: 1, x: 0, duration: 0.35, stagger: 0.055 },
-          "-=0.45",
-        );
-    },
-    { scope },
-  );
+  const rise = (delay: number) =>
+    animate
+      ? {
+          initial: { opacity: 0, y: 18 },
+          animate: { opacity: 1, y: 0 },
+          transition: { duration: 0.7, ease: EASE, delay },
+        }
+      : { initial: false as const, animate: { opacity: 1, y: 0 } };
 
   return (
-    <div ref={scope} className="relative overflow-hidden px-6 pb-24 pt-36 md:pb-32 md:pt-44">
-      <div className="pointer-events-none absolute inset-0 grid-bg" aria-hidden="true" />
-      <div className="pointer-events-none absolute inset-x-0 -top-40 h-[720px] aurora" aria-hidden="true" />
-
-      <div className="relative mx-auto grid w-full max-w-6xl items-center gap-14 lg:grid-cols-[1.05fr_1fr]">
-        <div>
-          <div data-hero-badge>
-            <Pill className="border-violet/25 bg-violet/[0.08] text-foreground">
-              <span className="live-dot h-1.5 w-1.5 rounded-full bg-mint" />
-              Live on Hedera testnet
-              <span className="text-dim">·</span>
-              <span className="text-muted">x402 payments</span>
-            </Pill>
-          </div>
-
-          <h1 className="mt-6 text-[2.6rem] font-semibold leading-[1.04] tracking-[-0.035em] sm:text-6xl lg:text-[4.1rem]">
-            <span data-hero-line className="grad-text block">
-              Your AI subscription
+    <section className="relative overflow-hidden px-6 pt-32 md:pt-40">
+      <div className="relative mx-auto max-w-4xl text-center">
+        <motion.div {...rise(0)}>
+          <Pill href={REPO_URL} className="mb-7">
+            <LiveDot />
+            Live on Hedera testnet
+            <span aria-hidden className="text-fg-4">
+              ·
             </span>
-            <span data-hero-line className="grad-text block">
-              is idle most of
-            </span>
-            <span data-hero-line className="grad-brand block">
-              the day.
-            </span>
-          </h1>
+            <span className="text-fg-3">open source</span>
+          </Pill>
+        </motion.div>
 
-          <p data-hero-sub className="mt-6 max-w-xl text-base leading-relaxed text-muted">
-            Xorv turns that idle quota into income. Run one command, and the Claude, Codex or Grok
-            plan you already pay for starts taking jobs from the network — settling{" "}
-            <span className="text-foreground">per job, in USDC</span>, straight to your wallet.
-            No invoices, no platform holding your money.
-          </p>
+        <motion.h1
+          {...rise(0.08)}
+          className="display text-balance"
+        >
+          Your AI subscription
+          <br />
+          is idle most of the day
+        </motion.h1>
 
-          <div data-hero-cta className="mt-8 flex flex-wrap items-center gap-3">
-            <Button href={APP_URL}>Post a job →</Button>
-            <Button href={REPO_URL} variant="ghost" external>
-              Start earning
-            </Button>
-          </div>
+        <motion.p
+          {...rise(0.16)}
+          className="measure mx-auto mt-7 text-[16.5px] leading-relaxed text-fg-2"
+        >
+          Xorv turns that idle quota into income. One command, and the Claude, Codex or Grok plan
+          you already pay for starts taking jobs from the network — settling per job, in USDC,
+          straight to your wallet.
+        </motion.p>
 
-          <div data-hero-chain className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-dim">
-            <span className="mono">npm i -g xorv</span>
-            <span className="h-3 w-px bg-white/10" />
-            <span>settles in ~3s</span>
-            <span className="h-3 w-px bg-white/10" />
-            <span>from $0.001 a job</span>
-            <span className="h-3 w-px bg-white/10" />
-            <span>0% protocol fee</span>
-          </div>
-        </div>
+        <motion.div {...rise(0.24)} className="mt-9 flex flex-wrap items-center justify-center gap-2.5">
+          <Button href={APP_URL}>Post a job</Button>
+          <Button href={REPO_URL} variant="secondary" external>
+            Start earning
+          </Button>
+        </motion.div>
 
-        <Terminal />
+        <motion.p {...rise(0.32)} className="mono mt-7 text-[12.5px] text-fg-4">
+          npm i -g xorv
+        </motion.p>
       </div>
-    </div>
+
+      <HeroPanel animate={animate} />
+    </section>
   );
 }
 
 /**
- * A transcript of a real `xorv start` session.
+ * The product, framed.
  *
- * Labelled "example session" in the chrome, because it is static markup rather
- * than a live feed. The live numbers are in the strip below the hero, fetched
- * from the broker's public API — so nothing on this page claims traffic that
- * isn't there.
+ * Ripar puts a browser-chromed dashboard on a warm panel here. Xorv's product
+ * is a terminal, so that is what goes in the frame — and it types itself out
+ * once, which is the closest thing to a demo a static page can offer.
  */
-function Terminal() {
+function HeroPanel({ animate }: { animate: boolean }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.25 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div data-hero-term className="card glow-ring overflow-hidden">
-      <div className="flex items-center gap-2 border-b border-[var(--border)] px-4 py-3">
-        <span className="h-2.5 w-2.5 rounded-full bg-rose/70" />
-        <span className="h-2.5 w-2.5 rounded-full bg-amber/70" />
-        <span className="h-2.5 w-2.5 rounded-full bg-mint/70" />
-        <span className="mono ml-2 text-[11px] text-dim">xorv — provider node</span>
-        <span className="ml-auto rounded-full border border-[var(--border)] px-2 py-0.5 text-[10px] text-dim">
-          example session
-        </span>
+    <motion.div
+      ref={ref}
+      initial={animate ? { opacity: 0, y: 36 } : false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.9, ease: EASE, delay: 0.3 }}
+      className="relative mx-auto mt-20 max-w-5xl md:mt-24"
+    >
+      {/* A single hairline frame that opens downward into the page. */}
+      <div className="rounded-t-[28px] border border-b-0 border-[var(--line)] bg-surface px-2 pt-2 md:rounded-t-[36px] md:px-3 md:pt-3">
+        <NodePanel animate={visible && animate} />
       </div>
-
-      <div className="mono space-y-1.5 p-5 text-[12.5px] leading-relaxed">
-        <Line>
-          <span className="text-violet">$</span> <span className="text-foreground">xorv start</span>
-        </Line>
-        <Line>
-          <span className="text-mint">✔</span>{" "}
-          <span className="text-muted">2/2 capabilities ready — Claude Code, Codex</span>
-        </Line>
-        <Line>
-          <span className="text-mint">✔</span>{" "}
-          <span className="text-muted">registered as</span>{" "}
-          <span className="text-cyan">prv_1LanKLZA8vhK</span>
-        </Line>
-        <Line>
-          <span className="text-mint">✔</span> <span className="text-azure">⛓</span>{" "}
-          <span className="text-muted">registration on HCS</span>{" "}
-          <span className="text-dim">0.0.9848245</span>
-        </Line>
-        <Line>
-          <span className="text-dim">─────────────────────────────────────</span>
-        </Line>
-        <Line>
-          <span className="text-mint">●</span> <span className="text-foreground">LIVE</span>{" "}
-          <span className="text-dim">│</span> <span className="text-muted">nivesh-macbook</span>{" "}
-          <span className="text-dim">│</span> <span className="text-muted">beat 3s ago</span>
-        </Line>
-        <Line>
-          <span className="text-mint">◈</span> <span className="text-muted">earned</span>{" "}
-          <span className="font-semibold text-mint">$0.0420</span>{" "}
-          <span className="text-dim">│</span> <span className="text-mint">42</span>{" "}
-          <span className="text-muted">done</span> <span className="text-dim">│</span>{" "}
-          <span className="text-cyan">1</span> <span className="text-muted">running</span>
-        </Line>
-        <Line>
-          <span className="text-amber">⚡</span>{" "}
-          <span className="text-foreground">job_gBc-RIOAyqW5</span>{" "}
-          <span className="text-muted">claude-code</span>{" "}
-          <span className="text-mint">$0.0100</span>
-        </Line>
-        <Line>
-          <span className="pl-5 text-dim">Write: src/parser.ts</span>
-        </Line>
-        <Line>
-          <span className="text-mint">✔</span>{" "}
-          <span className="text-muted">job done in 8.4s — earned</span>{" "}
-          <span className="text-mint">$0.0100</span>
-        </Line>
-      </div>
-    </div>
+    </motion.div>
   );
-}
-
-function Line({ children }: { children: React.ReactNode }) {
-  return <div data-term-line>{children}</div>;
 }

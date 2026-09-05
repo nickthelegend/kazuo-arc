@@ -1,61 +1,52 @@
 "use client";
 
 import { useRef, type ReactNode } from "react";
-import { gsap, useGSAP, shouldAnimate, DUR, EASE } from "@/lib/gsap";
+import { motion, useInView } from "motion/react";
+import { cn } from "@/lib/utils";
+import { EASE, useEntrance } from "@/lib/motion";
 
 /**
- * Scroll-in wrapper.
+ * The page's single reveal.
  *
- * The hidden start state is applied by `gsap.fromTo` inside `useGSAP` — which
- * runs in a layout effect, before paint — rather than by an inline
- * `style={{opacity:0}}`. That distinction matters: an inline zero opacity is the
- * element's *authored* value, so anything that reverts the animation, or fails
- * to run it at all, leaves the content permanently invisible. Driven from
- * script, the markup stays visible by default, which is the behaviour you want
- * when the animation layer breaks.
+ * One shared entrance for everything below the hero, so the page has a rhythm
+ * rather than a different trick per section. Short and exponential — it should
+ * register as the content settling, not as an animation you were asked to
+ * watch.
+ *
+ * When motion can't run (reduced-motion, or a backgrounded tab where rAF never
+ * fires) this renders the plain element in its final state. Content is never
+ * held at opacity 0 waiting for a frame that may not come.
  */
 export function Reveal({
   children,
   delay = 0,
-  y = 28,
-  className = "",
+  className,
 }: {
   children: ReactNode;
   delay?: number;
-  y?: number;
   className?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const inView = useInView(ref, { once: true, margin: "0px 0px -12% 0px" });
+  const animate = useEntrance();
 
-  useGSAP(
-    () => {
-      const el = ref.current;
-      if (!el) return;
-
-      if (!shouldAnimate()) {
-        gsap.set(el, { opacity: 1, y: 0 });
-        return;
-      }
-
-      gsap.fromTo(
-        el,
-        { opacity: 0, y },
-        {
-          opacity: 1,
-          y: 0,
-          duration: DUR,
-          ease: EASE,
-          delay,
-          scrollTrigger: { trigger: el, start: "top 92%", once: true },
-        },
-      );
-    },
-    { scope: ref },
-  );
+  if (!animate) {
+    return (
+      <div ref={ref} className={className}>
+        {children}
+      </div>
+    );
+  }
 
   return (
-    <div ref={ref} className={className}>
+    <motion.div
+      ref={ref}
+      className={cn(className)}
+      initial={{ opacity: 0, y: 14 }}
+      animate={inView ? { opacity: 1, y: 0 } : { opacity: 0, y: 14 }}
+      transition={{ duration: 0.55, ease: EASE, delay }}
+    >
       {children}
-    </div>
+    </motion.div>
   );
 }

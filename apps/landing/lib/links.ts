@@ -31,7 +31,7 @@ export const CHAIN = {
 export const NAV = [
   { label: "How it works", href: "#how" },
   { label: "Earn", href: "#earn" },
-  { label: "Payments", href: "#payments" },
   { label: "Adapters", href: "#adapters" },
+  { label: "Receipts", href: "#ledger" },
   { label: "FAQ", href: "#faq" },
 ];

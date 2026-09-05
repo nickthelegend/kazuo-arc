@@ -1,45 +1,51 @@
 @import "tailwindcss";
 
 /*
-  Xorv is dark-only by design, not by omission. The product is a terminal, a
-  ledger and a live network graph — surfaces that read as instruments. There is
-  no light palette to fall back to, so the tokens below are the whole system.
+  Xorv — monochrome.
+  ---------------------------------------------------------------------------
+  Black, white, and the space between them. No gradients, no accent colour used
+  decoratively. Emphasis comes from weight, size and negative space; colour is
+  reserved for meaning — a node is live, a job failed — and nothing else.
+
+  The product is a terminal and a ledger. It should read like an instrument.
 */
 :root {
   color-scheme: dark;
 
-  --background: #07070b;
-  --surface: #0d0e14;
-  --surface-2: #12131b;
-  --foreground: #e9eaf2;
-  --muted: #8a90a6;
-  --dim: #5c6279;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.14);
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #121212;
+  --surface-3: #191919;
 
-  --violet: #7c5cff;
-  --indigo: #636cff;
-  --azure: #3daaff;
-  --cyan: #3ddcff;
-  --mint: #50f0c8;
-  --amber: #ffb84c;
-  --rose: #ff5a78;
+  --fg: #fafafa;
+  --fg-2: #a1a1a1;
+  --fg-3: #6e6e6e;
+  --fg-4: #4a4a4a;
+
+  --line: rgba(255, 255, 255, 0.09);
+  --line-2: rgba(255, 255, 255, 0.16);
+  --line-3: rgba(255, 255, 255, 0.28);
+
+  /* Semantic only. If it isn't reporting state, it isn't coloured. */
+  --live: #4ade80;
+  --fail: #f87171;
+  --warn: #fbbf24;
 }
 
 @theme inline {
-  --color-background: var(--background);
+  --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-dim: var(--dim);
-  --color-border: var(--border);
-  --color-violet: var(--violet);
-  --color-azure: var(--azure);
-  --color-cyan: var(--cyan);
-  --color-mint: var(--mint);
-  --color-amber: var(--amber);
-  --color-rose: var(--rose);
+  --color-surface-3: var(--surface-3);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-fg-4: var(--fg-4);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-live: var(--live);
+  --color-fail: var(--fail);
+  --color-warn: var(--warn);
   --font-sans: var(--font-inter);
 }
 
@@ -48,120 +54,131 @@ html {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--fg);
   font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "cv11", "ss01";
+  font-variant-ligatures: contextual;
 }
 
 ::selection {
-  background: color-mix(in oklab, var(--violet) 55%, transparent);
-  color: #fff;
+  background: var(--fg);
+  color: var(--bg);
 }
 
-/* Scrollbar, so it belongs to the page rather than to the OS. */
 ::-webkit-scrollbar {
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--background);
+  background: var(--bg);
 }
 ::-webkit-scrollbar-thumb {
-  background: #22242f;
+  background: #262626;
   border-radius: 999px;
-  border: 3px solid var(--background);
+  border: 3px solid var(--bg);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #2e3140;
+  background: #363636;
 }
 
-/* --- type ---------------------------------------------------------------- */
+/* --- type ----------------------------------------------------------------
 
-.grad-text {
-  background-image: linear-gradient(105deg, #ffffff 0%, #cfe4ff 45%, #8fb8ff 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  /* With tight leading, bg-clip:text rasterizes at the box bounds and shears
-     the descenders off g/y/p. Extend the paint box, cancel the layout cost. */
-  padding-bottom: 0.14em;
-  margin-bottom: -0.14em;
+   Display sizes carry negative tracking; the larger the type, the tighter it
+   sets. Emphasis is weight and scale — never a gradient fill. */
+
+/* Fluid rather than stepped. A 76px headline that only drops at the `md`
+   breakpoint overflows every width between 768px and about 1000px — the sizes
+   real laptops actually use. clamp() removes the cliff. */
+.display {
+  font-size: clamp(2.5rem, 1.15rem + 5.6vw, 4.75rem);
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+  font-weight: 600;
 }
 
-.grad-brand {
-  background-image: linear-gradient(100deg, var(--violet) 0%, var(--azure) 52%, var(--cyan) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  padding-bottom: 0.14em;
-  margin-bottom: -0.14em;
+.display-sm {
+  font-size: clamp(1.9rem, 1.1rem + 3.1vw, 3rem);
+  letter-spacing: -0.035em;
+  line-height: 1.06;
+  font-weight: 600;
+}
+
+/* Body copy holds a 65–75ch measure so long paragraphs stay readable. */
+.measure {
+  max-width: 62ch;
 }
 
 .mono {
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  font-feature-settings: "zero" 1;
+  letter-spacing: -0.01em;
+}
+
+/* Tabular figures wherever numbers stack — prices, balances, ledger rows. */
+.tnum {
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- surfaces ------------------------------------------------------------ */
 
-.card {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
-  border: 1px solid var(--border);
-  border-radius: 16px;
+.hairline {
+  border: 1px solid var(--line);
 }
 
-.card-hover {
-  transition:
-    border-color 0.35s ease,
-    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.35s ease;
-}
-.card-hover:hover {
-  border-color: var(--border-strong);
-  transform: translateY(-3px);
-  box-shadow: 0 18px 50px -24px rgba(124, 92, 255, 0.45);
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
 }
 
-/* Hairline that fades at both ends — section separators. */
+/* Depth is offset + blur, never a coloured halo. */
+.lift {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.6),
+    0 24px 64px -32px rgba(0, 0, 0, 0.9);
+}
+
 .rule {
   height: 1px;
-  background: linear-gradient(
-    to right,
-    transparent,
-    rgba(255, 255, 255, 0.12) 22%,
-    rgba(255, 255, 255, 0.12) 78%,
-    transparent
-  );
+  background: var(--line);
 }
 
-/* --- backdrops ----------------------------------------------------------- */
+/* --- motion --------------------------------------------------------------
 
-.grid-bg {
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: 56px 56px;
-  /* Fade the grid toward the edges so it reads as depth, not wallpaper. */
-  mask-image: radial-gradient(78% 62% at 50% 34%, #000 40%, transparent 100%);
-  -webkit-mask-image: radial-gradient(78% 62% at 50% 34%, #000 40%, transparent 100%);
+   One authored moment (the hero). Everything else is a single restrained
+   reveal, so the page has a rhythm rather than a twitch per section. */
+
+@keyframes cursor {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  50%,
+  95% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+.cursor {
+  animation: cursor 1.1s steps(1) infinite;
 }
 
-.aurora {
-  background:
-    radial-gradient(46% 42% at 22% 18%, rgba(124, 92, 255, 0.3), transparent 68%),
-    radial-gradient(40% 38% at 78% 26%, rgba(61, 220, 255, 0.22), transparent 66%),
-    radial-gradient(52% 46% at 50% 92%, rgba(80, 240, 200, 0.12), transparent 70%);
-  filter: blur(20px);
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
-
-.glow-ring {
-  box-shadow:
-    0 0 0 1px rgba(255, 255, 255, 0.06),
-    0 0 60px -18px rgba(124, 92, 255, 0.6);
+.breathe {
+  animation: breathe 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
-
-/* --- motion -------------------------------------------------------------- */
 
 @keyframes marquee {
   from {
@@ -172,35 +189,29 @@ body {
   }
 }
 .marquee-track {
-  animation: marquee 42s linear infinite;
+  animation: marquee 48s linear infinite;
   width: max-content;
 }
 .marquee-mask {
-  mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 12%, #000 88%, transparent);
-}
-
-@keyframes pulse-dot {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.45;
-    transform: scale(0.82);
-  }
-}
-.live-dot {
-  animation: pulse-dot 2s ease-in-out infinite;
+  mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .marquee-track,
-  .live-dot {
+  .cursor,
+  .breathe {
     animation: none;
   }
   html {
     scroll-behavior: auto;
   }
+}
+
+/* --- focus ---------------------------------------------------------------- */
+
+:focus-visible {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+  border-radius: 4px;
 }

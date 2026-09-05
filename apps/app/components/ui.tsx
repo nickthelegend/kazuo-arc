@@ -1,76 +1,166 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-export function Card({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("card p-5", className)}>{children}</div>;
+/* ---------------------------------------------------------------------------
+   The app's component vocabulary.
+
+   Same two-button set as the marketing site, same hairlines, same monochrome.
+   An app that looks like a different product from its landing page is a
+   product that has two design teams and no design.
+--------------------------------------------------------------------------- */
+
+type Variant = "primary" | "secondary" | "ghost";
+
+const base =
+  "inline-flex items-center justify-center gap-2 rounded-lg text-[13.5px] font-medium " +
+  "transition-[background-color,border-color,color,transform] duration-200 " +
+  "active:scale-[0.985] disabled:pointer-events-none disabled:opacity-40";
+
+const variants: Record<Variant, string> = {
+  primary: "bg-white text-black px-4 py-2.5 hover:bg-white/90",
+  secondary:
+    "px-4 py-2.5 text-fg border border-[var(--line-2)] hover:border-[var(--line-3)] hover:bg-white/[0.04]",
+  ghost: "px-3 py-2 text-fg-2 hover:text-fg hover:bg-white/[0.05]",
+};
+
+export function Button({
+  children,
+  variant = "primary",
+  href,
+  external,
+  className,
+  ...props
+}: {
+  children: ReactNode;
+  variant?: Variant;
+  href?: string;
+  external?: boolean;
+} & Omit<ComponentProps<"button">, "ref">) {
+  const cls = cn(base, variants[variant], className);
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={cls}
+        {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      >
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <button className={cls} {...props}>
+      {children}
+    </button>
+  );
 }
 
-export function PageTitle({ title, sub }: { title: string; sub?: string }) {
+/** A bordered region. Never nested — a card inside a card is a layout that gave up. */
+export function Panel({
+  children,
+  className,
+  as: Tag = "div",
+}: {
+  children: ReactNode;
+  className?: string;
+  as?: "div" | "section" | "article";
+}) {
   return (
-    <div className="mb-6">
-      <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
-      {sub ? <p className="mt-1.5 text-sm text-muted">{sub}</p> : null}
+    <Tag className={cn("rounded-xl border border-[var(--line)] bg-surface", className)}>
+      {children}
+    </Tag>
+  );
+}
+
+export function PageHeader({
+  title,
+  sub,
+  action,
+}: {
+  title: string;
+  sub?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-fg">{title}</h1>
+        {sub ? <p className="measure mt-1.5 text-[14px] leading-relaxed text-fg-2">{sub}</p> : null}
+      </div>
+      {action}
     </div>
   );
 }
 
-const STATUS_STYLES: Record<string, string> = {
-  completed: "border-mint/30 bg-mint/[0.08] text-mint",
-  running: "border-cyan/30 bg-cyan/[0.08] text-cyan",
-  assigned: "border-azure/30 bg-azure/[0.08] text-azure",
-  paid: "border-violet/30 bg-violet/[0.08] text-violet",
-  quoted: "border-[var(--border)] bg-white/[0.03] text-muted",
-  failed: "border-rose/30 bg-rose/[0.08] text-rose",
-  expired: "border-[var(--border)] bg-white/[0.03] text-dim",
-  online: "border-mint/30 bg-mint/[0.08] text-mint",
-  busy: "border-amber/30 bg-amber/[0.08] text-amber",
-  offline: "border-[var(--border)] bg-white/[0.03] text-dim",
+/**
+ * Status.
+ *
+ * Colour appears here and essentially nowhere else, because here it means
+ * something: running, done, failed. A neutral dot for everything in between.
+ */
+const STATUS: Record<string, { dot: string; text: string; label?: string }> = {
+  completed: { dot: "bg-live", text: "text-fg-2" },
+  running: { dot: "bg-live", text: "text-fg" },
+  assigned: { dot: "bg-fg-3", text: "text-fg-2" },
+  paid: { dot: "bg-fg-3", text: "text-fg-2" },
+  quoted: { dot: "bg-fg-4", text: "text-fg-3" },
+  failed: { dot: "bg-fail", text: "text-fail" },
+  expired: { dot: "bg-fg-4", text: "text-fg-3" },
+  online: { dot: "bg-live", text: "text-fg-2" },
+  busy: { dot: "bg-warn", text: "text-fg-2" },
+  offline: { dot: "bg-fg-4", text: "text-fg-3" },
 };
 
-export function StatusBadge({ status }: { status: string }) {
+export function Status({ status, className }: { status: string; className?: string }) {
+  const style = STATUS[status] ?? STATUS.quoted!;
+  const pulsing = status === "running" || status === "online";
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium capitalize",
-        STATUS_STYLES[status] ?? STATUS_STYLES.quoted,
-      )}
-    >
-      {status === "running" || status === "online" ? (
-        <span className="live-dot h-1 w-1 rounded-full bg-current" />
-      ) : null}
-      {status}
+    <span className={cn("inline-flex items-center gap-1.5 text-[12.5px]", style.text, className)}>
+      <span className={cn("h-1.5 w-1.5 rounded-full", style.dot, pulsing && "breathe")} />
+      <span className="capitalize">{status}</span>
     </span>
   );
 }
 
 export function Empty({ title, hint }: { title: string; hint?: ReactNode }) {
   return (
-    <div className="card flex flex-col items-center justify-center gap-2 px-6 py-14 text-center">
-      <p className="text-sm font-medium text-foreground">{title}</p>
-      {hint ? <p className="max-w-sm text-xs leading-relaxed text-muted">{hint}</p> : null}
+    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[var(--line)] px-6 py-16 text-center">
+      <p className="text-[14px] font-medium text-fg-2">{title}</p>
+      {hint ? <p className="measure text-[13px] leading-relaxed text-fg-4">{hint}</p> : null}
     </div>
   );
 }
 
-export function ExternalLink({ href, children }: { href: string; children: ReactNode }) {
+export function Skeleton({ rows = 3, className }: { rows?: number; className?: string }) {
+  return (
+    <div className={cn("space-y-2", className)}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="h-16 animate-pulse rounded-xl bg-white/[0.03]" />
+      ))}
+    </div>
+  );
+}
+
+export function Ext({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="text-cyan transition-colors hover:text-foreground"
+      className="underline-offset-4 transition-colors hover:text-fg hover:underline"
     >
       {children}
     </Link>
   );
 }
 
-export function Field({ label, children }: { label: string; children: ReactNode }) {
+/** A label/value row. The app's densest and most-used primitive. */
+export function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 py-1.5">
-      <span className="shrink-0 text-xs text-dim">{label}</span>
-      <span className="min-w-0 truncate text-right text-xs text-muted">{children}</span>
+    <div className="flex items-baseline justify-between gap-4 py-2">
+      <span className="shrink-0 text-[12.5px] text-fg-4">{label}</span>
+      <span className="min-w-0 truncate text-right text-[12.5px] text-fg-2">{children}</span>
     </div>
   );
 }

@@ -1,91 +1,94 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-/** Small caps label that sits above a section heading. */
-export function Eyebrow({ children }: { children: ReactNode }) {
+/* ---------------------------------------------------------------------------
+   Buttons
+
+   Solid white for the primary action, hairline for everything else. Two
+   variants is the whole set: a page that needs a third is a page whose
+   hierarchy hasn't been decided.
+--------------------------------------------------------------------------- */
+
+type Variant = "primary" | "secondary" | "ghost";
+
+const base =
+  "inline-flex items-center justify-center gap-2 rounded-lg text-[13.5px] font-medium " +
+  "transition-[background-color,border-color,color,transform] duration-200 " +
+  "active:scale-[0.985] disabled:pointer-events-none disabled:opacity-40";
+
+const variants: Record<Variant, string> = {
+  primary: "bg-white text-black px-4 py-2.5 hover:bg-white/90",
+  secondary:
+    "px-4 py-2.5 text-fg border border-[var(--line-2)] hover:border-[var(--line-3)] hover:bg-white/[0.04]",
+  ghost: "px-3 py-2 text-fg-2 hover:text-fg hover:bg-white/[0.05]",
+};
+
+export function Button({
+  children,
+  variant = "primary",
+  href,
+  external,
+  className,
+  ...props
+}: {
+  children: ReactNode;
+  variant?: Variant;
+  href?: string;
+  external?: boolean;
+} & Omit<ComponentProps<"button">, "ref">) {
+  const cls = cn(base, variants[variant], className);
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={cls}
+        {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      >
+        {children}
+      </Link>
+    );
+  }
   return (
-    <div className="mb-4 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-muted">
-      <span className="h-px w-6 bg-gradient-to-r from-transparent to-violet" />
+    <button className={cls} {...props}>
       {children}
-    </div>
+    </button>
   );
 }
 
+/* ---------------------------------------------------------------------------
+   Section heading
+
+   No eyebrow. A kicker that appears above every section stops being a signal
+   and becomes grammar, so headings here carry themselves on size and weight.
+--------------------------------------------------------------------------- */
+
 export function SectionHeading({
-  eyebrow,
   title,
   sub,
   align = "center",
   className,
 }: {
-  eyebrow?: string;
   title: ReactNode;
   sub?: ReactNode;
   align?: "center" | "left";
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "max-w-2xl",
-        align === "center" && "mx-auto text-center",
-        className,
-      )}
-    >
-      {eyebrow ? <Eyebrow>{eyebrow}</Eyebrow> : null}
-      <h2 className="grad-text text-3xl font-semibold leading-[1.12] tracking-[-0.02em] sm:text-4xl md:text-[2.75rem]">
+    <div className={cn(align === "center" ? "mx-auto max-w-2xl text-center" : "max-w-2xl", className)}>
+      <h2 className="display-sm text-balance">
         {title}
       </h2>
-      {sub ? <p className="mt-4 text-[15px] leading-relaxed text-muted">{sub}</p> : null}
-    </div>
-  );
-}
-
-type ButtonProps = {
-  href: string;
-  children: ReactNode;
-  variant?: "primary" | "ghost";
-  className?: string;
-  external?: boolean;
-};
-
-export function Button({ href, children, variant = "primary", className, external }: ButtonProps) {
-  const base =
-    "inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition-all duration-300";
-  const styles =
-    variant === "primary"
-      ? "text-white glow-ring bg-[linear-gradient(100deg,#7C5CFF,#3DAAFF_55%,#3DDCFF)] hover:brightness-110 hover:-translate-y-0.5"
-      : "text-foreground border border-[var(--border)] bg-white/[0.03] hover:bg-white/[0.07] hover:border-[var(--border-strong)]";
-
-  const props = external ? { target: "_blank", rel: "noopener noreferrer" } : {};
-  return (
-    <Link href={href} className={cn(base, styles, className)} {...props}>
-      {children}
-    </Link>
-  );
-}
-
-/** Bordered pill used for stats and chain ids. */
-export function Pill({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-2 rounded-full border border-[var(--border)] bg-white/[0.03] px-3 py-1 text-xs text-muted",
-        className,
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
-/** A copyable command line. */
-export function Command({ children }: { children: string }) {
-  return (
-    <div className="card mono flex items-center gap-3 px-4 py-3 text-sm">
-      <span className="select-none text-violet">$</span>
-      <code className="text-foreground">{children}</code>
+      {sub ? (
+        <p
+          className={cn(
+            "measure mt-4 text-[15px] leading-relaxed text-fg-2",
+            align === "center" && "mx-auto",
+          )}
+        >
+          {sub}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -103,5 +106,52 @@ export function Section({
     <section id={id} className={cn("relative px-6 py-24 md:py-32", className)}>
       <div className="mx-auto w-full max-w-6xl">{children}</div>
     </section>
+  );
+}
+
+/** A hairline pill. Used once in the hero and once per status — not as chrome. */
+export function Pill({
+  children,
+  href,
+  className,
+}: {
+  children: ReactNode;
+  href?: string;
+  className?: string;
+}) {
+  const cls = cn(
+    "inline-flex items-center gap-2 rounded-full border border-[var(--line)] bg-white/[0.02] px-3 py-1 text-[12.5px] text-fg-2",
+    href && "transition-colors hover:border-[var(--line-2)] hover:text-fg",
+    className,
+  );
+  if (href) {
+    return (
+      <Link href={href} className={cls} target="_blank" rel="noopener noreferrer">
+        {children}
+      </Link>
+    );
+  }
+  return <span className={cls}>{children}</span>;
+}
+
+/** A live indicator. The only place green appears on the page. */
+export function LiveDot({ className }: { className?: string }) {
+  return (
+    <span className={cn("relative flex h-1.5 w-1.5", className)}>
+      <span className="breathe absolute inline-flex h-full w-full rounded-full bg-live" />
+      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-live" />
+    </span>
+  );
+}
+
+/** A shell command, presented as something you copy rather than read. */
+export function Command({ children }: { children: string }) {
+  return (
+    <div className="mono flex items-center gap-3 rounded-lg border border-[var(--line)] bg-surface px-4 py-3 text-[13px]">
+      <span aria-hidden className="select-none text-fg-4">
+        $
+      </span>
+      <code className="text-fg">{children}</code>
+    </div>
   );
 }

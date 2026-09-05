@@ -8,8 +8,8 @@ const COLUMNS = [
     links: [
       { label: "How it works", href: "#how" },
       { label: "For providers", href: "#earn" },
-      { label: "Payments", href: "#payments" },
       { label: "Adapters", href: "#adapters" },
+      { label: "Receipts", href: "#ledger" },
     ],
   },
   {
@@ -17,14 +17,14 @@ const COLUMNS = [
     links: [
       { label: "GitHub", href: REPO_URL, external: true },
       { label: "CLI on npm", href: NPM_URL, external: true },
-      { label: "x402 protocol", href: X402_URL, external: true },
+      { label: "x402", href: X402_URL, external: true },
       { label: "Hedera", href: HEDERA_URL, external: true },
     ],
   },
   {
     title: "On-chain",
     links: [
-      { label: `USDC ${CHAIN.usdc}`, href: CHAIN.usdcUrl, external: true },
+      { label: "USDC token", href: CHAIN.usdcUrl, external: true },
       { label: "Registry topic", href: CHAIN.topicUrl(CHAIN.topics.registry), external: true },
       { label: "Heartbeat topic", href: CHAIN.topicUrl(CHAIN.topics.heartbeat), external: true },
       { label: "Receipts topic", href: CHAIN.topicUrl(CHAIN.topics.receipts), external: true },
@@ -34,37 +34,23 @@ const COLUMNS = [
 
 export function Footer() {
   return (
-    <footer className="border-t border-[var(--border)] px-6 py-14">
+    <footer className="border-t border-[var(--line)] px-6 py-16">
       <div className="mx-auto w-full max-w-6xl">
-        <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(3,1fr)]">
+        <div className="grid gap-12 md:grid-cols-[1.5fr_repeat(3,1fr)]">
           <div>
-            <div className="flex items-center gap-2.5">
-              <Mark id="footer" className="h-6 w-6" />
-              <span className="font-semibold tracking-tight text-white">Xorv</span>
+            <div className="flex items-center gap-2.5 text-fg">
+              <Mark className="h-5 w-5" />
+              <span className="text-[15px] font-semibold tracking-[-0.02em]">Xorv</span>
             </div>
-            <p className="mt-4 max-w-xs text-sm leading-relaxed text-muted">
+            <p className="mt-4 max-w-[26ch] text-[13.5px] leading-relaxed text-fg-3">
               A decentralized AI capacity network. Idle subscriptions in, paid jobs out — settled
-              per request in USDC over x402 on Hedera.
-            </p>
-            <p className="mt-5 text-xs text-dim">
-              Part of the{" "}
-              <Link
-                href={LOOM_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-muted transition-colors hover:text-cyan"
-              >
-                Loompad
-              </Link>{" "}
-              ecosystem.
+              per request in USDC on Hedera.
             </p>
           </div>
 
           {COLUMNS.map((column) => (
             <div key={column.title}>
-              <h3 className="text-[11px] font-semibold uppercase tracking-[0.2em] text-dim">
-                {column.title}
-              </h3>
+              <h3 className="text-[13px] font-medium text-fg">{column.title}</h3>
               <ul className="mt-4 space-y-2.5">
                 {column.links.map((link) => (
                   <li key={link.label}>
@@ -73,7 +59,7 @@ export function Footer() {
                       {...("external" in link && link.external
                         ? { target: "_blank", rel: "noopener noreferrer" }
                         : {})}
-                      className="text-sm text-muted transition-colors hover:text-foreground"
+                      className="text-[13.5px] text-fg-3 transition-colors hover:text-fg"
                     >
                       {link.label}
                     </Link>
@@ -84,11 +70,19 @@ export function Footer() {
           ))}
         </div>
 
-        <div className="mt-12 flex flex-col items-start justify-between gap-3 border-t border-[var(--border)] pt-6 sm:flex-row sm:items-center">
-          <p className="text-xs text-dim">
-            © {new Date().getFullYear()} Xorv · MIT licensed
+        <div className="mt-14 flex flex-col items-start justify-between gap-3 border-t border-[var(--line)] pt-6 sm:flex-row sm:items-center">
+          <p className="text-[12.5px] text-fg-4">
+            © {new Date().getFullYear()} Xorv · MIT ·{" "}
+            <Link
+              href={LOOM_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition-colors hover:text-fg-2"
+            >
+              Loompad
+            </Link>
           </p>
-          <p className="mono text-xs text-dim">{CHAIN.network}</p>
+          <p className="mono text-[12px] text-fg-4">{CHAIN.network}</p>
         </div>
       </div>
     </footer>
