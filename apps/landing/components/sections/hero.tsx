@@ -69,7 +69,7 @@ export function Hero() {
         </motion.div>
 
         <motion.p {...rise(0.32)} className="mono mt-7 text-[12.5px] text-fg-4">
-          npm i -g xorv
+          npm i -g @xorv/cli
         </motion.p>
       </div>
 

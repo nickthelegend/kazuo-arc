@@ -57,7 +57,7 @@ export function Earn() {
 
         <Reveal delay={0.06}>
           <div className="space-y-2.5">
-            <Command>npm i -g xorv</Command>
+            <Command>npm i -g @xorv/cli</Command>
             <Command>xorv init</Command>
             <Command>xorv start</Command>
           </div>

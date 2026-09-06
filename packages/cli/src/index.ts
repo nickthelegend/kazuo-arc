@@ -90,6 +90,8 @@ program
 program
   .command("doctor")
   .description("check everything that could stop this node earning")
+  .option("--json", "machine-readable results, for CI and scripts")
+  .option("--fix", "repair what has exactly one safe repair; report the rest")
   .action(wrap(doctorCommand));
 
 program

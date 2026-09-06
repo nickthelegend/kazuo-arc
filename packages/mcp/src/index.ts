@@ -142,7 +142,7 @@ server.tool(
       const live = providers.filter((p) => p.status !== "offline");
       if (live.length === 0) {
         return text(
-          "No providers are online right now. Anyone can start one with `npm i -g xorv && xorv init && xorv start`.",
+          "No providers are online right now. Anyone can start one with `npm i -g @xorv/cli && xorv init && xorv start`.",
         );
       }
 

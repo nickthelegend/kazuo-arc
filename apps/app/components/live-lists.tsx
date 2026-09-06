@@ -65,7 +65,7 @@ export function ProviderList() {
         title="No providers online"
         hint={
           <>
-            Run <span className="mono text-fg-3">npm i -g xorv &amp;&amp; xorv init</span> on any
+            Run <span className="mono text-fg-3">npm i -g @xorv/cli &amp;&amp; xorv init</span> on any
             machine with Claude Code, Codex or Grok installed.
           </>
         }

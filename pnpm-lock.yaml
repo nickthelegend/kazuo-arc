@@ -29,8 +29,8 @@ importers:
         specifier: ~2.20.0
         version: 2.20.0(ansi-regex@6.2.2)(ansi-styles@6.2.3)(bn.js@5.2.3)(bufferutil@4.1.0)(debug@4.4.3)(protobufjs@8.2.0)(react-native@0.86.2(@babel/core@7.29.7)(@types/react@19.2.18)(bufferutil@4.1.0)(react@19.2.4)(utf-8-validate@6.0.6))(strip-ansi@7.1.2)(utf-8-validate@6.0.6)
       '@xorv/protocol':
-        specifier: workspace:*
-        version: link:../../packages/protocol
+        specifier: ^0.1.0
+        version: 0.1.0(ansi-regex@6.2.2)(ansi-styles@6.2.3)(bn.js@5.2.3)(bufferutil@4.1.0)(debug@4.4.3)(protobufjs@8.2.0)(react-native@0.86.2(@babel/core@7.29.7)(@types/react@19.2.18)(bufferutil@4.1.0)(react@19.2.4)(utf-8-validate@6.0.6))(strip-ansi@7.1.2)(utf-8-validate@6.0.6)
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -73,7 +73,7 @@ importers:
         version: 9.39.5(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.2.10
-        version: 16.2.10(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.2.10(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       tailwindcss:
         specifier: ^4
         version: 4.3.3
@@ -131,7 +131,7 @@ importers:
         version: 9.39.5(jiti@2.7.0)
       eslint-config-next:
         specifier: 16.2.10
-        version: 16.2.10(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
+        version: 16.2.10(@typescript-eslint/parser@8.65.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3))(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       tailwindcss:
         specifier: ^4
         version: 4.3.3
@@ -2609,6 +2609,9 @@ packages:
     peerDependenciesMeta:
       '@x402/paywall':
         optional: true
+
+  '@xorv/protocol@0.1.0':
+    resolution: {integrity: sha512-KEzvJV39SCqTGUKuNmND07KhwYSmR7DJrhwfSogQwEyLOlq+oQ6vkZsbApK+BGQlk5kTiIXVApxkZfQSnB/ziQ==}
 
   abitype@1.0.6:
     resolution: {integrity: sha512-MMSqYh4+C/aVqI2RQaWqbvI4Kxo5cQV40WQ4QFtDnNzCkqChm8MuENhElmynZlO0qUy/ObkEUaXtKqYnx1Kp3A==}
@@ -9988,6 +9991,24 @@ snapshots:
       - bufferutil
       - ethers
       - typescript
+      - utf-8-validate
+
+  '@xorv/protocol@0.1.0(ansi-regex@6.2.2)(ansi-styles@6.2.3)(bn.js@5.2.3)(bufferutil@4.1.0)(debug@4.4.3)(protobufjs@8.2.0)(react-native@0.86.2(@babel/core@7.29.7)(@types/react@19.2.18)(bufferutil@4.1.0)(react@19.2.4)(utf-8-validate@6.0.6))(strip-ansi@7.1.2)(utf-8-validate@6.0.6)':
+    dependencies:
+      '@hiero-ledger/sdk': 2.85.0(bn.js@5.2.3)(bufferutil@4.1.0)(react-native@0.86.2(@babel/core@7.29.7)(@types/react@19.2.18)(bufferutil@4.1.0)(react@19.2.4)(utf-8-validate@6.0.6))(utf-8-validate@6.0.6)
+      '@x402/core': 2.20.0
+      '@x402/hedera': 2.20.0(ansi-regex@6.2.2)(ansi-styles@6.2.3)(bn.js@5.2.3)(bufferutil@4.1.0)(debug@4.4.3)(protobufjs@8.2.0)(react-native@0.86.2(@babel/core@7.29.7)(@types/react@19.2.18)(bufferutil@4.1.0)(react@19.2.4)(utf-8-validate@6.0.6))(strip-ansi@7.1.2)(utf-8-validate@6.0.6)
+    transitivePeerDependencies:
+      - ansi-regex
+      - ansi-styles
+      - bn.js
+      - bufferutil
+      - debug
+      - expo-crypto
+      - protobufjs
+      - react-native
+      - strip-ansi
+      - supports-color
       - utf-8-validate
 
   abitype@1.0.6(typescript@5.9.3)(zod@3.25.76):

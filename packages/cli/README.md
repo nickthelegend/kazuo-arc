@@ -7,7 +7,7 @@
 </div>
 
 ```bash
-npm i -g xorv
+npm i -g @xorv/cli
 xorv init
 xorv start
 ```

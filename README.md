@@ -11,6 +11,12 @@ Rent out the Claude / Codex / Grok subscription you already pay for, and get pai
 
 </div>
 
+<div align="center">
+
+**[Landing](https://xorv.vercel.app)** · **[App](https://xorv-app.vercel.app)** · **[`npm i -g @xorv/cli`](https://www.npmjs.com/package/@xorv/cli)**
+
+</div>
+
 ---
 
 ## For judges — verify in three commands
@@ -19,7 +25,7 @@ Rent out the Claude / Codex / Grok subscription you already pay for, and get pai
 pnpm install && pnpm build && pnpm test
 ```
 
-220 tests, **no credentials and no network required** — the two pieces that
+272 tests, **no credentials and no network required** — the two pieces that
 touch Hedera (the facilitator and the HCS writer) are stubbed, so everything
 from a buyer's first request to a published receipt runs as production code.
 
@@ -27,6 +33,7 @@ Then the live proof, all on Hedera testnet and all openly readable:
 
 | What | Where |
 |---|---|
+| A job paid for **through the deployed app** | [`0.0.9842030@1785526598.292531686`](https://hashscan.io/testnet/transaction/0.0.9842030-1785526598-292531686) — Vercel → broker → settlement → Claude Code → result |
 | A real Claude Code job settled in **Circle USDC** | [`0.0.9842030@1785516412.478664506`](https://hashscan.io/testnet/transaction/0.0.9842030-1785516412-478664506) — buyer −0.2500 USDC, provider +0.2500, **buyer paid zero gas** |
 | A real Claude Code job, paid | [`0.0.9842030@1785475549.131327424`](https://hashscan.io/testnet/transaction/0.0.9842030-1785475549-131327424) |
 | Receipts topic | [`0.0.9848247`](https://hashscan.io/testnet/topic/0.0.9848247) |
@@ -43,8 +50,10 @@ Then the live proof, all on Hedera testnet and all openly readable:
 | ✅ Survives a broker restart | SQLite + MongoDB |
 | ✅ **Circle USDC** (`0.0.429274`) | A real Claude Code job settled in it — [`0.0.9842030@1785516412.478664506`](https://hashscan.io/testnet/transaction/0.0.9842030-1785516412-478664506) |
 | ⚠️ Browser wallet paying directly | Privy auth is live, but Hedera's x402 scheme needs a **native** transfer signature, not an EVM one. Payments route through a server signer |
-| ⚠️ Docker | Written, not built here |
-| ❌ npm packages | Not published |
+| ✅ **Deployed and public** | [landing](https://xorv.vercel.app) · [app](https://xorv-app.vercel.app) — a job paid for through the deployed app, above |
+| ✅ **Published to npm** | [`@xorv/cli`](https://www.npmjs.com/package/@xorv/cli) · [`@xorv/protocol`](https://www.npmjs.com/package/@xorv/protocol) · [`@xorv/mcp`](https://www.npmjs.com/package/@xorv/mcp) |
+| ✅ OS-level job sandbox | Seatbelt / bubblewrap / container — a hostile prompt cannot read the payout key |
+| ⚠️ Docker | Written, never built — Docker Desktop's VM would not start here |
 
 ---
 
@@ -58,14 +67,13 @@ run on the quota you were already paying for. Each job settles as a **real on-ch
 directly from the buyer to you** — no invoices, no platform float, no payout schedule.
 
 ```bash
-git clone https://github.com/nickthelegend/xorv.git
-cd xorv && pnpm install && pnpm build
-node packages/cli/dist/index.js init      # or: pnpm --filter xorv dev init
+npm i -g @xorv/cli
+xorv init
+xorv start
 ```
 
-> The CLI is built to be published as `xorv` on npm and its `package.json` is
-> ready for it, but **it is not published yet** — so `npm i -g xorv` will not
-> work today. Everything below runs from a clone.
+> Published as `@xorv/cli` rather than `xorv` — npm rejects the bare name as too
+> close to existing packages. The binary is still `xorv`.
 
 ---
 
@@ -127,7 +135,7 @@ success rate, which is what the matcher sorts on.
 ```
 xorv/
 ├── packages/
-│   ├── cli/          xorv — the provider node (published to npm as `xorv`)
+│   ├── cli/          @xorv/cli — the provider node; the binary is `xorv`
 │   ├── mcp/          @xorv/mcp — Xorv as an MCP server, so agents can buy capacity
 │   └── protocol/     @xorv/protocol — shared types, money math, Hedera + x402 wiring
 ├── services/

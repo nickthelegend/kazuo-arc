@@ -1,5 +1,5 @@
 {
-  "name": "xorv",
+  "name": "@xorv/cli",
   "version": "0.1.0",
   "description": "Rent out your idle Claude / Codex / Grok subscription and get paid per job in USDC over x402 on Hedera.",
   "license": "MIT",

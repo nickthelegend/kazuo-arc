@@ -155,6 +155,6 @@ function page(node: ProviderNode): string {
   <table><thead><tr><th>Capability</th><th>Adapter</th><th class="right">Price / job</th></tr></thead>
   <tbody>${rows}</tbody></table>
   <footer>Payouts to <span class="mono">${escapeHtml(node.config.accountId)}</span> on ${escapeHtml(node.config.network)}.
-  <br>Run your own: <span class="mono">npm i -g xorv &amp;&amp; xorv init</span></footer>
+  <br>Run your own: <span class="mono">npm i -g @xorv/cli &amp;&amp; xorv init</span></footer>
 </div></body></html>`;
 }

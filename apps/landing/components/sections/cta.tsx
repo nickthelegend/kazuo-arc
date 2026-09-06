@@ -17,7 +17,7 @@ export function Cta() {
           </p>
 
           <div className="mx-auto mt-9 max-w-sm text-left">
-            <Command>npm i -g xorv &amp;&amp; xorv init</Command>
+            <Command>npm i -g @xorv/cli &amp;&amp; xorv init</Command>
           </div>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">
