@@ -39,7 +39,7 @@ First release. Built for the [Hedera x402 bounty](https://hedera.com/x402-bounty
 
 ### Quality
 
-- 203 tests — unit plus a full-lifecycle integration suite that needs no Hedera
+- 220 tests — unit plus a full-lifecycle integration suite that needs no Hedera
   credentials and no network.
 - CI on Node 22 and 24, a Node 20.11 floor check for the CLI, and a
   committed-secret scan.

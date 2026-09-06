@@ -14,7 +14,8 @@
     "setup": "tsx src/scripts/setup.ts",
     "demo": "tsx src/scripts/demo.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "usdc": "tsx src/scripts/usdc.ts"
   },
   "dependencies": {
     "@hiero-ledger/sdk": "2.85.0",

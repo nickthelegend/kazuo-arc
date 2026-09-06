@@ -26,7 +26,8 @@
     "cli": "pnpm --filter xorv dev",
     "setup:hedera": "pnpm --filter @xorv/broker setup",
     "demo": "pnpm --filter @xorv/broker demo",
-    "mcp": "pnpm --filter @xorv/mcp dev"
+    "mcp": "pnpm --filter @xorv/mcp dev",
+    "usdc": "pnpm --filter @xorv/broker usdc"
   },
   "keywords": [
     "x402",

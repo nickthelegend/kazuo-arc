@@ -169,7 +169,7 @@ payload stays private while the record stays verifiable.
 
 ## Testing
 
-203 tests, none of which need Hedera credentials or a network.
+220 tests, none of which need Hedera credentials or a network.
 
 - **Unit** — money math against hand-computed integers, key parsing across both
   curves and every encoding, the matcher's ordering rules, the job state

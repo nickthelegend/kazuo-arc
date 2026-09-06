@@ -13,6 +13,41 @@ Rent out the Claude / Codex / Grok subscription you already pay for, and get pai
 
 ---
 
+## For judges — verify in three commands
+
+```bash
+pnpm install && pnpm build && pnpm test
+```
+
+220 tests, **no credentials and no network required** — the two pieces that
+touch Hedera (the facilitator and the HCS writer) are stubbed, so everything
+from a buyer's first request to a published receipt runs as production code.
+
+Then the live proof, all on Hedera testnet and all openly readable:
+
+| What | Where |
+|---|---|
+| A real Claude Code job settled in **Circle USDC** | [`0.0.9842030@1785516412.478664506`](https://hashscan.io/testnet/transaction/0.0.9842030-1785516412-478664506) — buyer −0.2500 USDC, provider +0.2500, **buyer paid zero gas** |
+| A real Claude Code job, paid | [`0.0.9842030@1785475549.131327424`](https://hashscan.io/testnet/transaction/0.0.9842030-1785475549-131327424) |
+| Receipts topic | [`0.0.9848247`](https://hashscan.io/testnet/topic/0.0.9848247) |
+
+### What is proven, and what isn't
+
+| | |
+|---|---|
+| ✅ x402 payments settling on Hedera | Many, on-chain, links above |
+| ✅ HTS token settlement (USDC's exact shape) | Six jobs — token `0.0.9858754`, 6dp fungible |
+| ✅ Real Claude Code jobs, paid per job | Prompt in, working code out |
+| ✅ HCS audit trail | Registry, heartbeat and receipt topics |
+| ✅ MCP: an agent buying capacity | Verified over stdio |
+| ✅ Survives a broker restart | SQLite + MongoDB |
+| ✅ **Circle USDC** (`0.0.429274`) | A real Claude Code job settled in it — [`0.0.9842030@1785516412.478664506`](https://hashscan.io/testnet/transaction/0.0.9842030-1785516412-478664506) |
+| ⚠️ Browser wallet paying directly | Privy auth is live, but Hedera's x402 scheme needs a **native** transfer signature, not an EVM one. Payments route through a server signer |
+| ⚠️ Docker | Written, not built here |
+| ❌ npm packages | Not published |
+
+---
+
 ## The idea
 
 Millions of people pay ~$20–200/month for an AI subscription and use a fraction of it. Meanwhile
@@ -23,8 +58,14 @@ run on the quota you were already paying for. Each job settles as a **real on-ch
 directly from the buyer to you** — no invoices, no platform float, no payout schedule.
 
 ```bash
-npm i -g xorv && xorv init && xorv start
+git clone https://github.com/nickthelegend/xorv.git
+cd xorv && pnpm install && pnpm build
+node packages/cli/dist/index.js init      # or: pnpm --filter xorv dev init
 ```
+
+> The CLI is built to be published as `xorv` on npm and its `package.json` is
+> ready for it, but **it is not published yet** — so `npm i -g xorv` will not
+> work today. Everything below runs from a clone.
 
 ---
 
@@ -184,7 +225,8 @@ This is the part x402 was actually invented for. An agent that needs work done
 finds capacity, pays for it, and gets the result — no human, no account, no card.
 
 ```bash
-claude mcp add xorv -- npx -y @xorv/mcp
+# @xorv/mcp is not published to npm yet — point at the built file in your clone:
+claude mcp add xorv -- node /absolute/path/to/xorv/packages/mcp/dist/index.js
 ```
 
 ```bash
@@ -215,7 +257,7 @@ HCS receipt: https://hashscan.io/testnet/transaction/0.0.9842030-1785477001-5661
 ## Tests
 
 ```bash
-pnpm test    # 203 tests, no credentials, no network
+pnpm test    # 220 tests, no credentials, no network
 ```
 
 Unit tests for money math, key parsing, the matcher and the terminal layout —
@@ -240,6 +282,10 @@ Persists to a volume, health-checks itself, and runs as a non-root user. Set
 `XORV_TRUST_PROXY=1` behind a reverse proxy so rate limiting sees real client
 IPs. `/metrics` speaks Prometheus.
 
+> The Dockerfile and compose file are written and reviewed but **have not been
+> built on this machine** — Docker wasn't available. Treat them as unverified
+> until you run them.
+
 ---
 
 ## Live on Hedera testnet
@@ -254,17 +300,16 @@ Everything below is real and checkable.
 | Heartbeat topic | [`0.0.9848246`](https://hashscan.io/testnet/topic/0.0.9848246) |
 | Receipts topic | [`0.0.9848247`](https://hashscan.io/testnet/topic/0.0.9848247) |
 
-**HTS token settlement, verified on-chain.** Six jobs, six settlements, and the buyer's HBAR
-balance unchanged through every one of them — the facilitator paid every fee:
+**Circle USDC settlement, verified on-chain.** Ten jobs across the CLI, the web app and the MCP
+server — and the buyer's HBAR balance unchanged through every one of them, because the facilitator
+paid every fee:
 
 | | |
 |---|---|
-| Token | `0.0.9858754` (fungible, 6dp — the same shape as USDC) |
-| Settlement | [`0.0.9842030@1785515573.020085790`](https://hashscan.io/testnet/transaction/0.0.9842030-1785515573-020085790) — payer `0.0.9848440` −0.0010, provider `0.0.9848438` +0.0010 |
-| Buyer's gas | **zero.** Every HBAR fee on that transaction was debited from the facilitator |
-
-Point `XORV_STABLECOIN` at `0.0.429274` and the same path settles in Circle's USDC — the token id
-is the only difference.
+| Token | [`0.0.429274`](https://hashscan.io/testnet/token/0.0.429274) — Circle's USDC on Hedera testnet |
+| A Claude Code job | [`0.0.9842030@1785516412.478664506`](https://hashscan.io/testnet/transaction/0.0.9842030-1785516412-478664506) — buyer `0.0.9848440` −0.2500 USDC, provider `0.0.9848438` +0.2500 |
+| Its HCS receipt | [`https://hashscan.io/testnet/transaction/0.0.9842030-1785516420-464719452`](https://hashscan.io/testnet/transaction/0.0.9842030-1785516420-464719452) |
+| Buyer's gas | **zero.** Every HBAR fee was debited from the facilitator |
 
 **A real Claude Code job, paid for over x402.** Prompt in, working Python out, $0.0100 moved from
 buyer to provider on-chain:
