@@ -1,3 +1,4 @@
+import { Claude, Codex, Grok, OpenAI, OpenCode } from "@lobehub/icons";
 import { Reveal } from "@/components/ui/reveal";
 import { Section, SectionHeading } from "@/components/ui/kit";
 
@@ -8,6 +9,14 @@ import { Section, SectionHeading } from "@/components/ui/kit";
  * facts each. Six cards would take four times the space to say the same thing
  * and would imply a hierarchy that isn't there.
  */
+const MARKS: Record<string, React.ReactNode> = {
+  "claude-code": <Claude size={16} />,
+  codex: <Codex size={16} />,
+  grok: <Grok size={16} />,
+  opencode: <OpenCode size={16} />,
+  "openai-compatible": <OpenAI size={16} />,
+};
+
 const ADAPTERS = [
   {
     name: "Claude Code",
@@ -60,7 +69,12 @@ export function Adapters() {
                   className="border-b border-[var(--line)] transition-colors hover:bg-white/[0.02]"
                 >
                   <td className="py-4 pr-6 align-top">
-                    <span className="text-[14.5px] font-medium text-fg">{adapter.name}</span>
+                    <span className="inline-flex items-center gap-2.5">
+                      <span aria-hidden className="flex h-4 w-4 shrink-0 items-center justify-center text-fg-2">
+                        {MARKS[adapter.id] ?? null}
+                      </span>
+                      <span className="text-[14.5px] font-medium text-fg">{adapter.name}</span>
+                    </span>
                     {!adapter.live ? (
                       <span className="ml-2 text-[11px] text-fg-4">test</span>
                     ) : null}

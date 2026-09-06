@@ -12,6 +12,14 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@hiero-ledger/sdk": "2.85.0",
+    "@lobehub/icons": "^5.15.0",
+    "@privy-io/react-auth": "^2.13.0",
+    "@privy-io/server-auth": "^1.20.0",
+    "@x402/core": "~2.20.0",
+    "@x402/fetch": "~2.20.0",
+    "@x402/hedera": "~2.20.0",
+    "@xorv/protocol": "^0.1.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.24.0",
     "motion": "^12.42.2",
@@ -19,13 +27,6 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwind-merge": "^3.6.0",
-    "@hiero-ledger/sdk": "2.85.0",
-    "@x402/core": "~2.20.0",
-    "@x402/fetch": "~2.20.0",
-    "@x402/hedera": "~2.20.0",
-    "@xorv/protocol": "^0.1.0",
-    "@privy-io/react-auth": "^2.13.0",
-    "@privy-io/server-auth": "^1.20.0",
     "viem": "^2.23.0"
   },
   "devDependencies": {
@@ -39,5 +40,5 @@
     "typescript": "^5",
     "vitest": "^3.2.4"
   },
-  "description": "Xorv job board \u2014 post AI jobs, pay per job in USDC over x402 on Hedera, watch them run live."
+  "description": "Xorv job board — post AI jobs, pay per job in USDC over x402 on Hedera, watch them run live."
 }

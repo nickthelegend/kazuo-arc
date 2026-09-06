@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { ModelPicker, type ModelOption } from "./model-picker";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { BROKER_URL, formatUsd } from "@/lib/api";
@@ -34,14 +35,14 @@ interface Quote {
   accepts: Array<{ asset: string; amount: string }>;
 }
 
-const MODELS = [
-  { id: "", label: "Any model" },
+const MODELS: ModelOption[] = [
+  { id: "", label: "Any model", hint: "cheapest" },
   { id: "claude-code", label: "Claude Code" },
   { id: "codex", label: "Codex" },
   { id: "grok", label: "Grok" },
   { id: "opencode", label: "OpenCode" },
-  { id: "openai-compatible", label: "OpenAI-compatible" },
-  { id: "echo", label: "Echo" },
+  { id: "openai-compatible", label: "OpenAI-compatible", hint: "local" },
+  { id: "echo", label: "Echo", hint: "test" },
 ];
 
 const HBAR = "0.0.0";
@@ -186,21 +187,14 @@ export function Composer() {
         />
 
         <div className="flex items-center gap-2 px-1.5 pb-1">
-          <select
+          <ModelPicker
             value={model}
-            onChange={(e) => {
-              setModel(e.target.value);
+            options={MODELS}
+            onChange={(id) => {
+              setModel(id);
               reset();
             }}
-            aria-label="Model"
-            className="rounded-lg border border-[var(--line)] bg-black px-2.5 py-1.5 text-[12px] text-fg-2 outline-none transition-colors hover:border-[var(--line-2)]"
-          >
-            {MODELS.map((m) => (
-              <option key={m.id} value={m.id} className="bg-black">
-                {m.label}
-              </option>
-            ))}
-          </select>
+          />
 
           <label className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[12px] text-fg-3 transition-colors focus-within:border-[var(--line-2)]">
             <span className="text-fg-4">max</span>
