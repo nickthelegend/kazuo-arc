@@ -73,8 +73,20 @@ export function mirrorNodeUrl(network: string): string {
     : HEDERA_TESTNET_MIRROR_NODE_URL;
 }
 
-/** USDC token id for a CAIP-2 network. */
+/**
+ * The stablecoin this network prices in.
+ *
+ * Defaults to Circle's USDC, overridable with `XORV_STABLECOIN`. A marketplace
+ * that hardcodes one token id can never be pointed at a different issuer, a
+ * different network's USDC, or a test token — and the override is what lets the
+ * HTS settlement path be exercised without waiting on a faucet.
+ *
+ * The value is read per call rather than captured at module load so a test can
+ * set it without re-importing the module.
+ */
 export function usdcTokenId(network: string): string {
+  const override = process.env.XORV_STABLECOIN?.trim();
+  if (override && /^\d+\.\d+\.\d+$/.test(override)) return override;
   return network === HEDERA_MAINNET_CAIP2 ? HEDERA_MAINNET_USDC : HEDERA_TESTNET_USDC;
 }
 

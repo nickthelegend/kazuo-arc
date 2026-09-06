@@ -254,6 +254,18 @@ Everything below is real and checkable.
 | Heartbeat topic | [`0.0.9848246`](https://hashscan.io/testnet/topic/0.0.9848246) |
 | Receipts topic | [`0.0.9848247`](https://hashscan.io/testnet/topic/0.0.9848247) |
 
+**HTS token settlement, verified on-chain.** Six jobs, six settlements, and the buyer's HBAR
+balance unchanged through every one of them — the facilitator paid every fee:
+
+| | |
+|---|---|
+| Token | `0.0.9858754` (fungible, 6dp — the same shape as USDC) |
+| Settlement | [`0.0.9842030@1785515573.020085790`](https://hashscan.io/testnet/transaction/0.0.9842030-1785515573-020085790) — payer `0.0.9848440` −0.0010, provider `0.0.9848438` +0.0010 |
+| Buyer's gas | **zero.** Every HBAR fee on that transaction was debited from the facilitator |
+
+Point `XORV_STABLECOIN` at `0.0.429274` and the same path settles in Circle's USDC — the token id
+is the only difference.
+
 **A real Claude Code job, paid for over x402.** Prompt in, working Python out, $0.0100 moved from
 buyer to provider on-chain:
 
