@@ -21,32 +21,65 @@ risk.
 
 ### What Xorv does
 
-- **A fresh empty directory per job**, under `~/.xorv/jobs/`, which is the
-  agent's working directory. Agent CLIs resolve relative paths and their own
-  permission scopes against cwd, so the blast radius of a hostile prompt is a
-  scratch directory rather than the operator's source tree.
-- **The directory is deleted when the job ends**, pass or fail.
-- **Job ids are sanitised** before being used as path components, so a crafted
-  id can't escape the sandbox root.
-- **`XORV_SAFE_MODE=1`** disables tools entirely and leaves pure text
-  generation. Worth less per job; it cannot touch a disk.
-- **Timeouts kill the process group**, not just the direct child, so an
-  orphaned model call can't keep burning quota after the job is gone.
+Every job is spawned through `packages/cli/src/sandbox.ts`, which applies the
+strongest containment the host can provide. `xorv doctor` names the active tier
+rather than saying "sandboxed", so an operator can tell which one they have.
+
+| Tier | Where | What it enforces |
+|---|---|---|
+| `seatbelt` | macOS | Credential paths unreadable; writes confined to the job dir |
+| `bwrap` | Linux w/ bubblewrap | Read-only root, private home, writes confined to the job dir |
+| `container` | opt-in, any host | Full isolation — the job never sees the host filesystem |
+| `limits` / `env` | fallback | Resource caps and a scrubbed environment; **no filesystem boundary** |
+
+On every tier:
+
+- **The environment is an allowlist, not the operator's shell.** A job receives
+  `PATH`, `HOME`, locale and proxy settings. It does not receive
+  `AWS_SECRET_ACCESS_KEY`, `GITHUB_TOKEN`, or a variable some vendor invents next
+  year — the allowlist excludes it without anyone editing a denylist.
+- **Resource limits** cap CPU seconds, file size and process count, so a fork
+  bomb or a disk-filling loop hits a wall instead of the machine.
+- **A fresh directory per job**, deleted when the job ends, pass or fail. Job ids
+  are sanitised before being used as path components.
+- **`XORV_SAFE_MODE=1`** disables tools entirely and leaves pure text generation.
+- **Timeouts kill the process group**, not just the direct child.
+
+Under `seatbelt` and `bwrap`, these are unreadable by a job: `~/.xorv` (**the
+payout private key**), `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh`,
+`~/.npmrc`, `~/.docker`, `~/.kube`, the macOS Keychain, and browser profiles.
+Writes outside the job directory fail.
+
+#### The keychain, and why the node reads it for you
+
+Claude Code authenticates by shelling out to `/usr/bin/security`. The obvious
+profile — let the agent reach its own credentials — leaves the Keychain
+readable, and a readable Keychain is not one secret but all of them. Measured on
+a real machine, a job under that profile can run `security find-internet-password
+-w` and walk off with the operator's GitHub token.
+
+So the node reads the agent's own token once at startup, outside the sandbox,
+and injects only that token into each job (`packages/cli/src/credentials.ts`).
+The job runs with the Keychain denied outright: the agent still authenticates,
+and `security` returns nothing to anyone who asks it for something else.
 
 ### What Xorv does not do
 
-**It does not contain a determined attacker.** These CLIs can run shell
-commands, and a shell command can leave a directory. Calling a working directory
-a sandbox would be a lie.
+**A job can still read the agent session it is running.** The token is in the
+job's own environment, because the agent needs it. That is the capacity being
+rented; it is not a boundary that can be closed while the product works.
 
-If you want a real boundary:
+**Below `seatbelt`/`bwrap` there is no filesystem boundary at all.** On a host
+with neither, `doctor` reports `limits` or `env` and warns.
+
+For a real boundary on any host:
 
 ```bash
-docker run --rm -it --network none -v xorv-home:/home/node/.xorv node:24 …
+XORV_SANDBOX=container xorv start
 ```
 
-…or a VM, or a dedicated machine. The threat model to hold in your head is
-"someone I have never met gets to run code as me, for a tenth of a cent".
+The threat model to hold in your head is "someone I have never met gets to run
+code as me, for a tenth of a cent".
 
 ### Terms of service
 

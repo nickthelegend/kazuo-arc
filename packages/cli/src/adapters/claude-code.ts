@@ -48,6 +48,7 @@ export class ClaudeCodeAdapter implements JobAdapter {
     let errorText = "";
 
     const result = await runChild({
+      adapter: this.kind,
       cmd: this.bin,
       args,
       cwd: input.cwd,

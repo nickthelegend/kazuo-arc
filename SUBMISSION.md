@@ -81,5 +81,9 @@ reading them here.
   server-side signer.
 - **Docker is unbuilt.** The files are written; Docker wasn't available here.
 - **npm packages are unpublished.** Everything runs from a clone.
-- **The per-job directory is not a sandbox.** It bounds the blast radius; a
-  shell command can still leave it. See `SECURITY.md`.
+- **A job can read the agent session it runs on.** The sandbox denies the payout
+  key, SSH keys, cloud credentials and the keychain, and confines writes to the
+  job directory — but the agent's own token is in the job's environment, because
+  the agent needs it to work. `XORV_SANDBOX=container` closes that too. On a host
+  with neither seatbelt nor bubblewrap there is no filesystem boundary at all,
+  and `xorv doctor` says so. See `SECURITY.md`.

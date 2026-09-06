@@ -334,17 +334,26 @@ Each receipt carries the job id, both accounts, the amount, the settlement trans
 A Xorv provider runs prompts written by people they have never met, on their own machine, against
 their own paid account. That is the product, and it is also the risk.
 
-**What Xorv does:** every job gets a fresh empty directory under `~/.xorv/jobs/` as its working
-directory, deleted when the job ends. Agent CLIs resolve relative paths and permission scopes
-against cwd, so the blast radius of a hostile prompt is a scratch directory rather than your source
-tree.
+**What Xorv does:** every job is spawned through a sandbox that applies the strongest containment the
+host provides — macOS seatbelt, Linux bubblewrap, or an opt-in container. On macOS and Linux a job
+cannot read `~/.xorv` (**your payout private key**), `~/.ssh`, `~/.aws`, `~/.config/gh`, `~/.npmrc`,
+the keychain, or your browser profile, and cannot write outside its own job directory. On every host
+the environment is an allowlist — a job never sees `AWS_SECRET_ACCESS_KEY` or `GITHUB_TOKEN` — and
+CPU, file size and process count are capped.
 
-**What Xorv does not do:** contain a determined attacker. These CLIs can run shell commands, and a
-shell command can leave a directory. This is blast-radius reduction, not a sandbox.
+Claude Code authenticates from the keychain, so the node reads its token once at startup, outside the
+sandbox, and injects only that token into the job. The keychain itself stays denied; otherwise any
+prompt could run `security find-internet-password -w` and take your GitHub token.
 
-**If you want a real boundary,** run the node in a container or a VM. Or set `XORV_SAFE_MODE=1`,
-which disables tools entirely and leaves a pure text-generation service — worth less per job, but it
-cannot touch a disk.
+`xorv doctor` names the active tier. Take it seriously if it says `env` or `limits` — those hosts
+have no filesystem boundary.
+
+**What Xorv does not do:** hide the agent session being rented. The agent's own token is in the job's
+environment because the agent needs it to run.
+
+**For full isolation on any host:** `XORV_SANDBOX=container xorv start`. Or `XORV_SAFE_MODE=1`, which
+disables tools entirely and leaves a pure text-generation service — worth less per job, but it cannot
+touch a disk.
 
 **On terms of service:** most consumer AI subscriptions are licensed to an individual and reselling
 that capacity may breach them. Xorv is infrastructure and doesn't decide this for you — run it

@@ -29,6 +29,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import type { AdapterKind, JobEvent } from "@xorv/protocol";
+import { DEFAULT_LIMITS, detectSandbox, sandboxEnv, wrapCommand, type SandboxTier } from "../sandbox.js";
+import { agentCredentials } from "../credentials.js";
 
 export type EmitEvent = (event: Omit<JobEvent, "at">) => void;
 
@@ -119,22 +121,10 @@ export function firstExisting(candidates: string[]): string | null {
  * it so a child authenticates exactly as it would from a fresh terminal.
  */
 export function agentEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, ...extra };
-  if (!process.env.CLAUDECODE) return env;
-  for (const key of Object.keys(env)) {
-    if (
-      key === "CLAUDECODE" ||
-      key.startsWith("CLAUDE_CODE_") ||
-      key === "CLAUDE_AGENT_SDK_VERSION" ||
-      key === "CLAUDE_EFFORT" ||
-      key === "ANTHROPIC_BASE_URL" ||
-      key === "BAGGAGE" ||
-      key === "AI_AGENT"
-    ) {
-      delete env[key];
-    }
-  }
-  return env;
+  // An allowlist, not the parent environment. A job used to inherit every
+  // secret the operator had exported — cloud keys, tokens, anything a shell
+  // profile happens to set. See sandbox.ts for why the list is positive.
+  return sandboxEnv(extra);
 }
 
 export interface SpawnResult {
@@ -160,17 +150,44 @@ export function runChild(opts: {
   onLine?: (line: string) => void;
   onStderr?: (chunk: string) => void;
   stdin?: string;
+  /** Override the containment tier; defaults to the strongest available. */
+  sandbox?: SandboxTier;
+  /**
+   * Which adapter this is for, so its own credential can be injected.
+   *
+   * The sandbox denies the keychain outright, so an agent that authenticates
+   * from it needs the token handed in. Doing that here rather than in each
+   * adapter means a new adapter cannot forget and silently fall back to an
+   * unauthenticated run.
+   */
+  adapter?: AdapterKind;
 }): Promise<SpawnResult> {
   return new Promise((resolve, reject) => {
     let child: ChildProcess;
+    let wrapped: ReturnType<typeof wrapCommand>;
     try {
-      child = spawn(opts.cmd, opts.args, {
+      // Every adapter reaches the operating system through here, so this is the
+      // one place containment has to be applied — an adapter cannot forget to.
+      // It also throws ENOENT for a missing binary, matching what spawn did
+      // before the sandbox sat in between.
+      wrapped = wrapCommand(opts.cmd, opts.args, {
+        jobDir: opts.cwd,
+        tier: opts.sandbox,
+        limits: DEFAULT_LIMITS,
+      });
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error(String(err)));
+      return;
+    }
+    try {
+      child = spawn(wrapped.cmd, wrapped.args, {
         cwd: opts.cwd,
-        env: opts.env ?? agentEnv(),
+        env: opts.env ?? agentEnv(opts.adapter ? agentCredentials(opts.adapter) : {}),
         stdio: [opts.stdin === undefined ? "ignore" : "pipe", "pipe", "pipe"],
         detached: process.platform !== "win32",
       });
     } catch (err) {
+      wrapped.cleanup?.();
       reject(err instanceof Error ? err : new Error(String(err)));
       return;
     }
@@ -225,11 +242,13 @@ export function runChild(opts: {
 
     child.on("error", (err) => {
       opts.signal.removeEventListener("abort", kill);
+      wrapped.cleanup?.();
       reject(err);
     });
 
     child.on("close", (code, signal) => {
       opts.signal.removeEventListener("abort", kill);
+      wrapped.cleanup?.();
       if (pending.trim() && opts.onLine) opts.onLine(pending);
       if (killed) {
         reject(new Error("job was cancelled or timed out"));

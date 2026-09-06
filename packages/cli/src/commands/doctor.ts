@@ -16,6 +16,7 @@ import {
 } from "@xorv/protocol";
 import { detectAvailable } from "../adapters/index.js";
 import { safeMode } from "../adapters/base.js";
+import { describeSandbox, detectSandbox, withheldEnvKeys } from "../sandbox.js";
 import { configPath, loadConfig, resolveBrokerUrl } from "../config.js";
 import { cloudflaredAvailable, CLOUDFLARED_INSTALL_HINT } from "../tunnel.js";
 import * as ui from "../ui.js";
@@ -63,8 +64,25 @@ export async function doctorCommand(): Promise<void> {
     level: safeMode() ? "warn" : "ok",
     label: safeMode()
       ? "XORV_SAFE_MODE is on — tools disabled, text generation only"
-      : "running in full agent mode (jobs get a sandboxed working directory)",
-    detail: safeMode() ? undefined : "prompts come from strangers — see the security note in the README",
+      : "running in full agent mode — prompts come from strangers",
+    detail: safeMode() ? undefined : "see SECURITY.md",
+  });
+
+  // Name the containment tier rather than the word "sandboxed", so an operator
+  // can tell the difference between a filesystem boundary and a tidy directory.
+  const tier = detectSandbox();
+  const withheld = withheldEnvKeys().length;
+  checks.push({
+    level: tier === "none" || tier === "env" ? "warn" : "ok",
+    label: `sandbox: ${describeSandbox(tier)}`,
+    detail:
+      tier === "seatbelt" || tier === "bwrap"
+        ? `payout key and credentials unreadable by a job; ${withheld} env var(s) withheld` +
+          " — XORV_SANDBOX=container for full isolation"
+        : tier === "container"
+          ? `${withheld} env var(s) withheld from jobs`
+          : "a hostile prompt could read files this user can read",
+    fix: tier === "none" || tier === "env" ? "run on macOS/Linux, or XORV_SANDBOX=container" : undefined,
   });
   render(checks.splice(0));
 
