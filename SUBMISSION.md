@@ -205,10 +205,18 @@ Hedera does it and other chains don't:
 A judge will find these anyway, and finding them undisclosed is worse than
 reading them here.
 
-- **Browser wallets cannot pay yet.** Privy auth is live — Google, GitHub,
-  email, external EVM wallets — but Hedera's x402 scheme signs a *native*
-  protobuf transfer, not an EVM RLP transaction, so payments route through a
-  server-side signer. Bridging the two is real work, not a config change.
+- **The wallet click itself is the one unverified step.** Privy was replaced
+  with HashPack over WalletConnect (HIP-820), because Privy signs EVM RLP
+  transactions and Hedera's x402 scheme settles a *native* protobuf transfer —
+  no chain config bridges those. The new path builds the transaction, has the
+  wallet sign it, and hands it to the facilitator to co-sign and submit. That
+  path **has settled on testnet**: `0.0.9842030@1785534997.798081600`, run
+  through the exact production code with a local key standing in for the
+  extension, since a browser extension cannot be driven from a test runner.
+  What remains unverified is HashPack's own signature bytes — its job, not
+  ours, and the library's known signing bug was fixed upstream in
+  hashgraph/hedera-wallet-connect#125. Needs a
+  `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (free) to run.
 - **A job can read the agent session it runs on.** The sandbox denies the payout
   key, SSH keys, cloud credentials and the keychain, and confines writes to the
   job directory. But the agent's own token is in the job's environment, because

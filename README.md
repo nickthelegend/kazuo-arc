@@ -51,7 +51,7 @@ Then the live proof, all on Hedera testnet and all openly readable:
 | ✅ MCP: an agent buying capacity | Verified over stdio |
 | ✅ Survives a broker restart | SQLite + MongoDB |
 | ✅ **Circle USDC** (`0.0.429274`) | A real Claude Code job settled in it — [`0.0.9842030@1785516412.478664506`](https://hashscan.io/testnet/transaction/0.0.9842030-1785516412-478664506) |
-| ⚠️ Browser wallet paying directly | Privy auth is live, but Hedera's x402 scheme needs a **native** transfer signature, not an EVM one. Payments route through a server signer |
+| ✅ Browser wallet paying directly | HashPack over WalletConnect signs the **native** transfer the facilitator verifies — settled on testnet in [`0.0.9842030@1785534997.798081600`](https://hashscan.io/testnet/transaction/0.0.9842030-1785534997-798081600). The extension click is the one step a test runner can't drive |
 | ✅ **Deployed and public** | [landing](https://xorv.vercel.app) · [app](https://xorv-app.vercel.app) — a job paid for through the deployed app, above |
 | ✅ **Published to npm** | [`@xorv/cli`](https://www.npmjs.com/package/@xorv/cli) · [`@xorv/protocol`](https://www.npmjs.com/package/@xorv/protocol) · [`@xorv/mcp`](https://www.npmjs.com/package/@xorv/mcp) |
 | ✅ OS-level job sandbox | Seatbelt / bubblewrap / container — a hostile prompt cannot read the payout key |
