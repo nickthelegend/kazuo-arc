@@ -164,7 +164,8 @@ pnpm test
 
 | | |
 |---|---|
-| **Paid through the deployed app** | [`0.0.9842030@1785526598.292531686`](https://hashscan.io/testnet/transaction/0.0.9842030-1785526598-292531686) — Vercel → tunnel → broker → settlement → Claude Code job → result |
+| **Bought in the browser, on the deployed app** | [`0.0.9842030@1785527147.476758713`](https://hashscan.io/testnet/transaction/0.0.9842030-1785527147-476758713) — typed a prompt at xorv-app.vercel.app, took the quote, paid, watched it run, got the answer. [`job_LOqvjZ2Pj3u7`](https://xorv-app.vercel.app/jobs/job_LOqvjZ2Pj3u7) |
+| Paid through the deployed app's API | [`0.0.9842030@1785526598.292531686`](https://hashscan.io/testnet/transaction/0.0.9842030-1785526598-292531686) — Vercel → tunnel → broker → settlement → Claude Code job → result |
 | **Circle USDC settlement** | [`0.0.9842030@1785516412.478664506`](https://hashscan.io/testnet/transaction/0.0.9842030-1785516412-478664506) — buyer `0.0.9848440` −0.2500 USDC, provider `0.0.9848438` +0.2500, **buyer paid zero gas** |
 | Real Claude Code job under the sandbox | [`0.0.9842030@1785524175.571243822`](https://hashscan.io/testnet/transaction/0.0.9842030-1785524175-571243822) |
 | Its HCS receipt | [`0.0.9842030@1785524183.472025433`](https://hashscan.io/testnet/transaction/0.0.9842030-1785524183-472025433) |
