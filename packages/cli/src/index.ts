@@ -9,6 +9,7 @@ import { startCommand } from "./commands/start.js";
 import { statusCommand } from "./commands/status.js";
 import { earningsCommand } from "./commands/earnings.js";
 import { doctorCommand } from "./commands/doctor.js";
+import { skillsCommand } from "./commands/skills.js";
 import { runCommand } from "./commands/run.js";
 import { walletAssociate, walletNew, walletShow } from "./commands/wallet.js";
 import {
@@ -86,6 +87,14 @@ program
   .option("--json", "machine-readable output")
   .option("--limit <n>", "how many ledger rows to read", "500")
   .action(wrap(earningsCommand));
+
+program
+  .command("skills")
+  .description("install Xorv as a /xorv slash command in Claude Code")
+  .option("-g, --global", "install for every project (~/.claude), not just this one")
+  .option("--force", "overwrite an existing install")
+  .option("--print", "print the skill instead of writing it")
+  .action(wrap(skillsCommand));
 
 program
   .command("doctor")

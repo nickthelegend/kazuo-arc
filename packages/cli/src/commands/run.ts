@@ -76,6 +76,30 @@ async function exitAfterFlush(code: number): Promise<never> {
   process.exit(code);
 }
 
+/**
+ * Fail in whatever shape the caller asked for.
+ *
+ * `--json` is a contract: a machine is parsing this. Printing prose on the
+ * error path breaks every caller that succeeded in parsing the happy path —
+ * including the Claude Code skill, which shells out to this exact command.
+ */
+async function failOut(
+  json: boolean | undefined,
+  stage: string,
+  err: unknown,
+  hints: string[] = [],
+): Promise<never> {
+  const message = err instanceof Error ? err.message : String(err);
+  if (json) {
+    console.log(JSON.stringify({ status: "failed", stage, error: message, hints }, null, 2));
+  } else {
+    ui.blank();
+    for (const hint of hints) ui.muted(`  ${hint}`);
+  }
+  await exitAfterFlush(1);
+  throw new Error("unreachable");
+}
+
 export async function runCommand(prompt: string, opts: RunOptions): Promise<void> {
   const config = loadConfig();
   const brokerUrl = (
@@ -120,8 +144,11 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
     if (!res.ok) throw new Error(body.error ?? `broker returned ${res.status}`);
     quote = body;
   } catch (err) {
-    quoteSpin?.fail(`no quote: ${err instanceof Error ? err.message : String(err)}`);
-    process.exitCode = 1;
+    if (!opts.json) quoteSpin?.fail(`no quote: ${err instanceof Error ? err.message : String(err)}`);
+    await failOut(opts.json, "quote", err, [
+      "no live provider matched that request under your price ceiling",
+      "check with: xorv status",
+    ]);
     return;
   }
   quoteSpin?.succeed(`matched ${ui.c.bold(quote.provider.label)}`);
@@ -206,11 +233,12 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
     jobId = body.jobId;
     settleTx = readSettlementTx(httpClient, res);
   } catch (err) {
-    paySpin?.fail(`payment failed: ${err instanceof Error ? err.message : String(err)}`);
-    ui.blank();
-    ui.muted("  common causes: the payer holds no USDC, or isn't associated with the token");
-    ui.muted(`  check with: xorv wallet`);
-    await exitAfterFlush(1);
+    if (!opts.json) paySpin?.fail(`payment failed: ${err instanceof Error ? err.message : String(err)}`);
+    await failOut(opts.json, "payment", err, [
+      "common causes: the payer holds no USDC, isn't associated with the token,",
+      "or is the same account as the provider (you can't pay yourself)",
+      "check with: xorv wallet",
+    ]);
   }
 
   paySpin?.succeed(`paid ${ui.c.money(quote.priceLabel)} — job ${ui.c.bold(jobId)}`);

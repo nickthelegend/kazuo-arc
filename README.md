@@ -15,6 +15,8 @@ Rent out the Claude / Codex / Grok subscription you already pay for, and get pai
 
 **[Landing](https://xorv.vercel.app)** · **[App](https://xorv-app.vercel.app)** · **[`npm i -g @xorv/cli`](https://www.npmjs.com/package/@xorv/cli)**
 
+**▶ [Watch the trailer](videos/xorv-launch/renders/video.mp4)** — 60 seconds
+
 </div>
 
 ---
@@ -54,6 +56,42 @@ Then the live proof, all on Hedera testnet and all openly readable:
 | ✅ **Published to npm** | [`@xorv/cli`](https://www.npmjs.com/package/@xorv/cli) · [`@xorv/protocol`](https://www.npmjs.com/package/@xorv/protocol) · [`@xorv/mcp`](https://www.npmjs.com/package/@xorv/mcp) |
 | ✅ OS-level job sandbox | Seatbelt / bubblewrap / container — a hostile prompt cannot read the payout key |
 | ⚠️ Docker | Written, never built — Docker Desktop's VM would not start here |
+
+---
+
+## The trailer
+
+**[videos/xorv-launch/renders/video.mp4](videos/xorv-launch/renders/video.mp4)** — 62s, 1080p.
+
+Built with HyperFrames from this repo's own design tokens, and every value on
+screen is real and checkable: the transaction id, the account pair, the USDC
+token, the HCS topic. The whole project is in `videos/xorv-launch/` — storyboard,
+script, and the eight frame compositions — so it re-renders with
+`npx hyperframes render`.
+
+---
+
+## `/xorv` — buy compute from inside Claude Code
+
+```bash
+xorv skills
+```
+
+That installs Xorv as a slash command. Then, in any project:
+
+```
+/xorv Write a Postgres query that finds duplicate rows by email, keeping the newest
+```
+
+Claude Code hands the task to a *different* machine — someone else's Claude or
+Codex subscription — pays for it in USDC over x402, and returns the answer with
+the settlement transaction beside it.
+
+An agent paying another agent for compute, per request. No account, no API key,
+no invoice. It shells out to `xorv run --json`, so the price ceiling, the quote,
+and the receipt are the same ones the CLI already enforces.
+
+Add `--global` to install it for every project.
 
 ---
 

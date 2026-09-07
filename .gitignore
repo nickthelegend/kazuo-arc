@@ -37,3 +37,16 @@ Thumbs.db
 .turbo/
 .eslintcache
 coverage/
+
+# Video project — the source and the finished render are tracked; everything
+# below is regenerable from SCRIPT.md / STORYBOARD.md and would only bloat the
+# repo (voice wavs, a MusicGen bed, site capture, snapshot sheets).
+videos/*/assets/voice/
+videos/*/assets/bgm/
+videos/*/capture/
+videos/*/snapshots/
+videos/*/.hyperframes/
+videos/*/node_modules/
+videos/*/.thumbnails/
+videos/*/.waveform-cache/
+videos/*/audio_engine_meta.json
