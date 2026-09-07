@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { ModelPicker, type ModelOption } from "./model-picker";
+import { useWallet } from "@/components/wallet-provider";
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { BROKER_URL, formatUsd } from "@/lib/api";
@@ -56,6 +57,7 @@ export function Composer() {
   const [model, setModel] = useState("");
   const [maxUsd, setMaxUsd] = useState("0.50");
   const [asset, setAsset] = useState<"usdc" | "hbar">("usdc");
+  const { session, accountId } = useWallet();
 
   const [quote, setQuote] = useState<Quote | null>(null);
   const [busy, setBusy] = useState<"quoting" | "paying" | null>(null);
@@ -105,6 +107,16 @@ export function Composer() {
     setError(null);
     setBusy("paying");
     try {
+      // With a wallet connected the x402 round trip happens in this tab and the
+      // user signs their own transfer. Without one we fall back to the server
+      // route, which pays from the deployment's demo account — same protocol,
+      // different money, and worth being honest about in the button label.
+      if (session) {
+        const { payQuoteWithWallet } = await import("@/lib/pay-with-wallet");
+        const { jobId } = await payQuoteWithWallet(session, BROKER_URL, quote.quoteId, asset);
+        router.push(`/jobs/${jobId}`);
+        return;
+      }
       const res = await fetch("/api/pay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

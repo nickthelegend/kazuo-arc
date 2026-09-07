@@ -86,7 +86,9 @@ describe("freezing", () => {
     const base64 = await signer.createPartiallySignedTransferTransaction(requirements());
 
     expect(base64).toMatch(/^[A-Za-z0-9+/]+=*$/);
-    const round = TransferTransaction.fromBytes(Buffer.from(base64, "base64"));
+    const round = TransferTransaction.fromBytes(
+      Buffer.from(base64, "base64"),
+    ) as TransferTransaction;
     expect(round.transactionId?.accountId?.toString()).toBe(FACILITATOR);
     expect(round.tokenTransfers.get(USDC)?.get(PROVIDER)?.toString()).toBe("250000");
   });
