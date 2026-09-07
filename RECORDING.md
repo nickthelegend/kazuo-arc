@@ -134,6 +134,18 @@ earnings.
 
 **[Browser: xorv-app.vercel.app]**
 
+Optional, ~10s — **Connect**, top right. Privy is wired for Google, GitHub,
+email and external EVM wallets, and it resolves the signed-in address to its
+Hedera account id.
+
+> "You can sign in with Google, GitHub, or any EVM wallet."
+
+**Say it exactly that way, and don't imply the wallet pays.** It doesn't yet:
+Hedera's x402 scheme signs a *native* protobuf transfer, not an EVM
+transaction, so payment routes through a server-side signer. That's disclosed
+in `SUBMISSION.md`, and a judge who tests it will find out. If you'd rather not
+explain it on camera, skip this beat entirely — the demo doesn't need it.
+
 Type a real prompt into the composer. Something small and verifiable —
 `Write a TypeScript function that debounces an async call` works well.
 
