@@ -147,8 +147,22 @@ your wallet, in front of the camera. **Install HashPack and click Connect once
 before recording** — the WalletConnect relay handshake is the one step that
 can't be rehearsed headlessly.
 
-Type a real prompt into the composer. Something small and verifiable —
-`Write a TypeScript function that debounces an async call` works well.
+Type a real prompt into the composer. **Make it use tools** — that is the
+difference between a good shot and a dead one:
+
+```
+Create a file fizzbuzz.js that prints FizzBuzz for 1..20, then run it with node
+and show me the output.
+```
+
+Measured on real jobs: a pure "write me a function" prompt emits **3 log
+events** — session started, then silence for ~15s, then the whole answer lands
+at once. The prompt above emits **8**, including `tool_call` and `file_edit`
+lines that stream while you talk over them. Same price, far better footage.
+
+It also puts the sandbox on screen for free: the paths in the log read
+`/private/tmp/xorv-jobs/job_.../`, which is the per-job directory from the
+security beat.
 
 Pick **Claude Code** from the model picker (the real vendor logos are there —
 worth a half-second pause).
