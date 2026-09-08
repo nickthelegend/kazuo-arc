@@ -15,6 +15,7 @@ import {
   type JobEvent,
 } from "@/lib/api";
 import { Button, Empty, Ext, Panel, Row, Status } from "@/components/ui";
+import { ResultMarkdown } from "@/components/result-markdown";
 import { cn } from "@/lib/utils";
 
 /**
@@ -125,9 +126,9 @@ export function JobView({ jobId, initial }: { jobId: string; initial: Job | null
             >
             <h2 className="mb-2.5 text-[13px] font-medium text-fg">Result</h2>
             <Panel className="p-4">
-              <pre className="mono max-h-[32rem] overflow-auto whitespace-pre-wrap break-words text-[12.5px] leading-relaxed text-fg-2">
-                {job.result}
-              </pre>
+              {/* Agent CLIs answer in markdown. Rendering it as raw text made
+                  the thing the buyer just paid for look like a log line. */}
+              <ResultMarkdown>{job.result}</ResultMarkdown>
             </Panel>
             </motion.section>
           ) : null}

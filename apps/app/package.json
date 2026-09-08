@@ -23,11 +23,15 @@
     "@x402/hedera": "~2.20.0",
     "@xorv/protocol": "^0.1.0",
     "clsx": "^2.1.1",
+    "highlight.js": "^11.11.1",
     "lucide-react": "^1.24.0",
     "motion": "^12.42.2",
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^3.6.0",
     "viem": "^2.23.0"
   },
@@ -42,7 +46,7 @@
     "typescript": "^5",
     "vitest": "^3.2.4"
   },
-  "description": "Xorv job board \u2014 post AI jobs, pay per job in USDC over x402 on Hedera, watch them run live.",
+  "description": "Xorv job board — post AI jobs, pay per job in USDC over x402 on Hedera, watch them run live.",
   "overrides": {
     "@hiero-ledger/sdk": "2.85.0"
   }
