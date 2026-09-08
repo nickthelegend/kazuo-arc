@@ -134,17 +134,18 @@ earnings.
 
 **[Browser: xorv-app.vercel.app]**
 
-Optional, ~10s — **Connect**, top right. Privy is wired for Google, GitHub,
-email and external EVM wallets, and it resolves the signed-in address to its
-Hedera account id.
+**Connect**, top right — and this beat is now worth real screen time, because
+the wallet genuinely pays.
 
-> "You can sign in with Google, GitHub, or any EVM wallet."
+> "This is HashPack. Hedera's x402 scheme signs a native transfer, not an EVM
+> one — so a normal EVM wallet can authenticate you but can't actually pay.
+> HashPack signs the real transaction, and the facilitator co-signs and covers
+> the fee."
 
-**Say it exactly that way, and don't imply the wallet pays.** It doesn't yet:
-Hedera's x402 scheme signs a *native* protobuf transfer, not an EVM
-transaction, so payment routes through a server-side signer. That's disclosed
-in `SUBMISSION.md`, and a judge who tests it will find out. If you'd rather not
-explain it on camera, skip this beat entirely — the demo doesn't need it.
+Approve the session, then buy the job below with it. The transfer is signed in
+your wallet, in front of the camera. **Install HashPack and click Connect once
+before recording** — the WalletConnect relay handshake is the one step that
+can't be rehearsed headlessly.
 
 Type a real prompt into the composer. Something small and verifiable —
 `Write a TypeScript function that debounces an async call` works well.
