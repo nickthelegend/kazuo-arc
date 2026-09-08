@@ -42,5 +42,8 @@
     "typescript": "^5",
     "vitest": "^3.2.4"
   },
-  "description": "Xorv job board — post AI jobs, pay per job in USDC over x402 on Hedera, watch them run live."
+  "description": "Xorv job board \u2014 post AI jobs, pay per job in USDC over x402 on Hedera, watch them run live.",
+  "overrides": {
+    "@hiero-ledger/sdk": "2.85.0"
+  }
 }
