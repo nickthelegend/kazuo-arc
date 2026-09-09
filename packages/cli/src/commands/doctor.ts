@@ -34,7 +34,7 @@ import os from "node:os";
 import path from "node:path";
 import { detectAvailable } from "../adapters/index.js";
 import { safeMode } from "../adapters/base.js";
-import { agentCredentials } from "../credentials.js";
+import { agentCredentials, credentialsExpired } from "../credentials.js";
 import { describeSandbox, detectSandbox, withheldEnvKeys, type SandboxTier } from "../sandbox.js";
 import { configPath, defaultCapability, loadConfig, resolveBrokerUrl, type NodeConfig } from "../config.js";
 import { cloudflaredAvailable, CLOUDFLARED_INSTALL_HINT } from "../tunnel.js";
@@ -253,12 +253,22 @@ export function probeAuth(kind: AdapterKind, home = os.homedir()): AuthProbe {
   switch (kind) {
     case "claude-code": {
       const has = Object.keys(agentCredentials(kind)).length > 0;
-      return has
-        ? { authed: true, hint: "" }
-        : {
-            authed: process.platform === "darwin" ? false : null,
-            hint: "run `claude` once and sign in, or export CLAUDE_CODE_OAUTH_TOKEN",
-          };
+      if (!has) {
+        return {
+          authed: process.platform === "darwin" ? false : null,
+          hint: "run `claude` once and sign in, or export CLAUDE_CODE_OAUTH_TOKEN",
+        };
+      }
+      // A token that exists but has expired is worse than none: the node keeps
+      // accepting jobs, the buyer is charged, and every one of them comes back
+      // `401 OAuth access token has expired`. Report it as signed out.
+      if (credentialsExpired(kind)) {
+        return {
+          authed: false,
+          hint: "session expired — run `claude` once to refresh it (no node restart needed)",
+        };
+      }
+      return { authed: true, hint: "" };
     }
     case "codex":
       return exists(".codex", "auth.json")

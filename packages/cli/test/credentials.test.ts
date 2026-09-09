@@ -9,7 +9,12 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { agentCredentials, canAuthenticate, resetCredentialCache } from "../src/credentials.js";
+import {
+  agentCredentials,
+  canAuthenticate,
+  credentialsExpired,
+  resetCredentialCache,
+} from "../src/credentials.js";
 import { secretPaths, seatbeltProfile } from "../src/sandbox.js";
 import os from "node:os";
 import fs from "node:fs";
@@ -67,5 +72,29 @@ describe("the keychain stays closed", () => {
     } finally {
       fs.rmSync(jobDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("an expired session", () => {
+  it("is reported as expired, not as signed in", () => {
+    // The bug this pins cost a real paid job: the node cached the token at
+    // startup, held it for hours past its expiry, and every job came back
+    // `401 OAuth access token has expired` AFTER the buyer had been charged.
+    // "A token exists" and "the session works" are different questions.
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = "sk-ant-explicit";
+    // An explicitly-exported token carries no readable expiry, so it is never
+    // treated as stale — the operator owns that choice.
+    expect(credentialsExpired("claude-code")).toBe(false);
+  });
+
+  it("treats adapters with no expiry concept as fine", () => {
+    expect(credentialsExpired("echo")).toBe(false);
+    expect(credentialsExpired("codex")).toBe(false);
+  });
+
+  it("still reports a usable session as authenticatable", () => {
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = "sk-ant-live";
+    expect(canAuthenticate("claude-code")).toBe(true);
+    expect(credentialsExpired("claude-code")).toBe(false);
   });
 });

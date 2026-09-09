@@ -53,6 +53,14 @@ xorv doctor
 Everything should be `✔` except the adapters you're not selling. If anything
 is `✖`, fix it now — that's the command telling you the demo will fail.
 
+**The one that will catch you: `claude-code … signed out — session expired`.**
+Claude Code's OAuth token expires roughly daily, and a provider node that has
+been up since yesterday is still holding the old one. The failure is nasty
+because the payment succeeds and *then* the job returns
+`401 OAuth access token has expired` — the buyer is charged for nothing. Run
+`claude` once in any terminal to refresh; the node picks it up on the next job
+without a restart. Then re-run `xorv doctor` and confirm it went green.
+
 ---
 
 ## 0:00 – 0:30 · The trailer

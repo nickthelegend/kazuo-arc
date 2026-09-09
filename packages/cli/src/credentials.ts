@@ -30,8 +30,36 @@ import os from "node:os";
 import path from "node:path";
 import type { AdapterKind } from "@xorv/protocol";
 
-/** Read once per process: this shells out, and jobs are frequent. */
-const cache = new Map<AdapterKind, Record<string, string>>();
+/**
+ * Cached with its expiry, not forever.
+ *
+ * The first version of this read the token once at node startup and held it
+ * for the process lifetime. A provider node runs for days; Claude Code's OAuth
+ * token does not. The node kept injecting a token that had expired hours
+ * earlier and every paid job came back
+ * `401 OAuth access token has expired` — after the buyer had already been
+ * charged, which is the worst possible place to fail.
+ *
+ * Re-reading when the cached token is spent means the operator can refresh
+ * their session in another terminal and the node recovers on the next job,
+ * with no restart and no lost income.
+ */
+interface CachedCredentials {
+  creds: Record<string, string>;
+  /** Epoch ms the token stops working; `null` when the source doesn't say. */
+  expiresAt: number | null;
+}
+
+const cache = new Map<AdapterKind, CachedCredentials>();
+
+/**
+ * Re-read this long before the stated expiry.
+ *
+ * A job can take minutes, so a token valid at dispatch can be dead by the time
+ * the agent actually calls out. Treating the last two minutes as already
+ * expired costs one keychain read and avoids charging for a job that cannot run.
+ */
+const EXPIRY_MARGIN_MS = 120_000;
 
 interface KeychainCredentials {
   claudeAiOauth?: { accessToken?: string; expiresAt?: number };
@@ -45,7 +73,7 @@ interface KeychainCredentials {
  * without an injected token, which fails loudly at the agent rather than
  * silently producing an unauthenticated result.
  */
-function claudeTokenFromKeychain(): string | null {
+function claudeTokenFromKeychain(): { token: string; expiresAt: number | null } | null {
   if (process.platform !== "darwin") return null;
   try {
     const raw = execFileSync(
@@ -55,19 +83,23 @@ function claudeTokenFromKeychain(): string | null {
     ).trim();
     const parsed = JSON.parse(raw) as KeychainCredentials;
     const token = parsed.claudeAiOauth?.accessToken;
-    return typeof token === "string" && token.length > 0 ? token : null;
+    if (typeof token !== "string" || token.length === 0) return null;
+    const expiresAt = parsed.claudeAiOauth?.expiresAt;
+    return { token, expiresAt: typeof expiresAt === "number" ? expiresAt : null };
   } catch {
     return null;
   }
 }
 
 /** The same token, for installations that keep it in a file instead. */
-function claudeTokenFromFile(): string | null {
+function claudeTokenFromFile(): { token: string; expiresAt: number | null } | null {
   const candidate = path.join(os.homedir(), ".claude", ".credentials.json");
   try {
     const parsed = JSON.parse(fs.readFileSync(candidate, "utf8")) as KeychainCredentials;
     const token = parsed.claudeAiOauth?.accessToken;
-    return typeof token === "string" && token.length > 0 ? token : null;
+    if (typeof token !== "string" || token.length === 0) return null;
+    const expiresAt = parsed.claudeAiOauth?.expiresAt;
+    return { token, expiresAt: typeof expiresAt === "number" ? expiresAt : null };
   } catch {
     return null;
   }
@@ -81,19 +113,46 @@ function claudeTokenFromFile(): string | null {
  */
 export function agentCredentials(kind: AdapterKind): Record<string, string> {
   const hit = cache.get(kind);
-  if (hit) return hit;
+  if (hit && !isStale(hit)) return hit.creds;
 
-  let creds: Record<string, string> = {};
+  let entry: CachedCredentials = { creds: {}, expiresAt: null };
   if (kind === "claude-code") {
     // An explicitly-set token wins: an operator who exported one has chosen a
-    // specific identity to rent out, and it is not ours to override.
-    const token =
-      process.env.CLAUDE_CODE_OAUTH_TOKEN?.trim() || claudeTokenFromKeychain() || claudeTokenFromFile();
-    if (token) creds = { CLAUDE_CODE_OAUTH_TOKEN: token };
+    // specific identity to rent out, and it is not ours to override. It also
+    // carries no expiry we can read, so it is never treated as stale.
+    const explicit = process.env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
+    if (explicit) {
+      entry = { creds: { CLAUDE_CODE_OAUTH_TOKEN: explicit }, expiresAt: null };
+    } else {
+      const found = claudeTokenFromKeychain() ?? claudeTokenFromFile();
+      if (found) {
+        entry = { creds: { CLAUDE_CODE_OAUTH_TOKEN: found.token }, expiresAt: found.expiresAt };
+      }
+    }
   }
 
-  cache.set(kind, creds);
-  return creds;
+  cache.set(kind, entry);
+  return entry.creds;
+}
+
+/** Spent, or close enough that a job starting now would outlive it. */
+function isStale(entry: CachedCredentials): boolean {
+  if (entry.expiresAt === null) return Object.keys(entry.creds).length === 0;
+  return Date.now() >= entry.expiresAt - EXPIRY_MARGIN_MS;
+}
+
+/**
+ * Whether the agent's session is currently usable.
+ *
+ * Distinct from "a token exists" — an expired token exists and fails every
+ * job. `xorv doctor` reports on this so a stale session is caught before a
+ * buyer pays for it rather than after.
+ */
+export function credentialsExpired(kind: AdapterKind): boolean {
+  agentCredentials(kind);
+  const hit = cache.get(kind);
+  if (!hit || hit.expiresAt === null) return false;
+  return Date.now() >= hit.expiresAt;
 }
 
 /** Whether a job for this adapter will be able to authenticate. */
