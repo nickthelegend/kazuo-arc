@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { Mark } from "@/components/mark";
 import { Connect } from "@/components/connect";
 import { api, type NetworkInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -53,8 +52,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
         )}
       >
         <div className="flex h-[57px] items-center gap-2.5 border-b border-[var(--line)] px-5">
-          <Link href="/" className="group flex items-center gap-2.5 text-fg">
-            <Mark className="h-[19px] w-[19px] transition-transform duration-[600ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:rotate-90" />
+          {/* Wordmark only: the mark is an X and the word starts with one, so
+              together they read as two competing X-shapes rather than a lockup. */}
+          <Link href="/" className="group flex items-center text-fg">
             <span className="text-[14.5px] font-semibold tracking-[-0.02em]">Xorv</span>
           </Link>
         </div>

@@ -74,10 +74,9 @@
          flex item shifts right by half its left margin, so 270px corrects it
          without touching the SVG, whose reveal wipe is bound to a glyph
          extent measured at runtime. */
-      margin-left: 270px;
       /* viewBox tightened to the artwork bounds; 151.78 x 2.954px per unit
          keeps the mark the same on-screen size it had at 768/260. */
-      width: 768px;
+      width: 420px;
       height: 189px;
     }
     .f08cta-rule {
@@ -148,30 +147,12 @@
            the paint references to them are gone; each stroke and fill is the flat token.
            beams 1 and 3 are direction-reversed only (identical geometry) so every stroke
            draws outward from the core. -->
-      <svg data-hf-id="hf-zk0j" class="f08cta-logo" id="f08cta-logo" viewBox="0 0 260 64" width="260" height="64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Xorv">
+      <svg data-hf-id="hf-zk0j" class="f08cta-logo" id="f08cta-logo" viewBox="66 0 104 64" width="104" height="64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Xorv">
         <defs data-hf-id="hf-vl9d">
           <clippath data-hf-id="hf-p9ao" id="f08cta-wordclip">
             <rect data-hf-id="hf-oavx" id="f08cta-wordclip-rect" x="74" y="2" width="0" height="60" />
           </clippath>
         </defs>
-
-        <g data-hf-id="hf-4n59" id="f08cta-core">
-          <rect data-hf-id="hf-eypv" x="27.6" y="27.6" width="8.8" height="8.8" rx="2.2" transform="rotate(45 32 32)" fill="#fafafa" />
-        </g>
-
-        <g data-hf-id="hf-b0dn" class="f08cta-beams" fill="none" stroke="#fafafa" stroke-width="7" stroke-linecap="round">
-          <path data-hf-id="hf-moek" class="f08cta-beam" d="M27 27 L14 14" />
-          <path data-hf-id="hf-cgua" class="f08cta-beam" d="M37 37 L50 50" />
-          <path data-hf-id="hf-h8hj" class="f08cta-beam" d="M37 27 L50 14" />
-          <path data-hf-id="hf-50o1" class="f08cta-beam" d="M27 37 L14 50" />
-        </g>
-
-        <g data-hf-id="hf-ge90" class="f08cta-nodes" fill="#fafafa">
-          <circle data-hf-id="hf-jjds" class="f08cta-node" cx="14" cy="14" r="3.1" />
-          <circle data-hf-id="hf-1tr4" class="f08cta-node" cx="50" cy="50" r="3.1" />
-          <circle data-hf-id="hf-qdbs" class="f08cta-node" cx="50" cy="14" r="3.1" />
-          <circle data-hf-id="hf-8ofc" class="f08cta-node" cx="14" cy="50" r="3.1" />
-        </g>
 
         <g data-hf-id="hf-d1p8" clip-path="url(#f08cta-wordclip)">
           <text data-hf-id="hf-neu7" id="f08cta-word" x="78" y="44" font-family="Inter, sans-serif" font-size="38" font-weight="700" letter-spacing="-1.2" fill="#fafafa">Xorv</text>
@@ -219,9 +200,6 @@
       var gridwrap = q("#f08cta-gridwrap");
       var leadH = q("#f08cta-leadh");
       var leadV = q("#f08cta-leadv");
-      var core = q("#f08cta-core");
-      var beams = qa(".f08cta-beam");
-      var nodes = qa(".f08cta-node");
       var wordClip = q("#f08cta-wordclip-rect");
       var wordEl = q("#f08cta-word");
       var pen = q("#f08cta-pen");
@@ -232,23 +210,6 @@
       var dotCore = q("#f08cta-dotcore");
       var dotRing = q("#f08cta-dotring");
 
-      /* Measured stroke geometry for the self-draw — never a magic number.
-         The dash/gap is deliberately LONGER than the path (len + 2w): with a bare
-         `dasharray = len` the next dash begins exactly at the path end and its round
-         linecap paints a stray dot there before the draw ever starts. The from/to
-         offsets clear both endpoints by half a stroke, so the travel is exactly the
-         ink travel (len + cap on each end) with no dead time. */
-      var BEAM_W = 7;
-      var CAP = BEAM_W / 2;
-      var beamDash = beams.map(function (p) {
-        var len = p.getTotalLength();
-        var dash = len + 2 * BEAM_W;
-        var from = dash + CAP + 0.5;
-        var to = dash - len - CAP;
-        p.style.strokeDasharray = String(dash);
-        p.style.strokeDashoffset = String(from);
-        return { from: from, to: to };
-      });
 
       /* the wipe travels the wordmark's real glyph extent, measured — a fixed travel
          would finish the reveal a third of the way through the tween */
@@ -305,13 +266,6 @@
       });
       gsap.set(leadH, { opacity: 0, rotation: 9, transformOrigin: "930px 0px" });
       gsap.set(leadV, { opacity: 0, rotation: -9, transformOrigin: "0px 704px" });
-      gsap.set(core, { scale: 0, svgOrigin: "32 32" });
-      nodes.forEach(function (c) {
-        gsap.set(c, {
-          scale: 0,
-          svgOrigin: c.getAttribute("cx") + " " + c.getAttribute("cy"),
-        });
-      });
       gsap.set(pen, { opacity: 0 });
       gsap.set(rule, { scaleX: 0, transformOrigin: "50% 50%" });
       gsap.set(live, { opacity: 0 });
@@ -365,38 +319,6 @@
       tl.to(leadH, { opacity: 0.34, duration: 0.5, ease: "power1.out" }, 0.72);
       tl.to(leadV, { opacity: 0.34, duration: 0.5, ease: "power1.out" }, 0.72);
 
-      /* the core seeds at the crossing point... */
-      tl.fromTo(
-        core,
-        { scale: 0 },
-        { scale: 1, duration: 0.28, ease: "back.out(2.2)", svgOrigin: "32 32" },
-        0.26,
-      );
-
-      /* ...four beams draw outward from it (stroke-dashoffset, measured length)... */
-      beams.forEach(function (p, i) {
-        tl.fromTo(
-          p,
-          { strokeDashoffset: beamDash[i].from },
-          { strokeDashoffset: beamDash[i].to, duration: 0.34, ease: "power2.out" },
-          0.38 + i * 0.14,
-        );
-      });
-
-      /* ...and a node lands where each beam ends */
-      nodes.forEach(function (c, i) {
-        tl.fromTo(
-          c,
-          { scale: 0 },
-          {
-            scale: 1,
-            duration: 0.18,
-            ease: "back.out(2.6)",
-            svgOrigin: c.getAttribute("cx") + " " + c.getAttribute("cy"),
-          },
-          0.68 + i * 0.14,
-        );
-      });
 
       /* the wordmark is written out by a hairline pen riding the reveal edge */
       tl.fromTo(

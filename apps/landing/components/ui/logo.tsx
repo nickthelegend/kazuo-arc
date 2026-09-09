@@ -49,14 +49,22 @@ export function Mark({ className }: { className?: string }) {
   );
 }
 
+/**
+ * The header lockup — wordmark only.
+ *
+ * The mark is an X, and the wordmark starts with an X. Set side by side they
+ * read as a stutter rather than a lockup: two X-shapes competing at the same
+ * size, the eye resolving neither. The word alone is unambiguous, and the mark
+ * still does its job everywhere it stands on its own — favicon, the closing
+ * frame of the film, anywhere there is no text beside it to fight.
+ */
 export function Logo({ className }: { className?: string }) {
   return (
     <Link
       href="/"
-      className={cn("group flex items-center gap-2.5 text-fg", className)}
+      className={cn("group flex items-center text-fg", className)}
       aria-label="Xorv, home"
     >
-      <Mark className="h-[22px] w-[22px] transition-transform duration-[600ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:rotate-90" />
       <span className="text-[15px] font-semibold tracking-[-0.02em]">Xorv</span>
     </Link>
   );
