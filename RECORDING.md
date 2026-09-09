@@ -17,6 +17,9 @@ This is the part that ruins takes. Do all of it first.
 # 1. Broker up, with the tunnel so the deployed app can reach it
 pnpm broker                       # terminal 1, leave running
 cloudflared tunnel --url http://localhost:8402    # terminal 2, copy the URL
+# ^ quick tunnels EXPIRE on their own. Start this one fresh right before you
+#   record, and re-deploy both apps onto its url — an hours-old tunnel will
+#   die mid-take.
 
 # 2. A provider node, already registered and warm
 xorv start                        # terminal 3, leave running
@@ -312,6 +315,7 @@ narration instead, the pronunciation trap is real and measured:
 |---|---|---|
 | `xorv run` fails with a bare 402 | You're buying from the account that's hosting | `export XORV_PAYER_ID` / `XORV_PAYER_KEY` |
 | "no online provider matches" | The node's heartbeat lapsed | Restart `xorv start`, wait 15s |
-| The deployed app shows "can't reach the broker" | The tunnel URL changed | Re-deploy the app with the new URL |
+| The deployed app shows "broker offline" | **The Cloudflare quick tunnel expired.** These are ephemeral and die on their own, not just when you restart the broker — it happened to us between two takes | Restart `cloudflared tunnel --url http://localhost:8402`, take the NEW url, and re-deploy **both** apps with it. Budget 5 minutes |
+| "broker offline" but pages still load | Your machine's DNS has a stale negative entry for the new tunnel host. Vercel resolves independently, so the deployment is fine | `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`, or just ignore it — check with `curl` from another network |
 | First job takes 20+ seconds | Cold start | Run one throwaway job first |
 | `doctor` says `sandbox: env` | You're on a host with no seatbelt/bubblewrap | Say so, or record on macOS |
