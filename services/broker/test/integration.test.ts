@@ -496,6 +496,39 @@ describe("the paid path", () => {
   });
 });
 
+describe("what a browser can read", () => {
+  /**
+   * x402 puts its terms in a response header, and a browser cannot read a
+   * response header that CORS does not expose.
+   *
+   * Not theoretical: shipping without `payment-required` on the expose list
+   * gave every wallet payment made from a real tab
+   * "Failed to parse payment requirements: Invalid payment required response",
+   * while every server-side client kept working — Node's fetch has no CORS, so
+   * nothing upstream of a browser could see it. The 402 test above passes
+   * either way; only this one fails.
+   */
+  it("exposes payment-required to the browser, not just the settle response", async () => {
+    await connectProvider(h);
+    const { body } = await quote(h);
+
+    const res = await fetch(`${h.base}/api/jobs/${body.quoteId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://xorv-app.vercel.app" },
+      body: "{}",
+    });
+
+    expect(res.status).toBe(402);
+    expect(res.headers.get("payment-required")).toBeTruthy();
+
+    const exposed = (res.headers.get("access-control-expose-headers") ?? "").toLowerCase();
+    // Without this the client never sees `accepts` and cannot build a transfer.
+    expect(exposed).toContain("payment-required");
+    // And this one carries the transaction id back after settlement.
+    expect(exposed).toContain("x-payment-response");
+  });
+});
+
 describe("failure handling", () => {
   it("reassigns a failed job to another provider at no extra charge", async () => {
     const a = await connectProvider(h, { label: "a", nodeId: "n1", accountId: "0.0.1", price: 1_000 });

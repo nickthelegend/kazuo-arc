@@ -121,10 +121,26 @@ export function createApp(deps: AppDeps) {
         return config.corsOrigins.includes(origin) ? origin : config.corsOrigins[0] ?? null;
       },
       allowHeaders: ["Content-Type", "Authorization", "X-PAYMENT", "X-Payment"],
-      // Browsers can't read a response header unless it's exposed, and the
-      // whole point of the settle response is that the client can show the
-      // on-chain transaction id.
-      exposeHeaders: ["X-PAYMENT-RESPONSE", "X-Payment-Response"],
+      // Browsers can't read a response header unless it's exposed, and x402
+      // carries its whole contract in two of them.
+      //
+      // `payment-required` is the one that matters and the one that was
+      // missing: the 402 puts the `accepts` array — amounts, assets, payTo,
+      // feePayer — in that header, not in the body. Server-side clients never
+      // noticed, because Node's fetch has no CORS. A browser paying with its
+      // own wallet got `null` for it and failed with "Failed to parse payment
+      // requirements", which reads like a protocol bug and is really a
+      // one-line CORS omission.
+      //
+      // Both casings of each, because header names are case-insensitive on the
+      // wire but this list is matched literally by some proxies.
+      exposeHeaders: [
+        "X-PAYMENT-RESPONSE",
+        "X-Payment-Response",
+        "PAYMENT-REQUIRED",
+        "Payment-Required",
+        "payment-required",
+      ],
     }),
   );
 
