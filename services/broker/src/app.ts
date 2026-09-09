@@ -120,7 +120,28 @@ export function createApp(deps: AppDeps) {
         if (config.corsOrigins.length === 0) return origin ?? "*";
         return config.corsOrigins.includes(origin) ? origin : config.corsOrigins[0] ?? null;
       },
-      allowHeaders: ["Content-Type", "Authorization", "X-PAYMENT", "X-Payment"],
+      // The full set `@x402/fetch` actually puts on the wire, not the set the
+      // spec implies. Two of these are non-obvious:
+      //
+      //   PAYMENT-SIGNATURE — the v2 spelling; the client sends either this or
+      //   X-PAYMENT depending on the negotiated version.
+      //
+      //   Access-Control-Expose-Headers — the client sets this as a REQUEST
+      //   header on the payment retry (dist/esm/index.mjs). That is a response
+      //   header name and arguably an upstream bug, but a browser dutifully
+      //   lists it in the preflight, and a server that does not allow it fails
+      //   every retry with "not allowed by Access-Control-Allow-Headers".
+      //   Server-side clients never send a preflight, so this only ever breaks
+      //   browsers.
+      allowHeaders: [
+        "Content-Type",
+        "Authorization",
+        "X-PAYMENT",
+        "X-Payment",
+        "PAYMENT-SIGNATURE",
+        "Payment-Signature",
+        "Access-Control-Expose-Headers",
+      ],
       // Browsers can't read a response header unless it's exposed, and x402
       // carries its whole contract in two of them.
       //
@@ -137,6 +158,10 @@ export function createApp(deps: AppDeps) {
       exposeHeaders: [
         "X-PAYMENT-RESPONSE",
         "X-Payment-Response",
+        // The client asks for this spelling by name; without it the settled
+        // transaction id is unreadable even though the payment succeeded.
+        "PAYMENT-RESPONSE",
+        "Payment-Response",
         "PAYMENT-REQUIRED",
         "Payment-Required",
         "payment-required",

@@ -527,6 +527,43 @@ describe("what a browser can read", () => {
     // And this one carries the transaction id back after settlement.
     expect(exposed).toContain("x-payment-response");
   });
+
+  /**
+   * The preflight has to allow every header `@x402/fetch` actually puts on the
+   * wire — which is not the set the spec implies.
+   *
+   * The one that bit us: on the payment retry the client does
+   * `retryRequest.headers.set("Access-Control-Expose-Headers", …)`. That is a
+   * *response* header name used as a *request* header, arguably an upstream
+   * bug — but the browser dutifully lists it in the preflight, and a server
+   * that does not allow it fails the retry with "Request header field
+   * access-control-expose-headers is not allowed by Access-Control-Allow-Headers".
+   *
+   * A server-side client never sends a preflight, so nothing but a browser can
+   * catch this.
+   */
+  it("passes a preflight carrying the headers the x402 client sends", async () => {
+    const res = await fetch(`${h.base}/api/jobs/qte_whatever`, {
+      method: "OPTIONS",
+      headers: {
+        Origin: "https://xorv-app.vercel.app",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers":
+          "content-type,x-payment,payment-signature,access-control-expose-headers",
+      },
+    });
+
+    expect(res.status).toBeLessThan(400);
+    const allowed = (res.headers.get("access-control-allow-headers") ?? "").toLowerCase();
+    for (const required of [
+      "content-type",
+      "x-payment",
+      "payment-signature",
+      "access-control-expose-headers",
+    ]) {
+      expect(allowed).toContain(required);
+    }
+  });
 });
 
 describe("failure handling", () => {

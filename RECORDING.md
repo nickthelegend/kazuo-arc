@@ -323,6 +323,7 @@ narration instead, the pronunciation trap is real and measured:
 |---|---|---|
 | `xorv run` fails with a bare 402 | You're buying from the account that's hosting | `export XORV_PAYER_ID` / `XORV_PAYER_KEY` |
 | "no online provider matches" | The node's heartbeat lapsed | Restart `xorv start`, wait 15s |
+| `RECONNECTING`, and the log flaps `control channel lost — retrying` every second | **Two `xorv start` processes are running.** They register under the same label and payout account, so the broker keeps replacing one with the other and both reconnect forever | `pgrep -fl "xorv start"` — kill all but one. It is stable within seconds |
 | The deployed app shows "broker offline" | **The Cloudflare quick tunnel expired.** These are ephemeral and die on their own, not just when you restart the broker — it happened to us between two takes | Restart `cloudflared tunnel --url http://localhost:8402`, take the NEW url, and re-deploy **both** apps with it. Budget 5 minutes |
 | "broker offline" but pages still load | Your machine's DNS has a stale negative entry for the new tunnel host. Vercel resolves independently, so the deployment is fine | `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`, or just ignore it — check with `curl` from another network |
 | First job takes 20+ seconds | Cold start | Run one throwaway job first |
