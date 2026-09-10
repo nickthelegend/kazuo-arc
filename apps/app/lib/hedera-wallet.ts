@@ -107,12 +107,31 @@ export function buildTransferTransaction(
 
   tx.setTransactionId(TransactionId.generate(AccountId.fromString(feePayer)));
 
-  // Freezing binds the body — node ids, transaction id, transfers — so the
-  // signature covers something that can no longer change. The facilitator's
-  // `verifyPayerSignature` checks the signature against the frozen body, so a
-  // transaction signed before freezing is rejected rather than silently wrong.
   const client = clientFor(requirements.network);
   try {
+    // Freeze against exactly ONE node, and this is load-bearing.
+    //
+    // A default freeze picks several candidate nodes, producing one signable
+    // body per node. `DAppSigner.signTransaction` builds its body from
+    // `nodeAccountIds[0]` only, gets a signature for that body back from the
+    // wallet, and then merges that single signature into *every* transaction
+    // in the list. The signature is therefore valid for the first node and
+    // invalid for all the others — and the facilitator, verifying whichever
+    // body it happens to read, rejects the payment with
+    // `invalid_exact_hedera_payload_signature_invalid: payer … did not sign`.
+    //
+    // With one node there is one body, so the signature the wallet returns is
+    // the signature for the transaction that gets submitted.
+    // `client.network` is a plain endpoint -> AccountId record, not a Map.
+    const node = Object.values(client.network as Record<string, AccountId | string>)[0];
+    if (node !== undefined) {
+      tx.setNodeAccountIds([node instanceof AccountId ? node : AccountId.fromString(String(node))]);
+    }
+
+    // Freezing binds the body — node id, transaction id, transfers — so the
+    // signature covers something that can no longer change. The facilitator's
+    // `verifyPayerSignature` checks against the frozen body, so a transaction
+    // signed before freezing is rejected rather than silently wrong.
     tx.freezeWith(client);
   } finally {
     client.close();

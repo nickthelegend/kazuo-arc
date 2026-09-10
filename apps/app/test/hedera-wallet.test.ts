@@ -72,6 +72,31 @@ describe("the transfer", () => {
   });
 });
 
+describe("one node, one body", () => {
+  it("freezes against exactly one node account", () => {
+    // Not cosmetic. A default freeze offers several candidate nodes, so the
+    // frozen transaction carries one signable body per node. HashPack's
+    // DAppSigner builds its body from nodeAccountIds[0] alone, gets a
+    // signature for THAT body, and then merges it into every transaction in
+    // the list — valid for the first node, invalid for the rest. The
+    // facilitator verifies whichever body it reads and rejects the payment
+    // with `invalid_exact_hedera_payload_signature_invalid: payer … did not
+    // sign the transaction`.
+    const tx = buildTransferTransaction(requirements(), PAYER);
+    expect(tx.nodeAccountIds?.length).toBe(1);
+  });
+
+  it("serialises to a single transaction, so the signature cannot mismatch", async () => {
+    const key = PrivateKey.generateECDSA();
+    const signer = createWalletHederaSigner(PAYER, async (tx) => tx.sign(key));
+    const base64 = await signer.createPartiallySignedTransferTransaction(requirements());
+    const round = TransferTransaction.fromBytes(
+      Buffer.from(base64, "base64"),
+    ) as TransferTransaction;
+    expect(round.nodeAccountIds?.length).toBe(1);
+  });
+});
+
 describe("freezing", () => {
   it("returns a frozen transaction, since the signature must cover a fixed body", () => {
     // The facilitator verifies the payer's signature against the frozen body.

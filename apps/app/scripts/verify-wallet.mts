@@ -11,7 +11,7 @@ import { PrivateKey } from "@hashgraph/sdk";
 import { x402Client } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
 import { ExactHederaScheme } from "@x402/hedera/exact/client";
-import { createWalletHederaSigner, buildTransferTransaction } from "./lib/hedera-wallet.ts";
+import { createWalletHederaSigner, buildTransferTransaction } from "../lib/hedera-wallet.ts";
 
 const BROKER = process.env.BROKER;
 const ACCOUNT = process.env.XORV_DEMO_PAYER_ID;
