@@ -23,24 +23,24 @@ const FAQ = [
     a: "Each job runs in a fresh empty directory under ~/.xorv/jobs that is deleted when the job ends, and that directory is the agent's working directory. But these CLIs can run shell commands, and a shell command can leave a directory — so this is blast-radius reduction, not a sandbox. Run the node in a container or a VM if you want a real boundary, or set XORV_SAFE_MODE=1 to disable tools entirely and sell text generation only.",
   },
   {
-    q: "How do I get paid if I hold no HBAR?",
-    a: "You don't need any. Xorv runs its own x402 facilitator, which signs as fee payer and covers the network fee on every settlement. Your account needs only to be able to receive USDC — and accounts with automatic association slots can do that with no setup at all.",
+    q: "How do I pay if I hold no gas token?",
+    a: "There isn't one to hold. On Arc, USDC is the native gas token — the thing you pay in and the thing fees are charged in are the same asset. And you spend none of it on fees: you sign an EIP-3009 authorization, which is typed data rather than a transaction, and Xorv's own facilitator relays it and pays the fee. Any address can receive USDC immediately, with no setup at all.",
   },
   {
     q: "What stops a provider taking the money and not doing the work?",
-    a: "Payment settles before the job runs, because a signed Hedera transaction expires after 180 seconds and a five-minute job would outlive it. The protection is at the network level: a failed job is reassigned to another provider at no extra cost to the buyer, and the failure counts against the original provider's success rate, which is what the matcher sorts on.",
+    a: "Payment settles before the job runs, because a signed authorization has a validity window and a five-minute job would outlive it. The protection is at the network level: a failed job is reassigned to another provider at no extra cost to the buyer, and the failure counts against the original provider's success rate, which is what the matcher sorts on.",
   },
   {
-    q: "Why Hedera rather than an EVM chain?",
-    a: "Three properties this specifically needs: fixed, predictable fees measured in hundredths of a cent, so a sub-cent job isn't eaten by gas; finality in about three seconds, so the buyer isn't waiting on confirmations; and a native fee-payer model, which is what lets buyers transact without holding the gas token. Consensus Service also gives an ordered public audit log without deploying a contract.",
+    q: "Why Arc?",
+    a: "Because the awkward part of a payments demo is the gas token, and Arc removes it rather than working around it: USDC is the native gas asset, so there is no second currency to acquire, no exchange rate to quote, and no window in which a stale rate misprices someone's work. Fees are thousandths of a cent and blocks land in about half a second, so a $0.001 job is viable and a buyer isn't waiting on confirmations. And because it is an ordinary EVM chain, the buyer's side is an EIP-712 signature that every wallet in existence already produces.",
   },
   {
     q: "Is the broker a middleman that can take a cut?",
-    a: "It isn't the payee. The 402 response names the matched provider's own Hedera account as payTo, so funds move directly from buyer to provider in one transfer and the broker never has custody. The protocol fee is currently zero.",
+    a: "It isn't the payee. The 402 response names the matched provider's own Arc address as payTo, so funds move directly from buyer to provider in one transfer and the broker never has custody. The protocol fee is currently zero.",
   },
   {
     q: "Can an agent use this without a human?",
-    a: "That's the point. Xorv ships an MCP server: an agent discovers capacity, prices a job, pays for it on-chain and gets the result back with a HashScan link — no account, no card, no human in the loop. It carries a hard per-call spending ceiling, because a model that can spend without a bound is a model that can empty an account through a loop it didn't mean to write.",
+    a: "That's the point. Xorv ships an MCP server: an agent discovers capacity, prices a job, pays for it on-chain and gets the result back with an ArcScan link — no account, no card, no human in the loop. It carries a hard per-call spending ceiling, because a model that can spend without a bound is a model that can empty an account through a loop it didn't mean to write.",
   },
 ];
 

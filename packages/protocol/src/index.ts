@@ -1,13 +1,13 @@
 /**
  * @xorv/protocol — everything the CLI, the broker and the web apps must agree
- * on: the domain model, money math, Hedera plumbing and the x402 wiring.
+ * on: the domain model, money math, Arc plumbing and the x402 wiring.
  */
 
 export * from "./constants.js";
 export * from "./types.js";
 export * from "./money.js";
-export * from "./hedera.js";
-export * from "./hcs.js";
+export * from "./chain.js";
+export * from "./log.js";
 export * from "./x402.js";
 
 import { createHash, randomBytes } from "node:crypto";

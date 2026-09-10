@@ -23,10 +23,11 @@
 
 import {
   fetchBalances,
+  formatNative,
   formatUsd,
-  hashscanAccount,
+  formatUsdc,
+  explorerAddress,
   networkLabel,
-  usdcTokenId,
   type AdapterKind,
 } from "@xorv/protocol";
 import fs from "node:fs";
@@ -108,7 +109,7 @@ export function configChecks(config: NodeConfig | null): Check[] {
     }
   }
 
-  if (!config.accountId) {
+  if (!config.address) {
     checks.push(fail("payout", "no payout account — jobs cannot be paid for", "xorv init"));
   }
 
@@ -152,49 +153,56 @@ export function sandboxChecks(tier: SandboxTier, withheld: number, safe: boolean
 }
 
 export interface BalanceLike {
-  hbarTinybars: string | bigint | number;
+  nativeWei: string | bigint | number;
   usdcUnits: string | bigint | number;
-  usdcAssociated: boolean;
-  canReceiveUsdc: boolean;
-  maxAutoAssociations: number;
+  viewsAgree: boolean;
 }
 
-export function payoutChecks(network: string, accountId: string, balances: BalanceLike): Check[] {
+/**
+ * What can be wrong with a payout account.
+ *
+ * On Hedera this was three checks and the important one asked whether the
+ * account could receive USDC *at all* — an account without an association or an
+ * automatic slot silently cannot be paid, and the payment is rejected at
+ * preflight with no useful message. That check is gone: every ERC-20 address
+ * can receive USDC, so the question has one answer and asking it is noise.
+ *
+ * What replaced it is a check that could not exist on Hedera. Arc reports the
+ * same balance twice, at 6 and 18 decimals, and if the two disagree then
+ * `XORV_STABLECOIN` is pointing at some other token — every figure this CLI
+ * prints is wrong, and the operator has no other way to find out.
+ */
+export function payoutChecks(network: string, address: string, balances: BalanceLike): Check[] {
   const checks: Check[] = [
-    ok("account", `${accountId} on ${networkLabel(network)} · ${hashscanAccount(network, accountId)}`),
+    ok("account", `${address} on ${networkLabel(network)} · ${explorerAddress(network, address)}`),
   ];
 
-  const hbar = Number(balances.hbarTinybars) / 1e8;
   checks.push(
     ok(
       "balance",
-      // A provider is *paid*, so it needs no HBAR to operate — the facilitator
+      // A provider is *paid*, so it needs nothing to operate — the facilitator
       // covers gas. Zero is fine here, and flagging it sends people to a faucet
       // they do not need.
-      `${hbar.toFixed(4)} ℏ · ${formatUsd(Number(balances.usdcUnits))} USDC` +
-        (hbar === 0 ? " (no HBAR needed — the facilitator pays gas)" : ""),
+      `${formatUsdc(String(balances.usdcUnits))} USDC` +
+        (Number(balances.usdcUnits) === 0 ? " (nothing needed — this account only receives)" : ""),
     ),
   );
 
-  // `canReceiveUsdc`, not `usdcAssociated`: an account with automatic
-  // association slots can be paid without ever opting in explicitly.
-  if (!balances.canReceiveUsdc) {
-    checks.push(
-      fail(
-        "usdc",
-        "cannot receive USDC — no association and no automatic slots, so payments will be rejected before they settle",
-        "xorv wallet associate",
-      ),
-    );
-  } else if (balances.usdcAssociated) {
-    checks.push(ok("usdc", `associated with ${usdcTokenId(network)}`));
-  } else {
+  if (balances.viewsAgree) {
     checks.push(
       ok(
         "usdc",
-        `can receive via automatic association (${
-          balances.maxAutoAssociations === -1 ? "unlimited slots" : `${balances.maxAutoAssociations} slots`
-        })`,
+        `one balance, two views — ${formatNative(String(balances.nativeWei))} at 18dp is the gas ` +
+          `view of the same money`,
+      ),
+    );
+  } else {
+    checks.push(
+      fail(
+        "usdc",
+        "the ERC-20 and native balances disagree, so the configured token is not Arc's native USDC — " +
+          "every amount this node reports is wrong",
+        "unset XORV_STABLECOIN, or point it at the real FiatTokenV2",
       ),
     );
   }
@@ -341,7 +349,7 @@ export function adapterChecks(states: AdapterState[]): Check[] {
  * Repair what has exactly one safe repair, and report the rest.
  *
  * Anything that costs money, moves funds, or needs a human decision is listed
- * as unfixable rather than guessed at. A `--fix` that spends HBAR without being
+ * as unfixable rather than guessed at. A `--fix` that spends money without being
  * asked is worse than one that does nothing.
  */
 export function fixNode(): { fixed: string[]; unfixable: string[] } {
@@ -376,7 +384,7 @@ export function fixNode(): { fixed: string[]; unfixable: string[] } {
   }
 
   const config = loadConfig();
-  if (config && !config.accountId) unfixable.push("no payout account — run `xorv init`");
+  if (config && !config.address) unfixable.push("no payout account — run `xorv init`");
   if (config && config.capabilities.length === 0) unfixable.push("no capabilities — run `xorv init`");
 
   return { fixed, unfixable };
@@ -403,15 +411,15 @@ export async function doctorCommand(opts: { json?: boolean; fix?: boolean } = {}
   checks.push(...configChecks(config));
   checks.push(...sandboxChecks(detectSandbox(), withheldEnvKeys().length, safeMode()));
 
-  if (config?.accountId) {
+  if (config?.address) {
     try {
-      const balances = await fetchBalances(config.network, config.accountId);
-      checks.push(...payoutChecks(config.network, config.accountId, balances));
+      const balances = await fetchBalances(config.network, config.address);
+      checks.push(...payoutChecks(config.network, config.address, balances));
     } catch (err) {
       checks.push(
         fail(
           "account",
-          `could not reach the mirror node for ${config.accountId}: ${
+          `could not reach the mirror node for ${config.address}: ${
             err instanceof Error ? err.message : String(err)
           }`,
           "check the account id and your connection",

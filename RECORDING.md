@@ -25,8 +25,7 @@ cloudflared tunnel --url http://localhost:8402    # terminal 2, copy the URL
 xorv start                        # terminal 3, leave running
 
 # 3. Buy from a DIFFERENT account than the one hosting
-export XORV_PAYER_ID=0.0.9848440
-export XORV_PAYER_KEY=<the buyer key>
+export XORV_PAYER_KEY=<the buyer key>   # the address is derived from it
 ```
 
 That last step matters more than it looks. **A provider cannot buy from
@@ -38,7 +37,7 @@ Then:
 - Terminal at **~16pt**, window at 1920×1080, nothing else on screen.
 - Browser with **two tabs pre-opened**: `xorv.vercel.app` and
   `xorv-app.vercel.app`. Logged in already if you're showing the wallet.
-- A HashScan tab open but scrolled to the top, ready to paste into.
+- An ArcScan tab open but scrolled to the top, ready to paste into.
 - **Run one throwaway job before recording.** It warms the broker, the mirror
   node, and the agent CLI — the first job of a session is always the slowest,
   and you don't want that on camera.
@@ -84,7 +83,7 @@ reads as unfinished.
 > Claude, or Codex, or Grok. Most of the day it sits there doing nothing.
 > Someone else needs one job run, and their only option is to buy a whole plan.
 >
-> Xorv connects those two people, and settles it per job — in USDC, on Hedera."
+> Xorv connects those two people, and settles it per job — in USDC, on Arc."
 
 Scroll to **How it works** and let the five steps sit for two seconds. Then
 scroll to the **Security** section and pause on the transcript.
@@ -133,7 +132,7 @@ Now go live:
 xorv start
 ```
 
-> "That's it. Registered on Hedera's Consensus Service, holding a control
+> "That's it. Registered on chain, holding a control
 > channel open, waiting for work."
 
 Leave the dashboard visible for a beat — label, heartbeat, capabilities,
@@ -148,15 +147,14 @@ earnings.
 **Connect**, top right — and this beat is now worth real screen time, because
 the wallet genuinely pays.
 
-> "This is HashPack. Hedera's x402 scheme signs a native transfer, not an EVM
-> one — so a normal EVM wallet can authenticate you but can't actually pay.
-> HashPack signs the real transaction, and the facilitator co-signs and covers
-> the fee."
+> "Any EVM wallet. What it signs is not a transaction — it's an EIP-3009
+> authorization, typed data. It never gets broadcast. The facilitator relays it
+> and pays the fee, so I need no gas at all."
 
 Approve the session, then buy the job below with it. The transfer is signed in
-your wallet, in front of the camera. **Install HashPack and click Connect once
-before recording** — the WalletConnect relay handshake is the one step that
-can't be rehearsed headlessly.
+your wallet, in front of the camera. **Install MetaMask and click Connect once before
+recording**, and let it add the Arc network — the extension prompt is the one
+step that can't be rehearsed headlessly.
 
 Type a real prompt into the composer. **Make it use tools** — that is the
 difference between a good shot and a dead one:
@@ -181,7 +179,7 @@ worth a half-second pause).
 **Stop on the quote.** This is the beat the whole bounty is about.
 
 > "Before any money moves, I get terms back. Who's going to run this — that's a
-> real machine, with a real Hedera account. What it costs. And it pays straight
+> real machine, with a real Arc address. What it costs. And it pays straight
 > to them; the broker never touches the money.
 >
 > That's HTTP 402. A status code nobody ever used, doing actual work."
@@ -192,7 +190,7 @@ Pay it. Watch the log stream. Read the answer out loud, briefly.
 
 ## 2:45 – 3:30 · Prove it on-chain
 
-Copy the transaction id from the receipt, open HashScan.
+Copy the transaction hash from the receipt, open ArcScan.
 
 **Point at two things and only two things.**
 
@@ -203,14 +201,15 @@ Copy the transaction id from the receipt, open HashScan.
 
 Scroll to the fee section.
 
-> "— every HBAR fee came from the facilitator. Not from the buyer. The buyer's
-> HBAR balance is zero and always was.
+> "— every fee came from the facilitator. Not from the buyer. The buyer never
+> broadcast anything, so they could not have paid a fee even in principle.
 >
 > On most chains, 'go buy the gas token before you can spend your stablecoin' is
-> exactly where a normal person's crypto payment dies. Hedera's native
-> fee-payer model removes that step, and this transaction is the proof."
+> exactly where a normal person's crypto payment dies. On Arc the money and the gas are
+> the same token, and the buyer spends none of it on fees. This transaction is
+> the proof."
 
-Then open the **receipts topic** `0.0.9848247` and scroll it.
+Then open the **audit log contract** `0x383f5153…65eef3` and scroll its events.
 
 > "And every settled job leaves a receipt here. Job id, both accounts, the
 > amount, and a SHA-256 of the result — so the record is auditable without the
@@ -262,7 +261,7 @@ xorv earnings
 > "And on the other side of that — this is the provider's ledger. Every job it
 > ran, what it charged, and the on-chain balance underneath.
 >
-> That USDC is real. It's on Hedera testnet right now."
+> That USDC is real. It's on Arc testnet right now."
 
 Close on:
 
@@ -270,7 +269,7 @@ Close on:
 pnpm test
 ```
 
-> "272 tests. No credentials, no network."
+> "295 tests. No credentials, no network."
 
 Let the green scroll and end. **Don't add an outro.** The test output is a
 better final frame than a logo.
@@ -310,8 +309,8 @@ narration instead, the pronunciation trap is real and measured:
   "usd". Measured on Kokoro: `"paid in USDC"` synthesizes in 1.173s;
   `"paid in U S D C"` takes 1.707s — those extra 0.5s are the letters actually
   being spoken.
-- Same for **`H bar`** (not `HBAR`) and **`M C P`** (not `MCP`).
-- Xorv comes back from speech recognition as "Zorv" and Hedera as "Hetera", so
+- Same for **`M C P`** (not `MCP`).
+- Xorv comes back from speech recognition as "Zorv", so
   if you auto-caption, fix those before publishing. `videos/xorv-launch/fix-captions.mjs`
   does exactly this for the trailer.
 
@@ -321,7 +320,7 @@ narration instead, the pronunciation trap is real and measured:
 
 | Symptom on camera | Cause | Fix before recording |
 |---|---|---|
-| `xorv run` fails with a bare 402 | You're buying from the account that's hosting | `export XORV_PAYER_ID` / `XORV_PAYER_KEY` |
+| `xorv run` fails with a bare 402 | You're buying from the address that's hosting | `export XORV_PAYER_KEY` |
 | "no online provider matches" | The node's heartbeat lapsed | Restart `xorv start`, wait 15s |
 | `RECONNECTING`, and the log flaps `control channel lost — retrying` every second | **Two `xorv start` processes are running.** They register under the same label and payout account, so the broker keeps replacing one with the other and both reconnect forever | `pgrep -fl "xorv start"` — kill all but one. It is stable within seconds |
 | The deployed app shows "broker offline" | **The Cloudflare quick tunnel expired.** These are ephemeral and die on their own, not just when you restart the broker — it happened to us between two takes | Restart `cloudflared tunnel --url http://localhost:8402`, take the NEW url, and re-deploy **both** apps with it. Budget 5 minutes |

@@ -35,7 +35,7 @@ export function Hero() {
         <motion.div {...rise(0)}>
           <Pill href={REPO_URL} className="mb-7">
             <LiveDot />
-            Live on Hedera testnet
+            Live on Arc testnet
             <span aria-hidden className="text-fg-4">
               ·
             </span>

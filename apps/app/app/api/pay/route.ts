@@ -1,51 +1,53 @@
 /**
  * The one route that spends money.
  *
- * Signing an x402 payment needs a Hedera private key. A key shipped to a
- * browser tab is a key in someone's extensions, devtools and clipboard history,
- * so the signing stays on the server and the browser only ever asks for it to
- * happen. In production this is where a real wallet connection (HashPack,
- * WalletConnect) or a per-user custodial key would go; for the demo it is a
- * single configured testnet payer, and the UI says so plainly.
+ * This is the **fallback** path, for a visitor with no wallet. When a wallet is
+ * connected the x402 round trip happens in the browser and the user signs their
+ * own authorization (see `lib/pay-with-wallet.ts`); this route pays from a
+ * single configured demo account instead, and the UI says so plainly.
+ *
+ * The key stays on the server because a key shipped to a browser tab is a key
+ * in someone's extensions, devtools and clipboard history.
  *
  * Everything else about the flow is the genuine article: the same `@x402/*`
  * client any third party would use, against the broker's public HTTP surface,
- * settling a real transfer on Hedera.
+ * settling a real transfer on Arc.
  */
 
 import { NextResponse } from "next/server";
-import { PrivateKey } from "@hiero-ledger/sdk";
+import { privateKeyToAccount } from "viem/accounts";
+import { createPublicClient, http } from "viem";
 import { x402Client, x402HTTPClient } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
-import { createClientHederaSigner } from "@x402/hedera";
-import { ExactHederaScheme } from "@x402/hedera/exact/client";
+import { registerExactEvmScheme } from "@x402/evm/exact/client";
+import { toClientEvmSigner } from "@x402/evm";
+import { ARC_CHAIN } from "@/lib/chains";
 
 export const runtime = "nodejs";
 /** Never prerender or cache: this route moves funds. */
 export const dynamic = "force-dynamic";
 
 const BROKER_URL = (process.env.XORV_BROKER_URL ?? "http://localhost:8402").replace(/\/+$/, "");
-const NETWORK = process.env.XORV_NETWORK ?? "hedera:testnet";
-const HBAR_ASSET_ID = "0.0.0";
 
 /**
- * Parse a Hedera key without knowing its curve.
+ * Parse an EVM private key.
  *
  * Duplicated from @xorv/protocol rather than imported: this module is bundled
  * for a Next.js route, and pulling the whole protocol package in drags the
- * broker's dependency graph along with it for the sake of twelve lines.
+ * broker's dependency graph along with it for the sake of six lines.
+ *
+ * The Hedera version of this helper was four times the size and had to guess
+ * between three key encodings, because the ED25519 and ECDSA parsers throw on
+ * each other's input and a wrong guess surfaced as an unverifiable signature
+ * much later. An EVM key has one format.
  */
-function parseKey(raw: string): PrivateKey {
+function parseKey(raw: string): `0x${string}` {
   const key = raw.trim();
   const hex = key.startsWith("0x") ? key.slice(2) : key;
-  if (/^[0-9a-fA-F]{64}$/.test(hex)) {
-    try {
-      return PrivateKey.fromStringECDSA(key);
-    } catch {
-      return PrivateKey.fromStringED25519(key);
-    }
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    throw new Error("XORV_DEMO_PAYER_KEY is not a 32-byte hex private key");
   }
-  return PrivateKey.fromStringDer(key);
+  return `0x${hex}`;
 }
 
 /** Pull the resource server's failure reason out of the `payment-required` header. */
@@ -63,20 +65,21 @@ function decodePaymentRequiredError(res: Response): string | null {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const payerId = process.env.XORV_DEMO_PAYER_ID?.trim();
   const payerKey = process.env.XORV_DEMO_PAYER_KEY?.trim();
 
-  if (!payerId || !payerKey) {
+  // Only a key is needed. The address is derived from it, so there is no second
+  // value to configure and no way for the two to disagree.
+  if (!payerKey) {
     return NextResponse.json(
       {
         error:
-          "No demo payer configured. Set XORV_DEMO_PAYER_ID and XORV_DEMO_PAYER_KEY in .env.local — see .env.example.",
+          "No demo payer configured. Set XORV_DEMO_PAYER_KEY in .env.local — see .env.example.",
       },
       { status: 501 },
     );
   }
 
-  let body: { quoteId?: string; asset?: "usdc" | "hbar" };
+  let body: { quoteId?: string };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -87,20 +90,20 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!quoteId) {
     return NextResponse.json({ error: "quoteId is required" }, { status: 400 });
   }
-  const wantHbar = body.asset === "hbar";
 
   try {
-    const signer = createClientHederaSigner(payerId, parseKey(payerKey), { network: NETWORK });
-    const client = new x402Client().register("hedera:*", new ExactHederaScheme(signer));
+    const payer = privateKeyToAccount(parseKey(payerKey));
+    const publicClient = createPublicClient({ chain: ARC_CHAIN, transport: http() });
 
-    // Narrow the server's `accepts` to the requested asset, never to nothing:
-    // an empty list would fail a request the broker was willing to serve.
-    client.registerPolicy((_version, requirements) => {
-      const preferred = wantHbar
-        ? requirements.filter((r) => r.asset === HBAR_ASSET_ID)
-        : requirements.filter((r) => r.asset !== HBAR_ASSET_ID);
-      return preferred.length > 0 ? preferred : requirements;
+    const client = new x402Client();
+    registerExactEvmScheme(client, {
+      signer: toClientEvmSigner(payer, publicClient),
+      // Wildcard `eip155:*` — pay whatever the broker quotes. See
+      // lib/pay-with-wallet.ts for why this is safe.
     });
+
+    // No asset-preference policy: Arc has one asset. On Hedera this had to
+    // narrow `accepts` to USDC or HBAR without ever emptying the list.
 
     const paidFetch = wrapFetchWithPayment(fetch, client);
     const httpClient = new x402HTTPClient(client);
@@ -131,14 +134,14 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     return NextResponse.json({
       jobId: payload.jobId,
-      payer: payerId,
+      payer: payer.address,
       transaction: settlement?.transaction ?? null,
       success: settlement?.success ?? true,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // Surfaced verbatim: the useful failures here ("payer holds no USDC",
-    // "token not associated") are exactly the ones worth reading.
+    // Surfaced verbatim: the useful failure here ("payer holds no USDC") is
+    // exactly the one worth reading.
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

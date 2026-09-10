@@ -13,11 +13,10 @@ import * as ui from "../ui.js";
 interface NetworkInfo {
   network: string;
   facilitator: { mode: string; description: string; feePayer: string };
-  operator: { accountId: string; url: string };
+  operator: { address: string; url: string };
   usdc: string;
-  topics: Record<string, { id: string; url: string } | null>;
-  hcsPublished: { registry: number; heartbeat: number; receipts: number };
-  hbarRate: { centsPerHbar: number } | null;
+  log: { address: string; url: string } | null;
+  logPublished: { registry: number; heartbeat: number; receipts: number };
   stats: {
     providersLive: number;
     providersConnected: number;
@@ -31,7 +30,7 @@ interface NetworkInfo {
 interface ProviderInfo {
   id: string;
   label: string;
-  accountId: string;
+  address: string;
   status: string;
   connected: boolean;
   activeJobs: number;
@@ -88,12 +87,6 @@ export async function statusCommand(opts: { broker?: string; json?: boolean }): 
       ui.kv([
         ["network", `${network.network} ${ui.c.muted(`· USDC ${network.usdc}`)}`],
         ["facilitator", `${network.facilitator.description} ${ui.c.muted(`· gas paid by ${network.facilitator.feePayer}`)}`],
-        [
-          "hbar rate",
-          network.hbarRate
-            ? `${ui.c.money(`$${(network.hbarRate.centsPerHbar / 100).toFixed(4)}`)} ${ui.c.muted("per ℏ, from the mirror node")}`
-            : ui.c.muted("unavailable"),
-        ],
         ["providers", `${ui.c.ok(String(network.stats.providersLive))} live ${ui.c.muted(`· ${network.stats.providersConnected} connected · ${network.stats.capacity} capabilities`)}`],
         ["jobs", `${network.stats.jobsCompleted} completed ${ui.c.muted(`of ${network.stats.jobsTotal}`)}`],
         ["settled", ui.c.money(formatUsd(network.stats.paidUsdMicros))],
@@ -104,25 +97,24 @@ export async function statusCommand(opts: { broker?: string; json?: boolean }): 
 
   // -- the audit trail ------------------------------------------------------
 
-  ui.heading("hedera consensus service");
-  const topicRows = Object.entries(network.topics).map(([kind, topic]) => [
-    topic ? ui.glyph.chain() : ui.glyph.off(),
-    kind,
-    topic ? ui.c.bold(topic.id) : ui.c.muted("not configured"),
-    String(network.hcsPublished[kind as keyof NetworkInfo["hcsPublished"]] ?? 0),
-    topic ? ui.c.muted(topic.url) : "",
+  // One contract with three indexed streams, where Hedera had three separate
+  // topics. Same three counters, so an operator reads this the same way.
+  ui.heading("on-chain audit log");
+  const streamRows = Object.entries(network.logPublished).map(([stream, count]) => [
+    network.log ? ui.glyph.chain() : ui.glyph.off(),
+    stream,
+    String(count),
   ]);
   console.log(
     ui.table(
-      [
-        { header: "" },
-        { header: "topic" },
-        { header: "id" },
-        { header: "sent", align: "right" },
-        { header: "hashscan" },
-      ],
-      topicRows,
+      [{ header: "" }, { header: "stream" }, { header: "written", align: "right" }],
+      streamRows,
     ),
+  );
+  ui.muted(
+    network.log
+      ? `  ${network.log.address}  ${network.log.url}`
+      : "  no audit contract configured — nothing is being recorded on chain",
   );
 
   // -- providers ------------------------------------------------------------

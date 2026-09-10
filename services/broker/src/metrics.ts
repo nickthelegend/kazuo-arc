@@ -77,10 +77,10 @@ export class Metrics {
         .reduce((sum, j) => sum + (j.priceUsdMicros ?? 0), 0)}`,
     );
 
-    const hcs = deps.chain.counts();
-    help("xorv_hcs_messages_total", "Messages published to Hedera Consensus Service.", "counter");
-    for (const [topic, count] of Object.entries(hcs)) {
-      lines.push(`xorv_hcs_messages_total{topic="${topic}"} ${count}`);
+    const audit = deps.chain.counts();
+    help("xorv_audit_entries_total", "Entries appended to the on-chain audit log.", "counter");
+    for (const [stream, count] of Object.entries(audit)) {
+      lines.push(`xorv_audit_entries_total{stream="${stream}"} ${count}`);
     }
 
     for (const [key, value] of this.counters) {

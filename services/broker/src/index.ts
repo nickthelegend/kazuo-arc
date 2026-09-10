@@ -4,7 +4,7 @@
 
 import { serve } from "@hono/node-server";
 import type { Server as HttpServer } from "node:http";
-import { formatUsd, networkLabel, usdcTokenId } from "@xorv/protocol";
+import { formatUsd, networkLabel, usdcAddress } from "@xorv/protocol";
 import { createApp } from "./app.js";
 import { Chain } from "./chain.js";
 import { loadConfig } from "./config.js";
@@ -54,16 +54,16 @@ const { app, hubHandlers, sweep } = createApp({
 });
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
-  const topics = chain.describeTopics();
+  const log = chain.describeLog();
   const line = (label: string, value: string) => console.log(`  ${label.padEnd(14)} ${value}`);
   console.log("");
   console.log("  ▁▂▃  X O R V   B R O K E R");
   console.log("");
   line("listening", `http://localhost:${info.port}`);
   line("network", `${config.network} (${networkLabel(config.network)})`);
-  line("operator", config.operatorId);
+  line("operator", config.operatorAddress);
   line("facilitator", config.facilitatorMode === "self" ? "self-hosted — we pay the gas" : config.facilitatorMode);
-  line("usdc", usdcTokenId(config.network));
+  line("usdc", usdcAddress(config.network));
   line("fee", config.feeBps === 0 ? "0% — providers keep everything" : `${config.feeBps / 100}%`);
   line(
     "storage",
@@ -72,9 +72,7 @@ const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
       : local.location,
   );
   line("mongodb", mongoStatus);
-  for (const [kind, topic] of Object.entries(topics)) {
-    line(`hcs:${kind}`, topic ? topic.id : "not configured");
-  }
+  line("audit log", log ? log.address : "not configured");
   console.log("");
 });
 

@@ -73,7 +73,7 @@ interface BrokerJob {
   startedAt: number | null;
   priceUsdMicros: number | null;
   providerLabel: string | null;
-  payment: { transactionId: string; asset: string; hashscanUrl: string } | null;
+  payment: { transactionHash: string; asset: string; explorerUrl: string } | null;
 }
 
 export async function jobsCommand(opts: { json?: boolean; limit?: string; all?: boolean }): Promise<void> {
@@ -398,7 +398,7 @@ export async function configCommand(opts: { json?: boolean; path?: boolean }): P
         ["node id", config.nodeId],
         ["network", config.network],
         ["broker", config.brokerUrl],
-        ["payout", config.accountId],
+        ["payout", config.address],
         ["key", ui.c.muted("[stored locally, 0600]")],
         ["region", config.region ?? ui.c.muted("not set")],
         ["sandbox", config.sandboxDir],

@@ -3,31 +3,49 @@
 /**
  * Wallet state for the app.
  *
- * Replaces the Privy provider. The difference is not cosmetic: Privy gave an
- * EVM address and an OAuth session, neither of which can sign the native
- * Hedera transfer x402 settles. This holds a HashPack/Blade/Kabila session
- * whose signature the facilitator actually accepts, so the browser can pay.
+ * Deliberately small — an address, a signer, and the two verbs. Anything more
+ * (balances, history) already has a home on the broker or an RPC and does not
+ * belong in React state that has to stay correct across reloads.
  *
- * Deliberately small — an account id, a signer, and the two verbs. Anything
- * more (balances, history) already has a home on the broker or the mirror node
- * and does not belong in React state that has to stay correct across reloads.
+ * Smaller than its Hedera predecessor in one way worth naming: there is no
+ * `available` flag gated on a WalletConnect project id, because there is no
+ * relay to configure. The only question is whether the browser has a wallet.
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { PROJECT_ID, connectWallet, restoreWallet, type WalletSession } from "@/lib/hashpack";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { ARC_CHAIN } from "@/lib/chains";
+import {
+  connectWallet,
+  restoreWallet,
+  switchToArc,
+  walletAvailable,
+  watchWallet,
+  type WalletSession,
+} from "@/lib/wallet";
 
 interface WalletState {
-  /** Hedera account id once connected, e.g. `0.0.9848440`. */
-  accountId: string | null;
+  /** Arc address once connected, e.g. `0x0329…9F36`. */
+  address: string | null;
   session: WalletSession | null;
   connecting: boolean;
-  /** Null until the restore attempt settles, so the UI can avoid flashing. */
+  /** False until the restore attempt settles, so the UI can avoid flashing. */
   ready: boolean;
   /** Set when a connect attempt failed, for display rather than a toast. */
   error: string | null;
-  /** False when no WalletConnect project id is configured. */
+  /** False when the browser has no EIP-1193 wallet at all. */
   available: boolean;
+  /** True when the wallet is connected but pointed at some other network. */
+  wrongChain: boolean;
   connect: () => Promise<void>;
+  switchChain: () => Promise<void>;
   disconnect: () => Promise<void>;
 }
 
@@ -39,8 +57,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Restore a session the relay already holds, so a reload doesn't force the
-  // user back through the modal. Never opens one.
+  // Reconnect silently if the wallet already granted access. `eth_accounts`
+  // never prompts, so a reload doesn't force the user back through the modal.
   useEffect(() => {
     let cancelled = false;
     restoreWallet()
@@ -55,6 +73,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // A user who switches account or network in their wallet has changed who is
+  // paying. Re-reading rather than trusting stale state is the difference
+  // between paying from the address on screen and paying from another one.
+  useEffect(
+    () =>
+      watchWallet(() => {
+        void restoreWallet().then(setSession);
+      }),
+    [],
+  );
+
   const connect = useCallback(async () => {
     setError(null);
     setConnecting(true);
@@ -63,32 +92,43 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       // Closing the modal is a decision, not a failure — don't shout about it.
-      if (!/reject|cancel|closed|User denied/i.test(message)) setError(message);
+      if (!/reject|cancel|closed|User denied|4001/i.test(message)) setError(message);
     } finally {
       setConnecting(false);
     }
   }, []);
 
-  const disconnect = useCallback(async () => {
+  const switchChain = useCallback(async () => {
+    setError(null);
     try {
-      await session?.disconnect();
-    } finally {
-      setSession(null);
+      await switchToArc();
+      setSession(await restoreWallet());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     }
-  }, [session]);
+  }, []);
+
+  // There is no "disconnect" in EIP-1193 — a dapp cannot revoke its own access,
+  // only the wallet can. Clearing local state is the honest extent of it, and
+  // saying so beats a button that pretends to do more than it does.
+  const disconnect = useCallback(async () => {
+    setSession(null);
+  }, []);
 
   const value = useMemo<WalletState>(
     () => ({
-      accountId: session?.accountId ?? null,
+      address: session?.address ?? null,
       session,
       connecting,
       ready,
       error,
-      available: PROJECT_ID.length > 0,
+      available: walletAvailable(),
+      wrongChain: Boolean(session) && session?.chainId !== ARC_CHAIN.id,
       connect,
+      switchChain,
       disconnect,
     }),
-    [session, connecting, ready, error, connect, disconnect],
+    [session, connecting, ready, error, connect, switchChain, disconnect],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

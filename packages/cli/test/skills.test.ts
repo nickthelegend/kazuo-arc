@@ -51,7 +51,7 @@ describe("spending discipline", () => {
 });
 
 describe("the receipt", () => {
-  it("requires the hashscan link to be reported with every paid job", () => {
+  it("requires the arcscan link to be reported with every paid job", () => {
     expect(body).toMatch(/Never report a paid job without its link/i);
   });
 

@@ -94,7 +94,7 @@ export function ProviderList() {
                 {p.capabilities.map((c) => c.displayName).join(" · ")}
               </p>
               <p className="mono mt-1 truncate text-[11.5px] text-fg-4">
-                {p.accountId}
+                {p.address}
                 {p.region ? ` · ${p.region}` : ""} · beat {formatAgo(p.lastHeartbeatAt)}
               </p>
             </div>

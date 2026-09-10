@@ -24,7 +24,7 @@ function capability(over: Partial<Capability> = {}): Capability {
 function registration(over: Partial<RegisterRequest> = {}): RegisterRequest {
   return {
     label: "node-a",
-    accountId: "0.0.1001",
+    address: "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B",
     endpoint: "http://localhost:1",
     capabilities: [capability()],
     version: "0.1.0",
@@ -79,7 +79,7 @@ describe("register", () => {
 
   it("keeps distinct nodeIds as distinct providers", () => {
     registry.register(registration({ nodeId: "a" }));
-    registry.register(registration({ nodeId: "b", accountId: "0.0.2002" }));
+    registry.register(registration({ nodeId: "b", address: "0.0.2002" }));
     expect(registry.list()).toHaveLength(2);
   });
 });
@@ -143,17 +143,17 @@ describe("match", () => {
 
   it("picks the cheapest matching provider", () => {
     registry.register(
-      registration({ nodeId: "pricey", accountId: "0.0.1", capabilities: [capability({ priceUsdMicros: 20_000 })] }),
+      registration({ nodeId: "pricey", address: "0.0.1", capabilities: [capability({ priceUsdMicros: 20_000 })] }),
     );
     const cheap = registry.register(
-      registration({ nodeId: "cheap", accountId: "0.0.2", capabilities: [capability({ priceUsdMicros: 5_000 })] }),
+      registration({ nodeId: "cheap", address: "0.0.2", capabilities: [capability({ priceUsdMicros: 5_000 })] }),
     );
     expect(registry.match({ maxPriceUsdMicros: 100_000 })!.provider.id).toBe(cheap.id);
   });
 
   it("breaks a price tie toward the better track record", () => {
-    const good = registry.register(registration({ nodeId: "good", accountId: "0.0.1" }));
-    const bad = registry.register(registration({ nodeId: "bad", accountId: "0.0.2" }));
+    const good = registry.register(registration({ nodeId: "good", address: "0.0.1" }));
+    const bad = registry.register(registration({ nodeId: "bad", address: "0.0.2" }));
 
     registry.jobStarted(good.id);
     registry.jobFinished(good.id, { ok: true, durationMs: 100 });
@@ -165,12 +165,12 @@ describe("match", () => {
 
   it("honours an adapter requirement", () => {
     registry.register(
-      registration({ nodeId: "claude", accountId: "0.0.1", capabilities: [capability()] }),
+      registration({ nodeId: "claude", address: "0.0.1", capabilities: [capability()] }),
     );
     const codex = registry.register(
       registration({
         nodeId: "codex",
-        accountId: "0.0.2",
+        address: "0.0.2",
         capabilities: [capability({ id: "codex", adapter: "codex", priceUsdMicros: 30_000 })],
       }),
     );
@@ -229,13 +229,11 @@ describe("stats", () => {
     expect(registry.get(provider.id)!.activeJobs).toBe(0);
   });
 
-  it("accumulates USDC and HBAR earnings separately", () => {
+  it("accumulates USDC earnings across jobs", () => {
     const registry = new Registry();
     const provider = registry.register(registration());
     registry.jobFinished(provider.id, { ok: true, durationMs: 1, usdcMicros: 10_000 });
-    registry.jobFinished(provider.id, { ok: true, durationMs: 1, tinybars: 1_462_167 });
-    const stats = registry.get(provider.id)!.stats;
-    expect(stats.earnedUsdcMicros).toBe(10_000);
-    expect(stats.earnedTinybars).toBe(1_462_167);
+    registry.jobFinished(provider.id, { ok: true, durationMs: 1, usdcMicros: 1_000 });
+    expect(registry.get(provider.id)!.stats.earnedUsdcMicros).toBe(11_000);
   });
 });

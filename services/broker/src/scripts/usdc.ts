@@ -1,119 +1,111 @@
 /**
- * `pnpm usdc` — is the buyer funded, and can we switch to real USDC yet?
+ * `pnpm usdc` — is everyone funded?
  *
  * Written because "I sent it" and "it arrived" are different facts, and the
- * only way to tell them apart is to ask the ledger. It reports where the
- * account actually stands, and when USDC is present it prints the one line
- * that switches the network over to it.
+ * only way to tell them apart is to ask the chain. Read-only: it never moves
+ * funds and never edits a file.
  *
- * Read-only. It never moves funds and never edits a file.
+ * It prints **both views of each balance**, which looks redundant and is not.
+ * On Arc the native/gas balance and the USDC ERC-20 balance are the same money
+ * seen at 18 and 6 decimals, and watching them agree is the fastest way to
+ * confirm you are pointed at real Arc USDC rather than some other ERC-20 that
+ * happens to be deployed on the chain. When they disagree, every figure this
+ * project shows a user is wrong, and it is worth finding that out here.
+ *
+ * Note which account needs what. The buyer needs USDC and **no gas** — that is
+ * the entire premise: it signs an authorization and never broadcasts. Only the
+ * facilitator needs a spendable balance, because only the facilitator sends
+ * transactions.
  */
 
 import {
-  HEDERA_TESTNET_USDC,
-  hashscanAccount,
-  hashscanToken,
-  mirrorNodeUrl,
+  explorerAddress,
+  explorerToken,
+  fetchBalances,
+  formatNative,
+  formatUsdc,
   networkLabel,
+  usdcAddress,
+  usdcDomain,
 } from "@xorv/protocol";
 import { loadConfig } from "../config.js";
 
-interface MirrorAccount {
-  account?: string;
-  balance?: { balance: number; tokens?: Array<{ token_id: string; balance: number }> };
-  max_automatic_token_associations?: number;
-  evm_address?: string;
-}
-
 const config = loadConfig();
 const network = config.network;
-const USDC = network === "hedera:mainnet" ? "0.0.456858" : HEDERA_TESTNET_USDC;
+const USDC = usdcAddress(network);
 
-/** Every account the demo cares about, and why. */
-const ACCOUNTS: Array<{ id: string | undefined; label: string; needs: "usdc" | "hbar" | "none" }> = [
-  { id: process.env.XORV_DEMO_PAYER_ID, label: "buyer (spends USDC)", needs: "usdc" },
-  { id: process.env.XORV_DEMO_PROVIDER_ID, label: "provider (receives)", needs: "none" },
-  { id: config.operatorId, label: "facilitator (pays gas)", needs: "hbar" },
+/** Every account the demo cares about, and what it actually needs. */
+const ACCOUNTS: Array<{ address: string | undefined; label: string; needs: string }> = [
+  {
+    address: process.env.XORV_DEMO_PAYER_ADDRESS,
+    label: "buyer",
+    needs: "USDC to spend — needs no gas, it never broadcasts",
+  },
+  {
+    address: process.env.XORV_DEMO_PROVIDER_ADDRESS,
+    label: "provider",
+    needs: "nothing — it only receives",
+  },
+  {
+    address: config.operatorAddress,
+    label: "facilitator",
+    needs: "a spendable balance — it relays and pays every fee",
+  },
 ];
-
-async function inspect(accountId: string): Promise<MirrorAccount | null> {
-  try {
-    const res = await fetch(`${mirrorNodeUrl(network)}/api/v1/accounts/${accountId}`, {
-      signal: AbortSignal.timeout(15_000),
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as MirrorAccount;
-  } catch {
-    return null;
-  }
-}
-
-function tokenBalance(account: MirrorAccount, tokenId: string): number {
-  const tokens = account.balance?.tokens ?? [];
-  return tokens.find((t) => t.token_id === tokenId)?.balance ?? 0;
-}
 
 async function main(): Promise<void> {
   console.log("");
-  console.log(`  ▁▂▃  USDC on ${networkLabel(network)}`);
+  console.log(`  ▁▂▃  USDC on Arc ${networkLabel(network)}`);
   console.log("");
-  console.log(`  token  ${USDC}  ${hashscanToken(network, USDC)}`);
+  console.log(`  token  ${USDC}  ${explorerToken(network, USDC)}`);
+
+  try {
+    const domain = await usdcDomain(network);
+    console.log(`         name="${domain.name}" version="${domain.version}" (EIP-712 domain)`);
+  } catch {
+    console.log("         ✖ could not read the EIP-712 domain — payments cannot settle");
+  }
   console.log("");
 
-  let buyerUsdc = 0;
-  let buyerId: string | null = null;
+  let buyerUnits = 0n;
+  let buyerAddress: string | null = null;
 
   for (const entry of ACCOUNTS) {
-    if (!entry.id) {
-      console.log(`  ${entry.label.padEnd(24)} not configured`);
-      continue;
-    }
-    const account = await inspect(entry.id);
-    if (!account) {
-      console.log(`  ${entry.label.padEnd(24)} ${entry.id}  — could not read`);
+    if (!entry.address) {
+      console.log(`  ${entry.label.padEnd(12)} not configured`);
+      console.log("");
       continue;
     }
 
-    const hbar = (account.balance?.balance ?? 0) / 1e8;
-    const usdc = tokenBalance(account, USDC) / 1e6;
-    const auto = account.max_automatic_token_associations ?? 0;
-
-    if (entry.needs === "usdc") {
-      buyerUsdc = usdc;
-      buyerId = entry.id;
-    }
-
-    console.log(`  ${entry.label.padEnd(24)} ${entry.id}`);
-    console.log(`    ${usdc.toFixed(2).padStart(10)} USDC   ${hbar.toFixed(4).padStart(12)} ℏ`);
-    if (entry.needs === "usdc") {
-      // The thing people get wrong: an account that cannot receive the token
-      // silently never gets it, and the faucet reports success either way.
-      const canReceive = auto === -1 || auto > (account.balance?.tokens?.length ?? 0) || usdc > 0;
+    console.log(`  ${entry.label.padEnd(12)} ${entry.address}`);
+    try {
+      const b = await fetchBalances(network, entry.address);
+      if (entry.label === "buyer") {
+        buyerUnits = BigInt(b.usdcUnits);
+        buyerAddress = entry.address;
+      }
       console.log(
-        `    ${canReceive ? "can receive USDC" : "CANNOT receive USDC — no association, no auto slots"}` +
-          ` (auto-association: ${auto === -1 ? "unlimited" : auto})`,
+        `    ${formatUsdc(b.usdcUnits).padStart(12)} (erc20, 6dp)` +
+          `    ${formatNative(b.nativeWei).padStart(12)} (native, 18dp)`,
       );
-      if (account.evm_address) console.log(`    evm: ${account.evm_address}`);
-      console.log(`    ${hashscanAccount(network, entry.id)}`);
+      console.log(
+        `    ${b.viewsAgree ? "one balance, two views ✔" : "⚠ VIEWS DISAGREE — this is not Arc's native USDC"}`,
+      );
+      console.log(`    needs: ${entry.needs}`);
+      console.log(`    ${explorerAddress(network, entry.address)}`);
+    } catch (err) {
+      console.log(`    — could not read (${(err as Error).message})`);
     }
     console.log("");
   }
 
-  if (buyerUsdc > 0) {
-    console.log(`  ✔ the buyer holds ${buyerUsdc} USDC — switch the network over with:`);
-    console.log("");
-    console.log(`      XORV_STABLECOIN=${USDC}`);
-    console.log("");
-    console.log("    then restart the broker. Nothing else changes.");
+  if (buyerUnits > 0n) {
+    console.log(`  ✔ the buyer holds ${formatUsdc(buyerUnits.toString())} — ready to pay.`);
   } else {
     console.log("  ✖ no USDC yet.");
     console.log("");
-    console.log(`    Send it to  ${buyerId ?? "the buyer account"}`);
-    console.log("    at https://faucet.circle.com — pick Hedera Testnet.");
-    console.log("");
-    console.log("    If the faucet said it sent, the transfer went somewhere else:");
-    console.log("    open the account link above on HashScan and check its token tab,");
-    console.log("    then re-run this to confirm.");
+    console.log(`    Claim it for  ${buyerAddress ?? "the buyer address"}`);
+    console.log("    at https://faucet.circle.com — pick Arc Testnet.");
   }
   console.log("");
 }

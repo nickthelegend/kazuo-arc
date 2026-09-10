@@ -8,7 +8,7 @@ export default function ProvidersPage() {
     <>
       <PageHeader
         title="Providers"
-        sub="Every node here is proving liveness by heartbeat, and every registration is recorded on a Hedera Consensus Service topic you can read yourself."
+        sub="Every node here is proving liveness by heartbeat, and every registration is recorded in an on-chain audit log you can read yourself."
       />
       <ProviderList />
     </>

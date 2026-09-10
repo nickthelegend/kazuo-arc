@@ -186,8 +186,8 @@ describe("Metrics", () => {
     expect(render(m)).toContain("xorv_job_duration_seconds_count 1000");
   });
 
-  it("reports HCS message counts per topic", () => {
+  it("reports audit-log entry counts per stream", () => {
     const out = render(new Metrics());
-    expect(out).toContain('xorv_hcs_messages_total{topic="receipts"} 5');
+    expect(out).toContain('xorv_audit_entries_total{stream="receipts"} 5');
   });
 });

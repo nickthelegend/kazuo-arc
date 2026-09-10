@@ -24,22 +24,31 @@ export interface Quote {
   request: JobRequest;
   providerId: string;
   providerLabel: string;
-  providerAccountId: string;
+  providerAddress: string;
   capabilityId: string;
   capabilityName: string;
   priceUsdMicros: number;
   /**
-   * The exact on-chain amounts this quote commits to, frozen at quote time.
+   * The exact on-chain amount this quote commits to, frozen at quote time.
    *
-   * These must not be recomputed per request. x402 asks the server for payment
+   * Must not be recomputed per request. x402 asks the server for payment
    * requirements twice — once to answer 402, once to check the payment that
-   * comes back — and the HBAR figure derives from a live exchange rate. Recompute
-   * it and a rate refresh between those two calls changes the amount, the
-   * payload no longer matches the requirements, and a correctly-signed payment
-   * is rejected. A quote is a price commitment; this is where it's kept.
+   * comes back — and anything that can differ between those two calls turns a
+   * correctly-signed payment into a rejected one. A quote is a price
+   * commitment; this is where it is kept.
    */
   usdcAmount: string;
-  hbarAmount: string | null;
+  /**
+   * The token's EIP-712 domain, frozen here for the same reason as the amount.
+   *
+   * The buyer signs an EIP-3009 authorization against
+   * `(name, version, chainId, verifyingContract)`, so the 402 has to state the
+   * first two. x402's EVM scheme fills them in automatically only for networks
+   * in its built-in stablecoin registry, and Arc is not one of them — checked,
+   * not assumed. Left out, the buyer signs against a domain of its own guessing
+   * and the facilitator rejects a signature that is otherwise perfectly valid.
+   */
+  domain: { name: string; version: string };
   createdAt: number;
   expiresAt: number;
   /** Set once the quote has been paid, so a replayed payment can't buy twice. */
@@ -123,7 +132,7 @@ export class JobStore {
       createdAt: Date.now(),
       providerId: quote.providerId,
       providerLabel: quote.providerLabel,
-      providerAccountId: quote.providerAccountId,
+      providerAddress: quote.providerAddress,
       capabilityId: quote.capabilityId,
       priceUsdMicros: quote.priceUsdMicros,
       events: [],

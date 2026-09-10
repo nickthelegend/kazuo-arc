@@ -3,21 +3,21 @@
  *
  * A real HTTP server, the real Hono app, the real x402 resource server and the
  * real WebSocket hub. Only two things are stubbed, and only because they are
- * the parts that touch Hedera: the facilitator (which would sign and submit a
- * transfer) and the chain writer (which would publish to HCS). Everything
- * between a buyer's first request and a published receipt is the production
- * code path.
+ * the parts that touch the chain: the facilitator (which would broadcast the
+ * authorization) and the audit writer (which would append to XorvLog).
+ * Everything between a buyer's first request and a published receipt is the
+ * production code path.
  *
  * The client side uses the genuine `@x402/*` client with a stub *scheme*, so
  * the 402 negotiation, header encoding and retry are all exercised for real —
- * only the signature is fake.
+ * only the signature is fake. A real signature is proven separately, against
+ * the real chain, by `scripts/m1-settle.mts`.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { serve } from "@hono/node-server";
 import type { Server } from "node:http";
 import WebSocket from "ws";
-import { PrivateKey } from "@hiero-ledger/sdk";
 import { x402Client, x402HTTPClient } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
 import type {
@@ -35,21 +35,21 @@ import { JobStore } from "../src/jobs.js";
 import { Registry } from "../src/registry.js";
 
 // ---------------------------------------------------------------------------
-// Stubs — only the two things that would touch Hedera
+// Stubs — only the two things that would touch the chain
 // ---------------------------------------------------------------------------
 
 class StubChain implements ChainLike {
-  readonly network = "hedera:testnet";
-  readonly operatorId = "0.0.9842030";
-  readonly settlementClient = null as never;
+  readonly network = "eip155:5042002";
+  readonly operatorAddress = "0xeEE4CA97A7Af69B42d9cafD3955735C1130eB51E";
+  readonly publicClient = null as never;
+  readonly walletClient = null as never;
   readonly published: Array<{ kind: string; data: unknown }> = [];
   private tally = { registry: 0, heartbeat: 0, receipts: 0 };
 
-  describeTopics() {
+  describeLog() {
     return {
-      registry: { id: "0.0.1", url: "https://hashscan.io/testnet/topic/0.0.1" },
-      heartbeat: { id: "0.0.2", url: "https://hashscan.io/testnet/topic/0.0.2" },
-      receipts: { id: "0.0.3", url: "https://hashscan.io/testnet/topic/0.0.3" },
+      address: "0x383f5153db8bb18c7c25157fb3493645a465eEf3",
+      url: "https://testnet.arcscan.app/address/0x383f5153db8bb18c7c25157fb3493645a465eEf3",
     };
   }
   counts() {
@@ -62,9 +62,9 @@ class StubChain implements ChainLike {
     this.tally[kind] += 1;
     this.published.push({ kind, data });
     return {
-      topicId: "0.0.3",
-      transactionId: `0.0.9842030@${1700000000 + this.published.length}.000000001`,
-      hashscanUrl: "https://hashscan.io/testnet/transaction/stub",
+      contract: "0x383f5153db8bb18c7c25157fb3493645a465eEf3",
+      transactionHash: `0x${String(this.published.length).padStart(64, "0")}`,
+      explorerUrl: "https://testnet.arcscan.app/tx/stub",
     };
   }
   async publishRegistration(provider: { id: string }) {
@@ -83,20 +83,20 @@ class StubChain implements ChainLike {
 function stubFacilitator(settled: PaymentRequirements[]): FacilitatorClient {
   return {
     async verify(_payload: PaymentPayload, requirements: PaymentRequirements) {
-      return { isValid: true, payer: "0.0.9848440", ...{ requirements } };
+      return { isValid: true, payer: "0x03294Ce27e218d1611B2ebc0b0ffdDb95F129F36", ...{ requirements } };
     },
     async settle(_payload: PaymentPayload, requirements: PaymentRequirements) {
       settled.push(requirements);
       return {
         success: true,
-        transaction: `0.0.9842030@175000000${settled.length}.111111111`,
+        transaction: `0x${String(settled.length).padStart(64, "7")}`,
         network: requirements.network,
-        payer: "0.0.9848440",
+        payer: "0x03294Ce27e218d1611B2ebc0b0ffdDb95F129F36",
       };
     },
     async getSupported() {
       return {
-        kinds: [{ x402Version: 2, scheme: "exact", network: "hedera:testnet" }],
+        kinds: [{ x402Version: 2, scheme: "exact", network: "eip155:5042002" }],
         extensions: [],
         signers: {},
       };
@@ -121,10 +121,12 @@ class StubScheme implements SchemeNetworkClient {
 
 function testConfig(): BrokerConfig {
   return {
-    network: "hedera:testnet",
-    operatorId: "0.0.9842030",
-    operatorKey: PrivateKey.generateECDSA(),
-    topics: { registry: "0.0.1", heartbeat: "0.0.2", receipts: "0.0.3" },
+    network: "eip155:5042002",
+    operatorAddress: "0xeEE4CA97A7Af69B42d9cafD3955735C1130eB51E",
+    // A throwaway key. Nothing in this test broadcasts, so it needs to parse
+    // and nothing more; the facilitator that would use it is stubbed out.
+    operatorKey: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
+    logAddress: "0x383f5153db8bb18c7c25157fb3493645a465eEf3",
     port: 0,
     publicUrl: "http://localhost",
     corsOrigins: [],
@@ -164,6 +166,8 @@ async function boot(): Promise<Harness> {
     jobs,
     getHub: () => hub,
     facilitator: stubFacilitator(settled),
+    // Arc's real USDC domain, supplied rather than fetched — see AppDeps.
+    resolveDomain: async () => ({ name: "USDC", version: "2" }),
   });
   void sweep;
 
@@ -177,7 +181,7 @@ async function boot(): Promise<Harness> {
   hub = new Hub(server, registry, hubHandlers);
 
   const scheme = new StubScheme();
-  const client = new x402Client().register("hedera:*", scheme);
+  const client = new x402Client().register("eip155:*", scheme);
   const paidFetch = wrapFetchWithPayment(fetch, client) as typeof fetch;
 
   return {
@@ -199,14 +203,14 @@ async function boot(): Promise<Harness> {
 /** A provider node: registers over HTTP, then holds a control socket like the CLI does. */
 async function connectProvider(
   h: Harness,
-  opts: { label?: string; accountId?: string; price?: number; nodeId?: string } = {},
+  opts: { label?: string; address?: string; price?: number; nodeId?: string } = {},
 ) {
   const res = await fetch(`${h.base}/api/providers/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       label: opts.label ?? "test-node",
-      accountId: opts.accountId ?? "0.0.9848438",
+      address: opts.address ?? "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B",
       endpoint: "http://localhost:1",
       capabilities: [
         {
@@ -322,7 +326,7 @@ describe("registration", () => {
     const res = await fetch(`${h.base}/api/providers/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label: "", accountId: "nope", capabilities: [] }),
+      body: JSON.stringify({ label: "", address: "nope", capabilities: [] }),
     });
     expect(res.status).toBe(400);
   });
@@ -350,7 +354,7 @@ describe("quoting", () => {
     const { status, body } = await quote(h);
     expect(status).toBe(200);
     expect(body.quoteId).toMatch(/^qte_/);
-    expect(body.provider.accountId).toBe("0.0.9848438");
+    expect(body.provider.address).toBe("0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B");
     expect(body.accepts.length).toBeGreaterThanOrEqual(1);
     provider.close();
   });
@@ -370,8 +374,8 @@ describe("quoting", () => {
   });
 
   it("picks the cheaper of two live providers", async () => {
-    const dear = await connectProvider(h, { label: "dear", nodeId: "n1", accountId: "0.0.1", price: 9_000 });
-    const cheap = await connectProvider(h, { label: "cheap", nodeId: "n2", accountId: "0.0.2", price: 2_000 });
+    const dear = await connectProvider(h, { label: "dear", nodeId: "n1", address: "0x0000000000000000000000000000000000000001", price: 9_000 });
+    const cheap = await connectProvider(h, { label: "cheap", nodeId: "n2", address: "0x0000000000000000000000000000000000000002", price: 2_000 });
     const { body } = await quote(h);
     expect(body.provider.label).toBe("cheap");
     dear.close();
@@ -395,7 +399,7 @@ describe("the paid path", () => {
     const decoded = JSON.parse(Buffer.from(header, "base64").toString("utf8"));
     expect(decoded.accepts.length).toBeGreaterThanOrEqual(1);
     // The whole point: the broker is not the payee.
-    for (const accept of decoded.accepts) expect(accept.payTo).toBe("0.0.9848438");
+    for (const accept of decoded.accepts) expect(accept.payTo).toBe("0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B");
     provider.close();
   });
 
@@ -431,9 +435,9 @@ describe("the paid path", () => {
     };
     expect(full.job.result).toBe("42");
     expect(full.job.resultHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(full.job.payment.payTo).toBe("0.0.9848438");
-    expect(full.job.payment.payer).toBe("0.0.9848440");
-    expect(full.job.payment.transactionId).toBeTruthy();
+    expect(full.job.payment.payTo).toBe("0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B");
+    expect(full.job.payment.payer).toBe("0x03294Ce27e218d1611B2ebc0b0ffdDb95F129F36");
+    expect(full.job.payment.transactionHash).toBeTruthy();
     expect(full.job.events.length).toBeGreaterThan(0);
 
     // And the receipt reached the ledger, carrying the settlement id.
@@ -442,7 +446,7 @@ describe("the paid path", () => {
       .data as Record<string, unknown>;
     expect(receipt.jobId).toBe(paid.jobId);
     expect(receipt.ok).toBe(true);
-    expect(receipt.transactionId).toBeTruthy();
+    expect(receipt.transactionHash).toBeTruthy();
     expect(receipt.resultHash).toBe(full.job.resultHash);
 
     provider.close();
@@ -568,8 +572,8 @@ describe("what a browser can read", () => {
 
 describe("failure handling", () => {
   it("reassigns a failed job to another provider at no extra charge", async () => {
-    const a = await connectProvider(h, { label: "a", nodeId: "n1", accountId: "0.0.1", price: 1_000 });
-    const b = await connectProvider(h, { label: "b", nodeId: "n2", accountId: "0.0.2", price: 1_000 });
+    const a = await connectProvider(h, { label: "a", nodeId: "n1", address: "0x0000000000000000000000000000000000000001", price: 1_000 });
+    const b = await connectProvider(h, { label: "b", nodeId: "n2", address: "0x0000000000000000000000000000000000000002", price: 1_000 });
 
     const { body } = await quote(h);
     const res = await h.paidFetch(`${h.base}/api/jobs/${body.quoteId}`, {
@@ -709,8 +713,8 @@ describe("heartbeats", () => {
   });
 
   it("won't let one provider heartbeat as another", async () => {
-    const a = await connectProvider(h, { label: "a", nodeId: "n1", accountId: "0.0.1" });
-    const b = await connectProvider(h, { label: "b", nodeId: "n2", accountId: "0.0.2" });
+    const a = await connectProvider(h, { label: "a", nodeId: "n1", address: "0x0000000000000000000000000000000000000001" });
+    const b = await connectProvider(h, { label: "b", nodeId: "n2", address: "0x0000000000000000000000000000000000000002" });
     const res = await fetch(`${h.base}/api/providers/${b.providerId}/heartbeat`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${a.token}` },
@@ -726,13 +730,13 @@ describe("public surface", () => {
   it("serves health and network state", async () => {
     expect((await fetch(`${h.base}/health`)).status).toBe(200);
     const net = (await (await fetch(`${h.base}/api/network`)).json()) as Record<string, never>;
-    expect(net.network).toBe("hedera:testnet");
-    expect(net.topics.receipts.id).toBe("0.0.3");
+    expect(net.network).toBe("eip155:5042002");
+    expect(net.log.address).toBe("0x383f5153db8bb18c7c25157fb3493645a465eEf3");
   });
 
   it("rejects a provider result callback from an unrelated node", async () => {
-    const a = await connectProvider(h, { label: "a", nodeId: "n1", accountId: "0.0.1" });
-    const b = await connectProvider(h, { label: "b", nodeId: "n2", accountId: "0.0.2" });
+    const a = await connectProvider(h, { label: "a", nodeId: "n1", address: "0x0000000000000000000000000000000000000001" });
+    const b = await connectProvider(h, { label: "b", nodeId: "n2", address: "0x0000000000000000000000000000000000000002" });
     const { body } = await quote(h);
     const res = await h.paidFetch(`${h.base}/api/jobs/${body.quoteId}`, {
       method: "POST",

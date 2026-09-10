@@ -17,8 +17,8 @@ const CLAIMS = [
     "The protocol fee is zero, and payment goes from the buyer's account to yours in a single transfer. Xorv is never the payee, so there is nothing to withhold.",
   ],
   [
-    "You never need HBAR",
-    "Xorv's facilitator is the fee payer on every settlement. Your account can hold nothing but earnings and still get paid.",
+    "You never need a gas token",
+    "There isn't one — on Arc, USDC is the gas. And you spend none of it: Xorv's facilitator pays the fee on every settlement. A brand-new address can receive earnings immediately, having done nothing.",
   ],
   [
     "You set the price",

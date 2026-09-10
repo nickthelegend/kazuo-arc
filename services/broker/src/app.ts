@@ -2,18 +2,19 @@
  * The broker's HTTP surface.
  *
  * The interesting part is `POST /api/jobs/:quoteId`. It is an ordinary x402
- * protected route, but its `payTo` resolves to the **provider's own Hedera
- * account** rather than to us. The broker introduces the two parties, witnesses
+ * protected route, but its `payTo` resolves to the **provider's own Arc
+ * address** rather than to us. The broker introduces the two parties, witnesses
  * the result and publishes the receipt; it never holds anyone's money. That is
  * also why a quote is a first-class object — see jobs.ts.
  *
  * ## Why payment settles before the job runs
  *
- * A Hedera transaction carries a valid-start and a validity window capped at
- * 180 seconds. The payer signs a real `TransferTransaction`, so if the broker
- * waited for a five-minute coding job to finish before submitting it, the
- * signed payment would have expired and the provider would be unpaid for work
- * already done. So Xorv verifies and settles up front, and covers the other
+ * An EIP-3009 authorization carries `validAfter` and `validBefore` timestamps,
+ * and x402 advertises a 300-second window. The buyer signs an authorization the
+ * facilitator must relay inside it, so if the broker waited for a five-minute
+ * coding job to finish before submitting, the signed payment would have expired
+ * and the provider would be unpaid for work already done. So Xorv verifies and
+ * settles up front, and covers the other
  * risk — a provider that takes the money and fails — by reassigning the job to
  * another provider at no extra charge (see `reassign`). The poster's downside
  * is bounded by the network, not by the individual node they happened to draw.
@@ -27,24 +28,22 @@ import type { RoutesConfig } from "@x402/core/server";
 import type { HTTPRequestContext } from "@x402/core/http";
 import type { FacilitatorClient } from "@x402/core/server";
 import type { Network } from "@x402/core/types";
-import { ExactHederaScheme } from "@x402/hedera/exact/server";
+import { ExactEvmScheme } from "@x402/evm/exact/server";
 import {
-  HBAR_ASSET_ID,
   HEARTBEAT_INTERVAL_MS,
-  HbarRateCache,
   JOB_TIMEOUT_MS,
   assetKind,
   buildFacilitator,
   formatUsd,
-  hashscanAccount,
-  hashscanTx,
-  paymentOptionsFor,
-  readTopic,
+  isAccountAddress,
+  explorerAddress,
+  explorerTx,
+  readLog,
   sha256,
-  usdMicrosToTinybars,
   usdMicrosToUsdcUnits,
+  usdcDomain,
   usdcUnitsToUsdMicros,
-  usdcTokenId,
+  usdcAddress,
   type AdapterKind,
   type Capability,
   type DispatchedJob,
@@ -63,8 +62,25 @@ import { Registry } from "./registry.js";
 import { bodyLimit, rateLimit, requestLog } from "./guards.js";
 import { Metrics } from "./metrics.js";
 
-/** Publish one heartbeat in this many to HCS — see Chain.publishHeartbeat. */
-const HEARTBEAT_PUBLISH_EVERY = 20;
+/**
+ * Publish one heartbeat in this many on chain — see Chain.publishHeartbeat.
+ *
+ * 240 beats at the 15s interval is one on-chain liveness proof per provider per
+ * hour. The Hedera version sampled 1 in 20 — one every five minutes — and that
+ * number does not survive the move, for a reason worth putting a figure on.
+ *
+ * Measured on Arc testnet: an audit append costs 43,460 gas, or **$0.00088**.
+ * At one every five minutes that is 288 writes a day, **$0.25 per day per
+ * provider** — paid by the broker, which takes a 0% fee and earns nothing. A
+ * single idle node would cost more per day than a hundred settled jobs
+ * ($0.00185 each) put together. On Hedera an HCS message cost a fraction of a
+ * cent and the arithmetic never mattered.
+ *
+ * Hourly still gives the log its actual job: a periodic, publicly checkable
+ * proof that a node really was up. Sub-minute liveness is already carried by
+ * the HTTP heartbeat and the control channel, neither of which touches a chain.
+ */
+const HEARTBEAT_PUBLISH_EVERY = 240;
 
 export interface AppDeps {
   config: BrokerConfig;
@@ -77,40 +93,68 @@ export interface AppDeps {
    * Override the facilitator.
    *
    * Production builds one from config; tests pass a stub so the whole HTTP
-   * path can be exercised without Hedera credentials or a real transfer.
+   * path can be exercised without chain credentials or a real transfer.
    */
   facilitator?: FacilitatorClient;
+  /**
+   * Override how the token's EIP-712 domain is obtained.
+   *
+   * Production reads it from the chain. Tests supply it directly, which keeps
+   * the quote path — and therefore most of this suite — off the network
+   * entirely. Without this the domain lookup sits on the request path of every
+   * first quote, and a test run becomes an RPC availability test.
+   */
+  resolveDomain?: () => Promise<{ name: string; version: string }>;
   metrics?: Metrics;
 }
 
 export function createApp(deps: AppDeps) {
   const { config, chain, registry, jobs } = deps;
   const app = new Hono();
-  const rates = new HbarRateCache(config.network);
   const heartbeatCounters = new Map<string, number>();
-  /** Jobs whose HCS receipt is already on the topic — see publishReceiptWhenReady. */
+
+  /**
+   * The token's EIP-712 domain, read once and reused.
+   *
+   * Every 402 must advertise it, because the buyer signs against it. Reading it
+   * per quote would put an RPC round-trip on the pricing path for a value that
+   * cannot change without the token being redeployed. Resolved lazily so the
+   * broker still boots when the RPC is briefly unreachable, and re-attempted on
+   * the next quote if it fails.
+   */
+  const readDomain = deps.resolveDomain ?? (() => usdcDomain(config.network));
+  let domainCache: { name: string; version: string } | null = null;
+  async function paymentDomain(): Promise<{ name: string; version: string }> {
+    domainCache ??= await readDomain();
+    return domainCache;
+  }
+
+  /** Jobs whose receipt is already on chain — see publishReceiptWhenReady. */
   const publishedReceipts = new Set<string>();
   const metrics = deps.metrics ?? new Metrics();
 
   const built = deps.facilitator
-    ? { facilitator: deps.facilitator, description: "injected (test)", feePayer: config.operatorId }
+    ? {
+        facilitator: deps.facilitator,
+        description: "injected (test)",
+        feePayer: config.operatorAddress,
+      }
     : buildFacilitator({
         mode: config.facilitatorMode,
         network: config.network,
-        // Deliberately not chain.client — see Chain.settlementClient.
-        client: chain.settlementClient,
-        feePayerId: config.operatorId,
+        feePayerAddress: config.operatorAddress,
         feePayerKey: config.operatorKey,
       });
   const { facilitator, description: facilitatorDescription, feePayer } = built;
 
+  // No `defaultAssets` to configure, because every price this server quotes is
+  // an explicit `{asset, amount, extra}` rather than a dollar figure the scheme
+  // has to look up. That matters here specifically: the scheme's built-in asset
+  // registry has no entry for Arc, so a Money-typed price would resolve to
+  // nothing at all.
   const x402Server = new x402ResourceServer(facilitator).register(
-    "hedera:*" as Network,
-    new ExactHederaScheme({
-      defaultAssets: {
-        [config.network]: { asset: usdcTokenId(config.network), decimals: 6 },
-      },
-    }),
+    "eip155:*" as Network,
+    new ExactEvmScheme(),
   );
 
   app.use(
@@ -218,18 +262,19 @@ export function createApp(deps: AppDeps) {
 
   app.get("/api/network", async (c) => {
     const live = registry.live();
-    const rate = await rates.get().catch(() => null);
     const allJobs = jobs.list({ limit: 1000 });
     const settled = allJobs.filter((j) => j.payment);
     return c.json({
       network: config.network,
       facilitator: { mode: config.facilitatorMode, description: facilitatorDescription, feePayer },
-      operator: { accountId: config.operatorId, url: hashscanAccount(config.network, config.operatorId) },
-      usdc: usdcTokenId(config.network),
-      topics: chain.describeTopics(),
-      hcsPublished: chain.counts(),
-      hcsLastError: chain.lastPublishError(),
-      hbarRate: rate ? { centsPerHbar: rate.centsPerHbar } : null,
+      operator: {
+        address: config.operatorAddress,
+        url: explorerAddress(config.network, config.operatorAddress),
+      },
+      usdc: usdcAddress(config.network),
+      log: chain.describeLog(),
+      logPublished: chain.counts(),
+      logLastError: chain.lastPublishError(),
       stats: {
         providersLive: live.length,
         providersConnected: deps.getHub()?.connectedCount() ?? 0,
@@ -248,8 +293,8 @@ export function createApp(deps: AppDeps) {
       providers: registry.list().map((p) => ({
         id: p.id,
         label: p.label,
-        accountId: p.accountId,
-        accountUrl: hashscanAccount(config.network, p.accountId),
+        address: p.address,
+        addressUrl: explorerAddress(config.network, p.address),
         endpoint: p.endpoint,
         status: p.status,
         connected: hub?.isConnected(p.id) ?? false,
@@ -276,10 +321,10 @@ export function createApp(deps: AppDeps) {
 
     const provider = registry.register(body);
 
-    // Registration is announced on HCS, but a slow consensus round-trip must
-    // not hold up a node that is ready to work.
+    // Registration is announced on chain, but a slow block must not hold up a
+    // node that is ready to work.
     const registryResult = await chain.publishRegistration(provider).catch(() => null);
-    if (registryResult) provider.registryConsensusAt = registryResult.transactionId;
+    if (registryResult) provider.registryTxHash = registryResult.transactionHash;
 
     return c.json({
       provider: stripSecrets(provider),
@@ -287,7 +332,7 @@ export function createApp(deps: AppDeps) {
       wsUrl: `${config.publicUrl.replace(/^http/, "ws")}/ws/provider?token=${provider.token}`,
       registry: registryResult,
       network: config.network,
-      usdc: usdcTokenId(config.network),
+      usdc: usdcAddress(config.network),
       heartbeatIntervalMs: HEARTBEAT_INTERVAL_MS,
     });
   });
@@ -379,20 +424,17 @@ export function createApp(deps: AppDeps) {
       );
     }
 
-    // Fetch the rate before the quote exists, so the HBAR figure the quote
-    // commits to is the same one the client is shown.
-    const rate = await rates.get().catch(() => null);
     metrics.inc('xorv_quotes_total');
     const quote = jobs.createQuote({
       request: { ...body, prompt: body.prompt, maxPriceUsdMicros: maxPrice },
       providerId: match.provider.id,
       providerLabel: match.provider.label,
-      providerAccountId: match.provider.accountId,
+      providerAddress: match.provider.address,
       capabilityId: match.capability.id,
       capabilityName: match.capability.displayName,
       priceUsdMicros: match.capability.priceUsdMicros,
       usdcAmount: usdMicrosToUsdcUnits(match.capability.priceUsdMicros),
-      hbarAmount: rate ? usdMicrosToTinybars(match.capability.priceUsdMicros, rate) : null,
+      domain: await paymentDomain(),
     });
 
     return c.json({
@@ -404,17 +446,16 @@ export function createApp(deps: AppDeps) {
       provider: {
         id: match.provider.id,
         label: match.provider.label,
-        accountId: match.provider.accountId,
-        accountUrl: hashscanAccount(config.network, match.provider.accountId),
+        address: match.provider.address,
+        addressUrl: explorerAddress(config.network, match.provider.address),
         capability: match.capability.displayName,
         adapter: match.capability.adapter,
         model: match.capability.model ?? null,
         stats: match.provider.stats,
       },
-      accepts: [
-        { asset: usdcTokenId(config.network), amount: quote.usdcAmount },
-        ...(quote.hbarAmount ? [{ asset: HBAR_ASSET_ID, amount: quote.hbarAmount }] : []),
-      ],
+      // One row, because Arc has one asset. On Hedera this array carried a
+      // second entry priced in HBAR at a live exchange rate.
+      accepts: [{ asset: usdcAddress(config.network), amount: quote.usdcAmount }],
     });
   });
 
@@ -433,28 +474,27 @@ export function createApp(deps: AppDeps) {
       description: "Run one AI job on a live Xorv provider",
       serviceName: "Xorv",
       mimeType: "application/json",
-      // Both resolvers read the amounts frozen on the quote — see Quote.usdcAmount
-      // for why recomputing here silently breaks correctly-signed payments.
+      // Every field is read from the quote rather than recomputed — see
+      // Quote.usdcAmount for why recomputing here silently breaks
+      // correctly-signed payments.
+      //
+      // One row, where Hedera had two. There is no second asset on Arc.
       accepts: [
         {
           scheme: "exact",
           network: config.network as Network,
           // Straight to the provider — the broker is never the payee.
-          payTo: (ctx) => quoteFromContext(ctx)?.providerAccountId ?? "",
-          price: (ctx) => ({
-            asset: usdcTokenId(config.network),
-            amount: quoteFromContext(ctx)?.usdcAmount ?? "0",
-          }),
-          maxTimeoutSeconds: 300,
-        },
-        {
-          scheme: "exact",
-          network: config.network as Network,
-          payTo: (ctx) => quoteFromContext(ctx)?.providerAccountId ?? "",
-          price: (ctx) => ({
-            asset: HBAR_ASSET_ID,
-            amount: quoteFromContext(ctx)?.hbarAmount ?? "0",
-          }),
+          payTo: (ctx) => quoteFromContext(ctx)?.providerAddress ?? "",
+          price: (ctx) => {
+            const quote = quoteFromContext(ctx);
+            return {
+              asset: usdcAddress(config.network),
+              amount: quote?.usdcAmount ?? "0",
+              // The EIP-712 domain travels with the price because x402 carries
+              // it as `extra` on the requirement. See Quote.domain.
+              extra: quote?.domain,
+            };
+          },
           maxTimeoutSeconds: 300,
         },
       ],
@@ -468,7 +508,7 @@ export function createApp(deps: AppDeps) {
                 provider: { id: quote.providerId, label: quote.providerLabel },
                 capability: quote.capabilityName,
                 priceLabel: formatUsd(quote.priceUsdMicros),
-                hint: "Sign the payment with a Hedera account holding USDC (or HBAR) and retry with the X-PAYMENT header.",
+                hint: "Sign the payment with an Arc address holding USDC and retry with the X-PAYMENT header. You need no gas — the facilitator relays it.",
               }
             : { error: "quote not found or expired — request a new one from POST /api/quotes" },
         };
@@ -534,7 +574,7 @@ export function createApp(deps: AppDeps) {
    * Capture settlement onto the job.
    *
    * The resource server settles after the handler returns, so this hook is the
-   * only place with both the on-chain transaction id and the job it paid for.
+   * only place with both the on-chain transaction hash and the job it paid for.
    */
   x402Server.onAfterSettle(async (ctx) => {
     const result = ctx.result;
@@ -548,20 +588,19 @@ export function createApp(deps: AppDeps) {
     // synchronously in the handler just above, so this is unambiguous.
     const candidate = jobs
       .list({ limit: 50 })
-      .find((j) => !j.payment && j.providerAccountId === payTo);
+      .find((j) => !j.payment && j.providerAddress === payTo);
     if (!candidate) return;
 
-    const kind = assetKind(asset);
     const record: PaymentRecord = {
-      asset: kind,
+      asset: assetKind(asset),
       assetId: asset,
       amount,
       network: config.network,
-      transactionId: result.transaction,
+      transactionHash: result.transaction,
       payer: result.payer ?? "unknown",
       payTo,
       settledAt: Date.now(),
-      hashscanUrl: hashscanTx(config.network, result.transaction),
+      explorerUrl: explorerTx(config.network, result.transaction),
     };
     jobs.patch(candidate.id, { payment: record });
   });
@@ -685,31 +724,54 @@ export function createApp(deps: AppDeps) {
     });
   });
 
-  /** The public audit trail, read straight from a Hedera mirror node. */
+  /**
+   * The public audit trail, read straight from the chain.
+   *
+   * Served by the broker for convenience only. Nothing here is privileged —
+   * the same entries are readable by anyone from any Arc RPC endpoint, which is
+   * the whole point of putting them on chain rather than in our database.
+   */
   app.get("/api/receipts", async (c) => {
-    const topic = chain.describeTopics().receipts;
-    if (!topic) return c.json({ receipts: [], topic: null });
+    const log = chain.describeLog();
+    if (!log) return c.json({ receipts: [], log: null });
     try {
-      const messages = await readTopic(config.network, topic.id, { limit: 50 });
+      const entries = await readLog(config.network, {
+        kind: "job.receipt",
+        limit: 50,
+        address: log.address,
+      });
       return c.json({
-        topic,
-        receipts: messages.map((m) => ({
-          consensusAt: m.consensusAt,
-          sequence: m.sequence,
-          payload: m.payload,
+        log,
+        receipts: entries.map((e) => ({
+          sequence: e.sequence,
+          blockNumber: e.blockNumber,
+          transactionHash: e.transactionHash,
+          author: e.author,
+          payload: e.payload,
         })),
       });
     } catch (err) {
-      return c.json({ receipts: [], topic, error: (err as Error).message }, 502);
+      return c.json({ receipts: [], log, error: (err as Error).message }, 502);
     }
   });
 
-  app.get("/api/topics/:kind", async (c) => {
-    const kind = c.req.param("kind") as "registry" | "heartbeat" | "receipts";
-    const topic = chain.describeTopics()[kind];
-    if (!topic) return c.json({ error: `no ${kind} topic configured` }, 404);
-    const messages = await readTopic(config.network, topic.id, { limit: 50 });
-    return c.json({ topic, messages });
+  app.get("/api/log/:kind", async (c) => {
+    const kind = c.req.param("kind");
+    const map = {
+      registry: "provider.registered",
+      heartbeat: "provider.heartbeat",
+      receipts: "job.receipt",
+    } as const;
+    const mapped = map[kind as keyof typeof map];
+    if (!mapped) return c.json({ error: `unknown log stream "${kind}"` }, 404);
+    const log = chain.describeLog();
+    if (!log) return c.json({ error: "no audit log contract configured" }, 404);
+    const entries = await readLog(config.network, {
+      kind: mapped,
+      limit: 50,
+      address: log.address,
+    });
+    return c.json({ log, entries });
   });
 
   // -------------------------------------------------------------------------
@@ -806,7 +868,7 @@ export function createApp(deps: AppDeps) {
   }
 
   /**
-   * Publish a job's HCS receipt once there is actually something to attest to.
+   * Publish a job's on-chain receipt once there is actually something to attest to.
    *
    * A job routinely finishes *before* its payment is recorded: the resource
    * server settles after the request handler returns, while echo-class work can
@@ -839,17 +901,17 @@ export function createApp(deps: AppDeps) {
     const receipt = await chain.publishReceipt({
       jobId: job.id,
       providerId: job.providerId ?? "",
-      providerAccountId: job.providerAccountId ?? "",
+      providerAddress: job.providerAddress ?? "",
       payer: job.payment?.payer ?? "unpaid",
       asset: job.payment?.assetId ?? "",
       amount: job.payment?.amount ?? "0",
-      transactionId: job.payment?.transactionId ?? "",
+      transactionHash: job.payment?.transactionHash ?? "",
       resultHash: job.resultHash ?? "",
       durationMs,
       ok,
     });
     if (receipt) {
-      jobs.patch(job.id, { receiptConsensusAt: receipt.transactionId });
+      jobs.patch(job.id, { receiptTxHash: receipt.transactionHash });
     } else {
       // Publishing failed; let a later attempt retry rather than marking this
       // job as receipted forever.
@@ -875,12 +937,9 @@ export function createApp(deps: AppDeps) {
     await publishReceiptWhenReady(jobId, durationMs, false);
   }
 
-  function earnings(job: Job): { usdcMicros?: number; tinybars?: number } {
+  function earnings(job: Job): { usdcMicros?: number } {
     if (!job.payment) return {};
-    if (job.payment.asset === "usdc") {
-      return { usdcMicros: usdcUnitsToUsdMicros(job.payment.amount) };
-    }
-    return { tinybars: Number(job.payment.amount) };
+    return { usdcMicros: usdcUnitsToUsdMicros(job.payment.amount) };
   }
 
   // -------------------------------------------------------------------------
@@ -930,8 +989,8 @@ export function createApp(deps: AppDeps) {
 
 function validateRegistration(body: RegisterRequest): string | null {
   if (!body?.label?.trim()) return "label is required";
-  if (!body.accountId || !/^\d+\.\d+\.\d+$/.test(body.accountId)) {
-    return "accountId must be a Hedera account id like 0.0.12345";
+  if (!body.address || !isAccountAddress(body.address)) {
+    return "address must be an EVM address like 0xff21…489B";
   }
   if (!body.nodeId?.trim()) return "nodeId is required";
   if (!Array.isArray(body.capabilities) || body.capabilities.length === 0) {
@@ -965,14 +1024,14 @@ function publicJob(job: Job, opts: { events?: boolean } = {}) {
     completedAt: job.completedAt ?? null,
     providerId: job.providerId ?? null,
     providerLabel: job.providerLabel ?? null,
-    providerAccountId: job.providerAccountId ?? null,
+    providerAddress: job.providerAddress ?? null,
     priceUsdMicros: job.priceUsdMicros ?? null,
     priceLabel: job.priceUsdMicros ? formatUsd(job.priceUsdMicros) : null,
     payment: job.payment ?? null,
     result: job.result ?? null,
     resultHash: job.resultHash ?? null,
     error: job.error ?? null,
-    receiptConsensusAt: job.receiptConsensusAt ?? null,
+    receiptTxHash: job.receiptTxHash ?? null,
     eventCount: job.events.length,
     events: opts.events ? job.events : undefined,
   };

@@ -6,11 +6,11 @@ import { AnimatePresence, motion } from "motion/react";
 import { EASE, useEntrance } from "@/lib/motion";
 import {
   BROKER_URL,
-  NETWORK,
   api,
   formatDuration,
   formatUsd,
-  hashscanAccount,
+  explorerAddress,
+  explorerTx,
   type Job,
   type JobEvent,
 } from "@/lib/api";
@@ -33,13 +33,6 @@ const GLYPH: Record<JobEvent["kind"], { mark: string; tone: string }> = {
   reasoning: { mark: "…", tone: "text-fg-4 italic" },
   error: { mark: "✕", tone: "text-fail" },
 };
-
-function hashscanTx(transactionId: string): string {
-  const net = NETWORK === "hedera:mainnet" ? "mainnet" : "testnet";
-  return `https://hashscan.io/${net}/transaction/${transactionId
-    .replace("@", "-")
-    .replace(/\.(\d+)$/, "-$1")}`;
-}
 
 /**
  * One job, live.
@@ -186,9 +179,9 @@ export function JobView({ jobId, initial }: { jobId: string; initial: Job | null
         <Panel className="p-4">
           <h2 className="text-[13px] font-medium text-fg">Provider</h2>
           <p className="mt-2 text-[14px] text-fg-2">{job.providerLabel ?? "unassigned"}</p>
-          {job.providerAccountId ? (
+          {job.providerAddress ? (
             <p className="mono mt-1 text-[11.5px] text-fg-4">
-              <Ext href={hashscanAccount(job.providerAccountId)}>{job.providerAccountId} ↗</Ext>
+              <Ext href={explorerAddress(job.providerAddress)}>{job.providerAddress} ↗</Ext>
             </p>
           ) : null}
           <div className="mt-3 border-t border-[var(--line)] pt-1">
@@ -215,34 +208,34 @@ export function JobView({ jobId, initial }: { jobId: string; initial: Job | null
               </p>
               <div className="mt-3 border-t border-[var(--line)] pt-1">
                 <Row label="payer">
-                  <Ext href={hashscanAccount(job.payment.payer)}>{job.payment.payer}</Ext>
+                  <Ext href={explorerAddress(job.payment.payer)}>{job.payment.payer}</Ext>
                 </Row>
                 <Row label="paid to">
-                  <Ext href={hashscanAccount(job.payment.payTo)}>{job.payment.payTo}</Ext>
+                  <Ext href={explorerAddress(job.payment.payTo)}>{job.payment.payTo}</Ext>
                 </Row>
                 <Row label="amount">
                   <span className="tnum">
-                    {job.payment.amount} {job.payment.asset === "hbar" ? "tℏ" : "µUSDC"}
+                    {job.payment.amount} µUSDC
                   </span>
                 </Row>
                 <Row label="network">{job.payment.network}</Row>
               </div>
 
               <div className="mt-4 space-y-2">
-                <Button href={job.payment.hashscanUrl} variant="secondary" external className="w-full">
-                  View transfer on HashScan
+                <Button href={job.payment.explorerUrl} variant="secondary" external className="w-full">
+                  View transfer on ArcScan
                 </Button>
-                {job.receiptConsensusAt ? (
+                {job.receiptTxHash ? (
                   <Button
-                    href={hashscanTx(job.receiptConsensusAt)}
+                    href={explorerTx(job.receiptTxHash)}
                     variant="ghost"
                     external
                     className="w-full justify-center"
                   >
-                    View HCS receipt
+                    View on-chain receipt
                   </Button>
                 ) : (
-                  <p className="text-center text-[11.5px] text-fg-4">HCS receipt publishing…</p>
+                  <p className="text-center text-[11.5px] text-fg-4">receipt publishing…</p>
                 )}
               </div>
 

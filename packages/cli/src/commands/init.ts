@@ -4,23 +4,23 @@
  *
  * The wizard's job is to make the two genuinely hard parts painless: which of
  * the operator's agent CLIs actually work right now (probed, not asked), and
- * getting them a Hedera account that can receive USDC (generated, with the one
+ * getting them an Arc address that can receive USDC (generated, with the one
  * manual step spelled out precisely).
  */
 
 import { randomBytes } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
-import { PrivateKey } from "@hiero-ledger/sdk";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
-  HEDERA_TESTNET_CAIP2,
+  ARC_TESTNET_CAIP2,
+  accountFor,
   fetchBalances,
   formatUsd,
-  hashscanAccount,
-  isAccountId,
+  explorerAddress,
   networkLabel,
   parseUsd,
-  usdcTokenId,
+  formatUsdc,
   type AdapterKind,
   type Capability,
 } from "@xorv/protocol";
@@ -140,7 +140,7 @@ export async function initCommand(opts: { broker?: string; force?: boolean }): P
   // -- 3. payout account ----------------------------------------------------
 
   ui.heading("3 · where should the money go?");
-  const network = previous?.network ?? HEDERA_TESTNET_CAIP2;
+  const network = previous?.network ?? ARC_TESTNET_CAIP2;
   const wallet = await setupWallet(previous, network);
 
   // -- 4. broker ------------------------------------------------------------
@@ -156,7 +156,7 @@ export async function initCommand(opts: { broker?: string; force?: boolean }): P
     label: label.trim() || "xorv-node",
     network,
     brokerUrl: brokerUrl.replace(/\/+$/, ""),
-    accountId: wallet.accountId,
+    address: wallet.address,
     privateKey: wallet.privateKey,
     capabilities,
     region: region.trim() || null,
@@ -179,7 +179,7 @@ export async function initCommand(opts: { broker?: string; force?: boolean }): P
         ...ui.kv([
           ["node", ui.c.bold(config.label)],
           ["selling", capabilities.map((c) => `${c.displayName} ${ui.c.money(formatUsd(c.priceUsdMicros))}`).join(", ")],
-          ["payout", `${config.accountId} ${ui.c.muted(`(${networkLabel(network)})`)}`],
+          ["payout", `${config.address} ${ui.c.muted(`(${networkLabel(network)})`)}`],
           ["broker", config.brokerUrl],
           ["config", configPath()],
         ]),
@@ -193,120 +193,108 @@ export async function initCommand(opts: { broker?: string; force?: boolean }): P
 }
 
 interface WalletChoice {
-  accountId: string;
+  address: string;
   privateKey: string;
 }
 
 /**
- * Get the operator a Hedera account that can receive USDC.
+ * Get the operator an address that can receive USDC.
  *
- * Importing is offered first because anyone who already has a testnet account
- * from the portal is one paste away from done. Generating is the fallback, and
- * it deliberately stops and shows the funding step rather than pretending an
- * unfunded account is finished — an account that has never received HBAR does
- * not exist on Hedera yet, and a node registered against one would look healthy
- * right up until the first payment failed.
+ * This function used to be the hardest part of onboarding and is now the
+ * easiest, and the difference is worth stating because it is the migration's
+ * clearest user-facing win.
+ *
+ * On Hedera it had to: generate an **ECDSA** key specifically (ED25519 yields
+ * no EVM address, and the faucet only accepts one), send the operator to the
+ * portal faucet, wait while they funded it — because an account that has never
+ * received HBAR *does not exist on Hedera* — have them copy back the `0.0.…`
+ * account id the faucet assigned, validate it, and then tell them to run
+ * `xorv wallet associate` before they could be paid in USDC at all.
+ *
+ * On Arc: generate a key. The address is a function of the key, the account
+ * needs no funding to exist, and it can receive USDC immediately. A provider
+ * only ever receives, so there is nothing left for them to do.
  */
-async function setupWallet(
-  previous: NodeConfig | null,
-  network: string,
-): Promise<WalletChoice> {
-  if (previous?.accountId && previous.privateKey) {
+async function setupWallet(previous: NodeConfig | null, network: string): Promise<WalletChoice> {
+  if (previous?.address && previous.privateKey) {
     const keep = await ui.confirm(
-      `reuse the existing payout account ${ui.c.bold(previous.accountId)}?`,
+      `reuse the existing payout account ${ui.c.bold(previous.address)}?`,
       true,
     );
-    if (keep) return { accountId: previous.accountId, privateKey: previous.privateKey };
+    if (keep) return { address: previous.address, privateKey: previous.privateKey };
   }
 
   const choice = await ui.select("how do you want to get paid?", [
     {
-      label: "I have a Hedera account already",
-      hint: "paste an account id + private key",
-      mode: "import" as const,
+      label: "Generate a new payout key for me",
+      hint: "instant — nothing to fund, nothing to opt into",
+      mode: "generate" as const,
     },
     {
-      label: "Generate a new keypair for me",
-      hint: "then fund it from the faucet",
-      mode: "generate" as const,
+      label: "I have an Arc key already",
+      hint: "paste a private key",
+      mode: "import" as const,
     },
   ]);
 
   if (choice.mode === "import") {
     while (true) {
-      const accountId = await ui.ask("  Hedera account id (0.0.…)");
-      if (!isAccountId(accountId)) {
-        ui.bad("  that doesn't look like a Hedera account id");
+      // A key, not an address: the address is derived, so the two can never
+      // disagree. The Hedera version asked for both and could not check that
+      // they matched — a mismatched pair failed at settlement and nowhere else.
+      const privateKey = await ui.ask("  private key (0x…, 32 bytes of hex)");
+      let account;
+      try {
+        account = accountFor(privateKey);
+      } catch (err) {
+        ui.bad(`  ${err instanceof Error ? err.message : String(err)}`);
         continue;
       }
-      const privateKey = await ui.ask("  private key (hex or DER)");
-      if (!privateKey.trim()) {
-        ui.bad("  a private key is required to sign payouts");
-        continue;
-      }
-      await reportBalances(network, accountId);
-      return { accountId: accountId.trim(), privateKey: privateKey.trim() };
+      ui.ok(`  that key controls ${ui.c.bold(account.address)}`);
+      await reportBalances(network, account.address);
+      return { address: account.address, privateKey: privateKey.trim() };
     }
   }
 
-  // Generate. ECDSA, because it yields an EVM address the faucet accepts.
-  const key = PrivateKey.generateECDSA();
-  const evmAddress = `0x${key.publicKey.toEvmAddress()}`;
+  const key = generatePrivateKey();
+  const account = privateKeyToAccount(key);
 
   ui.blank();
   console.log(
     ui.box(
       [
-        ui.c.bold("a new keypair for this node"),
+        ui.c.bold("a new payout key for this node"),
         "",
         ...ui.kv([
-          ["evm address", ui.c.accent(evmAddress)],
-          ["private key", ui.c.muted(`${key.toStringRaw().slice(0, 14)}…  (saved to ${configPath()})`)],
+          ["address", ui.c.accent(account.address)],
+          ["private key", ui.c.muted(`${key.slice(0, 14)}…  (saved to ${configPath()})`)],
         ]),
         "",
-        ui.c.warn("Hedera creates the account when it first receives HBAR."),
-        "",
-        `  1. open ${ui.c.accent(`https://portal.hedera.com/faucet`)}`,
-        `  2. paste the EVM address above and request ${networkLabel(network)} HBAR`,
-        `  3. copy the ${ui.c.bold("account id")} it gives you back (0.0.…) and paste it below`,
+        "  Ready now. It can receive USDC immediately — there is nothing to",
+        "  fund and nothing to opt into, because this account only receives.",
       ],
-      { title: "fund this account", color: ui.BRAND.amber },
+      { title: "payout account", color: ui.BRAND.mint },
     ),
   );
   ui.blank();
 
-  while (true) {
-    const accountId = await ui.ask("  account id from the faucet (0.0.…)");
-    if (!isAccountId(accountId)) {
-      ui.bad("  that doesn't look like a Hedera account id — it looks like 0.0.12345");
-      continue;
-    }
-    await reportBalances(network, accountId);
-    return { accountId: accountId.trim(), privateKey: key.toStringRaw() };
-  }
+  return { address: account.address, privateKey: key };
 }
 
-/** Show what the account holds, and whether it can receive USDC at all. */
-async function reportBalances(network: string, accountId: string): Promise<void> {
-  const spin = ui.spinner(`checking ${accountId} on ${networkLabel(network)}…`);
+/** Show what the account holds. Informational — an empty one is perfectly fine. */
+async function reportBalances(network: string, address: string): Promise<void> {
+  const spin = ui.spinner(`checking ${address} on ${networkLabel(network)}…`);
   try {
-    const balances = await fetchBalances(network, accountId);
+    const balances = await fetchBalances(network, address);
     spin.stop();
-    const hbar = (Number(balances.hbarTinybars) / 1e8).toFixed(4);
-    ui.ok(`  account found — ${ui.c.money(`${hbar} ℏ`)}`);
-    if (balances.usdcAssociated) {
-      ui.ok(`  associated with USDC ${ui.c.muted(`(${usdcTokenId(network)})`)}`);
-    } else {
-      ui.warn(
-        `  not associated with USDC yet — run ${ui.c.accent("xorv wallet associate")} before taking USDC-priced jobs`,
-      );
+    ui.ok(`  holds ${ui.c.money(formatUsdc(balances.usdcUnits))}`);
+    if (!balances.viewsAgree) {
+      ui.warn("  the ERC-20 and native balances disagree — XORV_STABLECOIN is not Arc's USDC");
     }
-    ui.muted(`  ${hashscanAccount(network, accountId)}`);
+    ui.muted(`  ${explorerAddress(network, address)}`);
   } catch (err) {
     spin.stop();
-    ui.warn(
-      `  couldn't reach the mirror node to verify (${err instanceof Error ? err.message : String(err)})`,
-    );
+    ui.warn(`  couldn't reach the RPC to verify (${err instanceof Error ? err.message : String(err)})`);
     ui.muted("  continuing — `xorv doctor` will re-check this later");
   }
 }

@@ -18,22 +18,22 @@ const STEPS = [
   {
     n: "02",
     title: "The network quotes a price",
-    body: "The quote pins one provider at one price and answers HTTP 402 with the exact amounts, payable in USDC or HBAR.",
+    body: "The quote pins one provider at one price and answers HTTP 402 with the exact amount, the token, and the EIP-712 domain to sign against.",
   },
   {
     n: "03",
-    title: "The buyer signs a transfer",
-    body: "A real Hedera transaction, signed but unsubmitted. Xorv's facilitator adds the second signature and pays the gas, so the buyer only ever needs the stablecoin.",
+    title: "The buyer signs an authorization",
+    body: "Not a transaction — an EIP-3009 authorization, which is typed data. It is never broadcast and never enters a mempool. Xorv's facilitator relays it and pays the fee, so the buyer needs nothing but the stablecoin.",
   },
   {
     n: "04",
     title: "Money moves, then the job runs",
-    body: "Settlement lands in about three seconds — buyer to provider, directly. The broker never takes custody. Then the job is dispatched and streams back live.",
+    body: "Settlement lands in about a second — buyer to provider, directly. The broker never takes custody. Then the job is dispatched and streams back live.",
   },
   {
     n: "05",
     title: "A receipt goes on-chain",
-    body: "Job id, provider, amount, transaction id and a SHA-256 of the result are written to a Hedera Consensus Service topic. Public, ordered, append-only.",
+    body: "Job id, provider, amount, transaction hash and a SHA-256 of the result are appended to a contract on Arc. Public, ordered, append-only — and readable from any RPC without credentials.",
   },
 ];
 
@@ -43,7 +43,7 @@ export function How() {
       <Reveal>
         <SectionHeading
           title="A job, a payment and a receipt — in one request"
-          sub="x402 turns HTTP 402 from a status code nobody used into a working payment rail. Xorv runs the whole loop on Hedera."
+          sub="x402 turns HTTP 402 from a status code nobody used into a working payment rail. Xorv runs the whole loop on Arc, where the money and the gas are the same asset."
         />
       </Reveal>
 
@@ -69,9 +69,9 @@ export function How() {
       <Reveal delay={0.1}>
         <p className="measure mx-auto mt-12 text-center text-[13.5px] leading-relaxed text-fg-3">
           Payment settles <em className="not-italic text-fg-2">before</em> the job runs. A signed
-          Hedera transaction is only valid for 180 seconds, so waiting for a five-minute coding job
-          would leave the provider unpaid for work already done. A failed job is reassigned to
-          another provider at no extra charge.
+          authorization carries a validity window, so waiting for a five-minute coding job would
+          leave the provider unpaid for work already done. A failed job is reassigned to another
+          provider at no extra charge.
         </p>
       </Reveal>
     </Section>

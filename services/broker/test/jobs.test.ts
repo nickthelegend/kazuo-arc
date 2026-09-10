@@ -14,12 +14,12 @@ function quoteInput(over: Partial<Omit<Quote, "id" | "createdAt" | "expiresAt">>
     request: { prompt: "hello", maxPriceUsdMicros: 50_000 },
     providerId: "prv_1",
     providerLabel: "node-a",
-    providerAccountId: "0.0.1001",
+    providerAddress: "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B",
     capabilityId: "echo",
     capabilityName: "Echo (test)",
     priceUsdMicros: 1_000,
     usdcAmount: "1000",
-    hbarAmount: "1462167",
+    domain: { name: "USDC", version: "2" },
     ...over,
   };
 }
@@ -35,10 +35,12 @@ describe("quotes", () => {
     const a = store.getQuote(quote.id)!;
     const b = store.getQuote(quote.id)!;
     expect(a.usdcAmount).toBe("1000");
-    expect(a.hbarAmount).toBe("1462167");
     expect(b.usdcAmount).toBe(a.usdcAmount);
-    expect(b.hbarAmount).toBe(a.hbarAmount);
-    expect(b.providerAccountId).toBe(a.providerAccountId);
+    expect(b.providerAddress).toBe(a.providerAddress);
+    // The domain is frozen for the same reason as the amount: x402 asks for
+    // requirements twice, and anything that differs between the two calls
+    // rejects a correctly-signed payment.
+    expect(b.domain).toEqual(a.domain);
   });
 
   it("expires after its TTL and stops resolving", () => {
@@ -56,9 +58,11 @@ describe("quotes", () => {
     expect(store.getQuote(quote.id)!.jobId).toBe(job.id);
   });
 
-  it("carries a null hbarAmount when no rate was available", () => {
-    const quote = store.createQuote(quoteInput({ hbarAmount: null }));
-    expect(store.getQuote(quote.id)!.hbarAmount).toBeNull();
+  it("carries the EIP-712 domain the buyer has to sign against", () => {
+    // x402's EVM scheme fills this in only for networks in its built-in
+    // stablecoin registry, and Arc is not one of them, so the quote must.
+    const quote = store.createQuote(quoteInput());
+    expect(store.getQuote(quote.id)!.domain).toEqual({ name: "USDC", version: "2" });
   });
 
   it("returns undefined for an unknown quote", () => {
@@ -75,7 +79,7 @@ describe("job lifecycle", () => {
   it("starts paid and carries the quote's provider and price", () => {
     const job = store.createJob(store.createQuote(quoteInput()));
     expect(job.status).toBe("paid");
-    expect(job.providerAccountId).toBe("0.0.1001");
+    expect(job.providerAddress).toBe("0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B");
     expect(job.priceUsdMicros).toBe(1_000);
     expect(job.events).toEqual([]);
   });

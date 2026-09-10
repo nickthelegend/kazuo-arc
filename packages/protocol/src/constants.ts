@@ -4,30 +4,62 @@
  * Anything here is protocol surface: change a value and every participant has
  * to agree on the change, so they live in one place rather than being retyped
  * per package.
+ *
+ * ## Arc in one paragraph
+ *
+ * Arc is a Circle L1 where **USDC is the native gas token**. That single fact
+ * decides most of this file. There is no second asset to quote a price in, no
+ * exchange rate to fetch, and no "buy the gas token first" step — the thing you
+ * are paid in is the thing fees are charged in. USDC appears twice on the
+ * chain: as the native balance the EVM meters gas against (18 decimals, because
+ * that is what an EVM assumes of its gas token) and as a Circle FiatTokenV2
+ * ERC-20 at a fixed address (6 decimals, because that is what USDC is). They
+ * are one balance under two views. x402 settles through the ERC-20 face, so
+ * **every amount in this codebase is 6 decimals**.
  */
 
-import {
-  HBAR_ASSET_ID,
-  HEDERA_MAINNET_CAIP2,
-  HEDERA_MAINNET_MIRROR_NODE_URL,
-  HEDERA_MAINNET_USDC,
-  HEDERA_TESTNET_CAIP2,
-  HEDERA_TESTNET_MIRROR_NODE_URL,
-  HEDERA_TESTNET_USDC,
-  HEDERA_USDC_DECIMALS,
-} from "@x402/hedera";
+/** CAIP-2 for Arc testnet — chain id 5042002. */
+export const ARC_TESTNET_CAIP2 = "eip155:5042002";
 
-export {
-  HBAR_ASSET_ID,
-  HEDERA_MAINNET_CAIP2,
-  HEDERA_MAINNET_USDC,
-  HEDERA_TESTNET_CAIP2,
-  HEDERA_TESTNET_USDC,
-  HEDERA_USDC_DECIMALS,
-};
+/** CAIP-2 for Arc mainnet — chain id 5042. */
+export const ARC_MAINNET_CAIP2 = "eip155:5042";
 
-/** HBAR is denominated in tinybars — 1 ℏ = 10^8 tℏ. */
-export const HBAR_DECIMALS = 8;
+/** EVM chain ids, for wallet `switchChain` and RPC checks. */
+export const ARC_TESTNET_CHAIN_ID = 5042002;
+export const ARC_MAINNET_CHAIN_ID = 5042;
+
+/**
+ * The ERC-20 face of native USDC — a real Circle FiatTokenV2 at a fixed
+ * address, identical on both Arc networks.
+ *
+ * Being a genuine FiatTokenV2 is what makes the whole design work: it
+ * implements EIP-3009 `transferWithAuthorization`, so a buyer signs an
+ * authorization offline and a facilitator relays it. That is the Arc equivalent
+ * of Hedera's fee-payer model, reached by a completely different mechanism, and
+ * it is why the stock x402 `exact` scheme needs no Xorv-specific code.
+ */
+export const ARC_USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
+
+/** USDC's ERC-20 decimals. The native/gas view of the same balance is 18. */
+export const USDC_DECIMALS = 6;
+
+/**
+ * Decimals the EVM meters the native balance in.
+ *
+ * Only ever needed to convert *between* the two views of one balance. Anything
+ * denominated as money in this codebase uses `USDC_DECIMALS`; reaching for this
+ * constant in a payment path is almost always a 10^12 bug in the making.
+ */
+export const NATIVE_DECIMALS = 18;
+
+/** Public RPC per CAIP-2 network. */
+export function rpcUrl(network: string): string {
+  const override = process.env.XORV_RPC_URL?.trim();
+  if (override) return override;
+  return network === ARC_MAINNET_CAIP2
+    ? "https://rpc.arc.network"
+    : "https://rpc.testnet.arc.network";
+}
 
 /** The x402 protocol version Xorv speaks. */
 export const X402_VERSION = 2;
@@ -63,62 +95,72 @@ export const QUOTE_TTL_SECONDS = 300;
 /** Ceiling on how long a single job may run on a provider before it's failed. */
 export const JOB_TIMEOUT_MS = 10 * 60_000;
 
-/** Wire version for HCS envelopes, so consumers can evolve the shape safely. */
-export const HCS_SCHEMA_VERSION = 1;
+/** Wire version for audit-log envelopes, so consumers can evolve the shape. */
+export const LOG_SCHEMA_VERSION = 1;
 
-/** Mirror Node REST base per CAIP-2 network. */
-export function mirrorNodeUrl(network: string): string {
-  return network === HEDERA_MAINNET_CAIP2
-    ? HEDERA_MAINNET_MIRROR_NODE_URL
-    : HEDERA_TESTNET_MIRROR_NODE_URL;
-}
+/**
+ * The `kind` discriminator on a `XorvLog` entry.
+ *
+ * Mirrors the contract's `KIND_` constants exactly. They are indexed on the
+ * event, so a reader pulls one stream — say, every receipt — without scanning
+ * the rest, which is what the three separate Hedera topics used to give us.
+ */
+export const LOG_KIND = {
+  registration: 1,
+  heartbeat: 2,
+  receipt: 3,
+} as const;
 
 /**
  * The stablecoin this network prices in.
  *
- * Defaults to Circle's USDC, overridable with `XORV_STABLECOIN`. A marketplace
- * that hardcodes one token id can never be pointed at a different issuer, a
- * different network's USDC, or a test token — and the override is what lets the
- * HTS settlement path be exercised without waiting on a faucet.
+ * Overridable with `XORV_STABLECOIN`. A marketplace that hardcodes one token
+ * address can never be pointed at a different issuer or a test token, and the
+ * override is what lets the settlement path be exercised without a faucet.
  *
- * The value is read per call rather than captured at module load so a test can
- * set it without re-importing the module.
+ * Read per call rather than captured at module load, so a test can set it
+ * without re-importing the module.
  */
-export function usdcTokenId(network: string): string {
+export function usdcAddress(network: string): string {
   const override = process.env.XORV_STABLECOIN?.trim();
-  if (override && /^\d+\.\d+\.\d+$/.test(override)) return override;
-  return network === HEDERA_MAINNET_CAIP2 ? HEDERA_MAINNET_USDC : HEDERA_TESTNET_USDC;
+  if (override && /^0x[0-9a-fA-F]{40}$/.test(override)) return override;
+  void network; // same address on both Arc networks; kept for signature parity
+  return ARC_USDC_ADDRESS;
+}
+
+/** The deployed `XorvLog` address, or null when the audit trail is unconfigured. */
+export function logAddress(): string | null {
+  const raw = process.env.XORV_LOG_ADDRESS?.trim();
+  return raw && /^0x[0-9a-fA-F]{40}$/.test(raw) ? raw : null;
 }
 
 /** Human label for a network, for CLI and UI chrome. */
 export function networkLabel(network: string): string {
-  return network === HEDERA_MAINNET_CAIP2 ? "mainnet" : "testnet";
+  return network === ARC_MAINNET_CAIP2 ? "mainnet" : "testnet";
 }
 
-/**
- * HashScan link for a Hedera transaction id.
- *
- * The SDK renders ids as `0.0.123@1699.000000000`, and HashScan wants
- * `0.0.123-1699-000000000`, so the separators are rewritten here rather than at
- * each of the half-dozen call sites that surface a receipt link.
- */
-export function hashscanTx(network: string, transactionId: string): string {
-  const net = networkLabel(network);
-  const normalized = transactionId.replace("@", "-").replace(/\.(\d+)$/, "-$1");
-  return `https://hashscan.io/${net}/transaction/${normalized}`;
+/** EVM chain id for a CAIP-2 network. */
+export function chainIdFor(network: string): number {
+  const parsed = Number(network.split(":")[1]);
+  return Number.isFinite(parsed) ? parsed : ARC_TESTNET_CHAIN_ID;
 }
 
-/** HashScan link for a topic. */
-export function hashscanTopic(network: string, topicId: string): string {
-  return `https://hashscan.io/${networkLabel(network)}/topic/${topicId}`;
+/** ArcScan base URL for a network. */
+export function explorerBase(network: string): string {
+  return network === ARC_MAINNET_CAIP2 ? "https://arcscan.app" : "https://testnet.arcscan.app";
 }
 
-/** HashScan link for an account. */
-export function hashscanAccount(network: string, accountId: string): string {
-  return `https://hashscan.io/${networkLabel(network)}/account/${accountId}`;
+/** ArcScan link for a transaction hash. */
+export function explorerTx(network: string, txHash: string): string {
+  return `${explorerBase(network)}/tx/${txHash}`;
 }
 
-/** HashScan link for a token. */
-export function hashscanToken(network: string, tokenId: string): string {
-  return `https://hashscan.io/${networkLabel(network)}/token/${tokenId}`;
+/** ArcScan link for an address — an account or a contract. */
+export function explorerAddress(network: string, address: string): string {
+  return `${explorerBase(network)}/address/${address}`;
+}
+
+/** ArcScan link for a token. */
+export function explorerToken(network: string, address: string): string {
+  return `${explorerBase(network)}/token/${address}`;
 }

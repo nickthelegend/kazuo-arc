@@ -34,7 +34,7 @@ export function startLocalServer(node: ProviderNode, port: number): Promise<Loca
       return json(res, 200, {
         label: node.config.label,
         providerId: node.providerId,
-        accountId: node.config.accountId,
+        address: node.config.address,
         network: node.config.network,
         region: node.config.region,
         capabilities: node.config.capabilities.map((c) => ({
@@ -144,7 +144,7 @@ function page(node: ProviderNode): string {
 </style></head><body><div class="wrap">
   <div class="mark">Xorv provider node</div>
   <h1>${escapeHtml(node.config.label)}</h1>
-  <p class="sub">Selling idle AI capacity, paid per job in USDC over x402 on Hedera.</p>
+  <p class="sub">Selling idle AI capacity, paid per job in USDC over x402 on Arc.</p>
   <span class="pill"><span class="dot"></span>${node.stats.connected ? "connected to the network" : "reconnecting"}</span>
   <div class="grid">
     <div class="card"><div class="k">Jobs done</div><div class="v">${node.stats.jobsCompleted}</div></div>
@@ -154,7 +154,7 @@ function page(node: ProviderNode): string {
   </div>
   <table><thead><tr><th>Capability</th><th>Adapter</th><th class="right">Price / job</th></tr></thead>
   <tbody>${rows}</tbody></table>
-  <footer>Payouts to <span class="mono">${escapeHtml(node.config.accountId)}</span> on ${escapeHtml(node.config.network)}.
+  <footer>Payouts to <span class="mono">${escapeHtml(node.config.address)}</span> on ${escapeHtml(node.config.network)}.
   <br>Run your own: <span class="mono">npm i -g @xorv/cli &amp;&amp; xorv init</span></footer>
 </div></body></html>`;
 }

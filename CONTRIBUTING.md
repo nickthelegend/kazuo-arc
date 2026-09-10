@@ -4,7 +4,7 @@
 
 ```bash
 pnpm install
-cp .env.example .env          # a testnet account takes ~60s at portal.hedera.com
+cp .env.example .env          # claim Arc testnet USDC at faucet.circle.com
 pnpm --filter @xorv/broker setup   # creates the 3 HCS topics + demo accounts
 pnpm build
 pnpm test

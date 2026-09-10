@@ -1,112 +1,120 @@
 /**
- * `pnpm setup:hedera` — provision everything Xorv needs on Hedera, once.
+ * `pnpm setup` — get an Arc deployment from nothing to ready.
  *
- * Creates the three HCS topics, and optionally a provider account and a buyer
- * account so the demo has two distinct parties (a transfer from an account to
- * itself nets zero and is not a payment).
+ * Much less to do here than the Hedera version, and the difference is the
+ * interesting part.
  *
- * Both generated accounts are created with unlimited automatic token
- * associations. That is the single most useful thing you can do for a Hedera
- * account that is going to receive a stablecoin: without it, USDC cannot land
- * and the x402 preflight rejects the payment before it is ever submitted.
+ * On Hedera this script had to create three Consensus Service topics and two
+ * funded accounts, and every generated account needed
+ * `setMaxAutomaticTokenAssociations(-1)` or USDC could not land in it at all —
+ * the single most common way a Hedera demo silently fails.
+ *
+ * On Arc an account is a keypair. It exists because you generated it; nothing
+ * is created on chain, nothing is opted into, and any address can receive USDC
+ * immediately. So this generates keys, reports what is configured, and checks
+ * the things that can actually be wrong: whether the accounts are funded, and
+ * whether the audit-log contract is really deployed where config says it is.
+ *
+ *   pnpm setup              # check what's configured
+ *   pnpm setup --accounts   # also generate a provider and buyer keypair
  */
 
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import {
-  AccountCreateTransaction,
-  Hbar,
-  PrivateKey,
-  TransferTransaction,
-  AccountId,
-} from "@hiero-ledger/sdk";
-import {
-  createTopic,
-  hashscanAccount,
-  hashscanTopic,
-  hederaClient,
+  explorerAddress,
+  explorerToken,
+  fetchBalances,
+  formatUsdc,
+  logDeployed,
   networkLabel,
-  usdcTokenId,
+  readClient,
+  usdcAddress,
+  usdcDomain,
 } from "@xorv/protocol";
 import { loadConfig } from "../config.js";
 
 const config = loadConfig();
-const client = hederaClient(config.network, config.operatorId, config.operatorKey);
-
 const args = new Set(process.argv.slice(2));
-const wantTopics = args.has("--topics") || args.size === 0;
-const wantAccounts = args.has("--accounts") || args.size === 0;
+const wantAccounts = args.has("--accounts");
 
 function line(label: string, value: string): void {
   console.log(`  ${label.padEnd(22)} ${value}`);
 }
 
-async function createAccount(name: string, hbar: number): Promise<{ id: string; key: string }> {
-  const key = PrivateKey.generateECDSA();
-  const tx = await new AccountCreateTransaction()
-    .setKeyWithoutAlias(key.publicKey)
-    .setInitialBalance(new Hbar(hbar))
-    // -1 = unlimited automatic token associations (HIP-904). Without this the
-    // account must explicitly associate USDC before it can be paid.
-    .setMaxAutomaticTokenAssociations(-1)
-    .setAccountMemo(`xorv ${name}`)
-    .execute(client);
-  const receipt = await tx.getReceipt(client);
-  const id = receipt.accountId;
-  if (!id) throw new Error(`${name} account creation returned no id`);
-  return { id: id.toString(), key: key.toStringRaw() };
+async function reportBalance(label: string, address: string): Promise<void> {
+  try {
+    const b = await fetchBalances(config.network, address);
+    line(label, `${address}  ${formatUsdc(b.usdcUnits)}${b.viewsAgree ? "" : "  ⚠ views disagree"}`);
+  } catch (err) {
+    line(label, `${address}  — could not read (${(err as Error).message})`);
+  }
 }
 
 async function main(): Promise<void> {
   console.log("");
   console.log(`  ▁▂▃  XORV setup — ${config.network} (${networkLabel(config.network)})`);
   console.log("");
-  line("operator", config.operatorId);
-  line("usdc token", usdcTokenId(config.network));
+
+  const client = readClient(config.network);
+  const chainId = await client.getChainId().catch(() => null);
+  line("rpc", chainId ? `reachable, chain ${chainId}` : "UNREACHABLE");
+  const usdc = usdcAddress(config.network);
+  line("usdc", `${usdc}  ${explorerToken(config.network, usdc)}`);
+
+  // Reading the domain proves two things at once: the RPC works, and the token
+  // at that address really is a FiatTokenV2 rather than some other contract.
+  // Without EIP-3009 on it, no payment in this system can ever settle.
+  try {
+    const domain = await usdcDomain(config.network);
+    line("eip-712 domain", `name="${domain.name}" version="${domain.version}"`);
+  } catch {
+    line("eip-712 domain", "✖ could not read — is XORV_STABLECOIN a FiatTokenV2?");
+  }
+
+  console.log("");
+  await reportBalance("operator", config.operatorAddress);
   console.log("");
 
-  const env: Record<string, string> = {};
-
-  if (wantTopics) {
-    console.log("  creating HCS topics…");
-    const topics: Array<[string, string, string]> = [
-      ["XORV_TOPIC_REGISTRY", "registry", "xorv:registry:v1 - provider registrations"],
-      ["XORV_TOPIC_HEARTBEAT", "heartbeat", "xorv:heartbeat:v1 - provider liveness and capacity"],
-      ["XORV_TOPIC_RECEIPTS", "receipts", "xorv:receipts:v1 - settled job receipts"],
-    ];
-    for (const [envName, label, memo] of topics) {
-      const id = await createTopic(client, memo);
-      env[envName] = id;
-      line(label, `${id}   ${hashscanTopic(config.network, id)}`);
-    }
-    console.log("");
+  if (config.logAddress) {
+    const deployed = await logDeployed(config.network, config.logAddress);
+    line(
+      "audit log",
+      deployed
+        ? `${config.logAddress}  ${explorerAddress(config.network, config.logAddress)}`
+        : `${config.logAddress}  ✖ NO CONTRACT AT THIS ADDRESS`,
+    );
+  } else {
+    line("audit log", "not configured — run `pnpm dlx tsx scripts/deploy-log.mts`");
   }
 
   if (wantAccounts) {
-    console.log("  creating demo accounts (unlimited auto-association)…");
-    const provider = await createAccount("provider payout", 5);
-    line("provider", `${provider.id}   ${hashscanAccount(config.network, provider.id)}`);
-    env.XORV_DEMO_PROVIDER_ID = provider.id;
-    env.XORV_DEMO_PROVIDER_KEY = provider.key;
-
-    const payer = await createAccount("demo buyer", 20);
-    line("buyer", `${payer.id}   ${hashscanAccount(config.network, payer.id)}`);
-    env.XORV_DEMO_PAYER_ID = payer.id;
-    env.XORV_DEMO_PAYER_KEY = payer.key;
     console.log("");
+    console.log("  generating demo keypairs…");
+    console.log("");
+    const env: Record<string, string> = {};
+    for (const [name, prefix] of [
+      ["provider (receives)", "XORV_DEMO_PROVIDER"],
+      ["buyer (spends)", "XORV_DEMO_PAYER"],
+    ] as const) {
+      const key = generatePrivateKey();
+      const account = privateKeyToAccount(key);
+      line(name, account.address);
+      env[`${prefix}_ADDRESS`] = account.address;
+      env[`${prefix}_KEY`] = key;
+    }
+    console.log("");
+    console.log("  paste into .env:");
+    console.log("");
+    for (const [key, value] of Object.entries(env)) console.log(`${key}=${value}`);
+    console.log("");
+    console.log("  Then fund the buyer at https://faucet.circle.com (Arc Testnet).");
+    console.log("  The provider needs nothing — it only ever receives.");
   }
 
-  console.log("  paste into .env:");
   console.log("");
-  for (const [key, value] of Object.entries(env)) {
-    console.log(`${key}=${value}`);
-  }
-  console.log("");
-  client.close();
 }
 
 main().catch((err) => {
   console.error("\n  setup failed:", err instanceof Error ? err.message : err);
-  client.close();
   process.exit(1);
 });
-
-export { createAccount, TransferTransaction, AccountId };

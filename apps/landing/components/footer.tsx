@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Mark } from "@/components/ui/logo";
-import { CHAIN, HEDERA_URL, LOOM_URL, NPM_URL, REPO_URL, X402_URL } from "@/lib/links";
+import { ARC_URL, CHAIN, CIRCLE_URL, LOOM_URL, NPM_URL, REPO_URL, X402_URL } from "@/lib/links";
 
 const COLUMNS = [
   {
@@ -18,16 +18,16 @@ const COLUMNS = [
       { label: "GitHub", href: REPO_URL, external: true },
       { label: "CLI on npm", href: NPM_URL, external: true },
       { label: "x402", href: X402_URL, external: true },
-      { label: "Hedera", href: HEDERA_URL, external: true },
+      { label: "Arc", href: ARC_URL, external: true },
+      { label: "Circle", href: CIRCLE_URL, external: true },
     ],
   },
   {
     title: "On-chain",
     links: [
       { label: "USDC token", href: CHAIN.usdcUrl, external: true },
-      { label: "Registry topic", href: CHAIN.topicUrl(CHAIN.topics.registry), external: true },
-      { label: "Heartbeat topic", href: CHAIN.topicUrl(CHAIN.topics.heartbeat), external: true },
-      { label: "Receipts topic", href: CHAIN.topicUrl(CHAIN.topics.receipts), external: true },
+      { label: "Audit log contract", href: CHAIN.logUrl, external: true },
+      { label: "ArcScan", href: "https://testnet.arcscan.app", external: true },
     ],
   },
 ];
@@ -44,7 +44,7 @@ export function Footer() {
             </div>
             <p className="mt-4 max-w-[26ch] text-[13.5px] leading-relaxed text-fg-3">
               A decentralized AI capacity network. Idle subscriptions in, paid jobs out — settled
-              per request in USDC on Hedera.
+              per request in USDC on Arc.
             </p>
           </div>
 

@@ -164,7 +164,7 @@ export function Bento() {
             className="h-full"
             visual={<SettleVisual />}
             title="Settled, then receipted"
-            body="A signed transfer, co-signed by the facilitator so the buyer never needs gas, then a receipt written to Hedera Consensus Service."
+            body="A signed authorization, relayed by the facilitator so the buyer never spends gas, then a receipt appended to a contract on Arc."
           />
         </Reveal>
       </div>
@@ -311,7 +311,7 @@ function SettleVisual() {
       <div data-settle-tx className="flex items-center gap-2">
         <span className="h-1.5 w-1.5 rounded-full bg-live" />
         <span className="mono truncate text-[10.5px] text-fg-3">
-          0.0.9842030@1785477682.129
+          0x9c1fed2b2c87…4f0c67
         </span>
       </div>
     </div>

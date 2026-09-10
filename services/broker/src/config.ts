@@ -2,15 +2,14 @@
  * Broker configuration, resolved once at boot.
  *
  * Everything that can be wrong about a deployment — missing key, unfunded
- * operator, topics that don't exist — should be discoverable here or in
+ * operator, a log contract that isn't there — should be discoverable here or in
  * `describeConfig`, not three seconds into someone's first paid job.
  */
 
 import { config as loadDotenv } from "dotenv";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { HEDERA_TESTNET_CAIP2, isAccountId, parsePrivateKey } from "@xorv/protocol";
-import type { PrivateKey } from "@hiero-ledger/sdk";
+import { ARC_TESTNET_CAIP2, accountFor, isAccountAddress, parsePrivateKey } from "@xorv/protocol";
 
 // The repo keeps one .env at the root; the broker is two directories down.
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -19,9 +18,11 @@ loadDotenv({ quiet: true });
 
 export interface BrokerConfig {
   network: string;
-  operatorId: string;
-  operatorKey: PrivateKey;
-  topics: { registry: string | null; heartbeat: string | null; receipts: string | null };
+  /** The operator's address, derived from the key rather than configured twice. */
+  operatorAddress: string;
+  operatorKey: string;
+  /** Deployed XorvLog contract; null disables the audit trail rather than failing. */
+  logAddress: string | null;
   port: number;
   publicUrl: string;
   corsOrigins: string[];
@@ -39,7 +40,8 @@ function required(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) {
     throw new Error(
-      `Missing ${name}. Copy .env.example to .env and fill it in — a funded testnet account takes ~60s at https://portal.hedera.com`,
+      `Missing ${name}. Copy .env.example to .env and fill it in — ` +
+        `claim Arc testnet USDC at https://faucet.circle.com`,
     );
   }
   return value;
@@ -51,22 +53,36 @@ function optional(name: string): string | null {
 }
 
 export function loadConfig(): BrokerConfig {
-  const operatorId = required("HEDERA_OPERATOR_ID");
-  if (!isAccountId(operatorId)) {
-    throw new Error(`HEDERA_OPERATOR_ID must look like 0.0.12345, got "${operatorId}"`);
+  const operatorKey = parsePrivateKey(required("XORV_OPERATOR_KEY"));
+
+  // Derived, not configured. The Hedera version required an account id
+  // alongside the key and could not check that the two matched — a mismatched
+  // pair produced INVALID_SIGNATURE on the first payment and nothing before it.
+  // An EVM address is a pure function of its key, so the pair cannot disagree.
+  const operatorAddress = accountFor(operatorKey).address;
+
+  const declared = optional("XORV_OPERATOR_ADDRESS");
+  if (declared && declared.toLowerCase() !== operatorAddress.toLowerCase()) {
+    throw new Error(
+      `XORV_OPERATOR_ADDRESS is ${declared} but XORV_OPERATOR_KEY controls ${operatorAddress}. ` +
+        `Remove the address — it is derived from the key — or fix the key.`,
+    );
+  }
+
+  const logAddress = optional("XORV_LOG_ADDRESS");
+  if (logAddress && !isAccountAddress(logAddress)) {
+    throw new Error(`XORV_LOG_ADDRESS must be an EVM address, got "${logAddress}"`);
   }
 
   return {
-    network: process.env.XORV_NETWORK?.trim() || HEDERA_TESTNET_CAIP2,
-    operatorId,
-    operatorKey: parsePrivateKey(required("HEDERA_OPERATOR_KEY")),
-    topics: {
-      registry: optional("XORV_TOPIC_REGISTRY"),
-      heartbeat: optional("XORV_TOPIC_HEARTBEAT"),
-      receipts: optional("XORV_TOPIC_RECEIPTS"),
-    },
+    network: process.env.XORV_NETWORK?.trim() || ARC_TESTNET_CAIP2,
+    operatorAddress,
+    operatorKey,
+    logAddress,
     port: Number(process.env.XORV_BROKER_PORT ?? 8402),
-    publicUrl: process.env.XORV_BROKER_URL?.trim() || `http://localhost:${process.env.XORV_BROKER_PORT ?? 8402}`,
+    publicUrl:
+      process.env.XORV_BROKER_URL?.trim() ||
+      `http://localhost:${process.env.XORV_BROKER_PORT ?? 8402}`,
     corsOrigins: (process.env.XORV_CORS_ORIGINS ?? "")
       .split(",")
       .map((s) => s.trim())

@@ -54,8 +54,8 @@ const LINES: Line[] = [
   {
     render: () => (
       <>
-        <Ok /> <span className="text-fg-2">registration on HCS</span>{" "}
-        <span className="text-fg-4">0.0.9848245</span>
+        <Ok /> <span className="text-fg-2">registration on chain</span>{" "}
+        <span className="text-fg-4">0x383f5153…eef3</span>
       </>
     ),
     after: 380,
@@ -115,7 +115,7 @@ const LINES: Line[] = [
     render: () => (
       <>
         <Ok /> <span className="text-fg-2">settled</span>{" "}
-        <span className="text-fg-4">0.0.9842030@1785477682.129117457</span>
+        <span className="text-fg-4">0x9c1fed2b…4f0c67</span>
       </>
     ),
   },

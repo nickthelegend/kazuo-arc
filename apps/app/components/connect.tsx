@@ -2,81 +2,87 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
-import { NETWORK } from "@/lib/api";
+import { createPublicClient, erc20Abi, http, getAddress, formatUnits } from "viem";
 import { EASE, useEntrance } from "@/lib/motion";
+import { ARC_CHAIN, USDC_ADDRESS, explorerAddress } from "@/lib/chains";
 import { useWallet } from "@/components/wallet-provider";
+import { shortAddress } from "@/lib/wallet";
 import { Button } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 /**
- * Connect a Hedera wallet.
+ * Connect an EVM wallet.
  *
- * This used to be Privy, and the swap is the point rather than a detail.
- * Privy signs EVM transactions; Hedera's x402 scheme settles a **native**
- * protobuf transfer. So the old button could authenticate you and then not pay
- * for anything — the payment quietly happened server-side with a key the app
- * held. HashPack (or Blade, or Kabila, over the same WalletConnect session)
- * signs the transaction the facilitator actually verifies, so the account
- * shown here is the account that pays.
+ * Any wallet. That sentence is the migration in miniature: Hedera's x402 scheme
+ * settles a native protobuf transfer, so an ordinary EVM wallet could
+ * authenticate a user and then be unable to pay — which is why this component
+ * previously carried a WalletConnect project id, a relay session, and a note
+ * explaining that Privy had to be removed. Arc settles an EIP-3009
+ * authorization, which is EIP-712 typed data, which every wallet signs.
  *
- * One consequence worth noticing: there is no "connected but no Hedera account
- * yet" state anymore. A wallet session *is* a Hedera account id — the ledger
- * already knows it. That whole class of confusion belonged to the EVM-address
- * path and left with it.
+ * The balance shown is read straight from the token contract rather than an
+ * indexer, because there is one and it is authoritative.
  */
 
 interface Balances {
+  /** The ERC-20 view, in USDC. This is the money figure. */
   usdc: number;
-  hbar: number;
-  canReceive: boolean;
-}
-
-const USDC_TOKEN = process.env.NEXT_PUBLIC_XORV_STABLECOIN ?? "0.0.429274";
-
-function mirrorNode(network: string): string {
-  return network === "hedera:mainnet"
-    ? "https://mainnet-public.mirrornode.hedera.com"
-    : "https://testnet.mirrornode.hedera.com";
+  /** The native view of the same balance, at 18 decimals. */
+  native: number;
+  /** They must agree; if they don't, the configured token isn't Arc's USDC. */
+  agree: boolean;
 }
 
 export function Connect() {
-  const { accountId, connecting, ready, error, available, connect, disconnect } = useWallet();
+  const {
+    address,
+    connecting,
+    ready,
+    error,
+    available,
+    wrongChain,
+    connect,
+    switchChain,
+    disconnect,
+  } = useWallet();
   const [open, setOpen] = useState(false);
   const [balances, setBalances] = useState<Balances | null>(null);
   const animate = useEntrance();
 
   useEffect(() => {
-    if (!accountId) {
+    if (!address) {
       setBalances(null);
       return;
     }
-    const controller = new AbortController();
+    let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch(`${mirrorNode(NETWORK)}/api/v1/accounts/${accountId}`, {
-          signal: controller.signal,
-        });
-        if (!res.ok) return;
-        const body = (await res.json()) as {
-          balance?: { balance?: number; tokens?: Array<{ token_id: string; balance: number }> };
-          max_automatic_token_associations?: number;
-        };
-        const tokens = body.balance?.tokens ?? [];
-        const usdc = tokens.find((t) => t.token_id === USDC_TOKEN);
-        const auto = body.max_automatic_token_associations ?? 0;
+        const client = createPublicClient({ chain: ARC_CHAIN, transport: http() });
+        const account = getAddress(address);
+        const [units, wei] = await Promise.all([
+          client.readContract({
+            address: USDC_ADDRESS,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [account],
+          }),
+          client.getBalance({ address: account }),
+        ]);
+        if (cancelled) return;
         setBalances({
-          usdc: (usdc?.balance ?? 0) / 1e6,
-          hbar: (body.balance?.balance ?? 0) / 1e8,
-          // The trap this surfaces: an account with neither an association nor
-          // a free auto-slot silently cannot be paid in USDC.
-          canReceive: Boolean(usdc) || auto === -1 || auto > tokens.length,
+          usdc: Number(formatUnits(units, 6)),
+          native: Number(formatUnits(wei, 18)),
+          // One balance, two views. Scaled by 10^12 — see lib/chains.ts.
+          agree: wei / 10n ** 12n === units,
         });
       } catch {
         /* a balance we couldn't read is not worth an error state */
       }
     })();
-    return () => controller.abort();
-  }, [accountId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
 
   // Close the menu on outside click — a popover that only closes via its own
   // trigger is a popover people leave open.
@@ -89,12 +95,14 @@ export function Connect() {
 
   if (!available) {
     return (
-      <span
-        className="text-[12px] text-fg-4"
-        title="NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set"
+      <a
+        href="https://metamask.io/download/"
+        target="_blank"
+        rel="noreferrer"
+        className="text-[12px] text-fg-4 underline underline-offset-2 transition-colors hover:text-fg-2"
       >
-        wallet unavailable
-      </span>
+        No wallet found
+      </a>
     );
   }
 
@@ -102,20 +110,33 @@ export function Connect() {
     return <div className="h-[34px] w-[104px] animate-pulse rounded-lg bg-white/[0.04]" />;
   }
 
-  if (!accountId) {
+  if (!address) {
     return (
       <div className="flex items-center gap-2">
         {error ? (
           <span className="max-w-[220px] truncate text-[12px] text-[#f87171]">{error}</span>
         ) : null}
-        <Button onClick={() => void connect()} disabled={connecting} className="px-3.5 py-2 text-[13px]">
+        <Button
+          onClick={() => void connect()}
+          disabled={connecting}
+          className="px-3.5 py-2 text-[13px]"
+        >
           {connecting ? "Waiting for wallet…" : "Connect"}
         </Button>
       </div>
     );
   }
 
-  const explorer = NETWORK === "hedera:mainnet" ? "mainnet" : "testnet";
+  if (wrongChain) {
+    // Worth its own state rather than a silent failure. An EIP-712 domain
+    // includes the chain id, so a signature made on the wrong network is
+    // structurally valid and verifies against nothing.
+    return (
+      <Button onClick={() => void switchChain()} className="px-3.5 py-2 text-[13px]">
+        Switch to {ARC_CHAIN.name}
+      </Button>
+    );
+  }
 
   return (
     <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -123,11 +144,11 @@ export function Connect() {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        aria-label={`Wallet ${accountId}`}
+        aria-label={`Wallet ${address}`}
         className="flex items-center gap-2 rounded-lg border border-[var(--line)] px-2.5 py-1.5 text-[12px] text-fg-2 transition-colors hover:border-[var(--line-2)]"
       >
         <span className="h-1.5 w-1.5 rounded-full bg-[var(--live)]" aria-hidden />
-        <span className="mono">{accountId}</span>
+        <span className="mono">{shortAddress(address)}</span>
       </button>
 
       <AnimatePresence>
@@ -138,12 +159,14 @@ export function Connect() {
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.16, ease: EASE }}
             className={cn(
-              "absolute right-0 z-50 mt-1.5 w-[280px] rounded-xl border border-[var(--line-2)] bg-black p-4",
+              "absolute right-0 z-50 mt-1.5 w-[300px] rounded-xl border border-[var(--line-2)] bg-black p-4",
               "shadow-[0_16px_40px_rgba(0,0,0,0.9)]",
             )}
           >
-            <div className="text-[11px] uppercase tracking-[0.14em] text-fg-4">Hedera account</div>
-            <div className="mono mt-1.5 text-[13px] text-fg">{accountId}</div>
+            <div className="text-[11px] uppercase tracking-[0.14em] text-fg-4">
+              {ARC_CHAIN.name}
+            </div>
+            <div className="mono mt-1.5 break-all text-[12px] text-fg">{address}</div>
 
             {balances ? (
               <dl className="mt-4 space-y-2 border-t border-[var(--line)] pt-3 text-[12.5px]">
@@ -152,31 +175,36 @@ export function Connect() {
                   <dd className="mono text-fg">${balances.usdc.toFixed(2)}</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-fg-3">HBAR</dt>
-                  <dd className="mono text-fg-2">{balances.hbar.toFixed(4)} ℏ</dd>
+                  <dt
+                    className="text-fg-3"
+                    title="The same balance at 18 decimals — the view the EVM meters gas in"
+                  >
+                    gas view
+                  </dt>
+                  <dd className="mono text-fg-3">{balances.native.toFixed(6)}</dd>
                 </div>
               </dl>
             ) : null}
 
-            {balances && !balances.canReceive ? (
+            {balances && !balances.agree ? (
               <p className="mt-3 text-[12px] leading-relaxed text-[#fbbf24]">
-                This account isn&rsquo;t associated with USDC and has no automatic slots, so it
-                can&rsquo;t hold the token yet.
+                The ERC-20 and native balances disagree, so this isn&rsquo;t Arc&rsquo;s native
+                USDC. Amounts shown here can&rsquo;t be trusted.
               </p>
             ) : null}
 
             <p className="mt-3 text-[12px] leading-relaxed text-fg-3">
-              You sign each payment in your wallet. Xorv never holds your key, and the network fee
-              is paid by the facilitator — not by you.
+              You sign each payment in your wallet — an authorization, not a transaction. Xorv never
+              holds your key, and you pay no gas: the facilitator relays it and covers the fee.
             </p>
 
             <a
-              href={`https://hashscan.io/${explorer}/account/${accountId}`}
+              href={explorerAddress(address)}
               target="_blank"
               rel="noreferrer"
               className="mt-3 block text-[12px] text-fg-2 underline underline-offset-2 transition-colors hover:text-fg"
             >
-              View on HashScan
+              View on ArcScan
             </a>
 
             <button
@@ -187,7 +215,7 @@ export function Connect() {
               }}
               className="mt-4 w-full rounded-lg border border-[var(--line)] px-3 py-2 text-[12px] text-fg-2 transition-colors hover:border-[var(--line-2)] hover:text-fg"
             >
-              Disconnect
+              Forget this wallet
             </button>
           </motion.div>
         ) : null}

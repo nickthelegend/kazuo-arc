@@ -6,13 +6,26 @@
  * floating point starts lying. A `number` holds micro-USD losslessly well past
  * any price this network will ever see, and JSON carries it without ceremony.
  *
- * USDC on Hedera also has 6 decimals, so micro-USD and USDC's smallest unit are
- * the same integer. That is a happy coincidence, not a law, so the conversion
- * still goes through a named function — if this ever runs against a token with
- * different precision, there's one place to fix.
+ * USDC has 6 decimals, so micro-USD and USDC's smallest unit are the same
+ * integer. That is a happy coincidence, not a law, so the conversion still goes
+ * through a named function — if this ever runs against a token with different
+ * precision, there is one place to fix.
+ *
+ * ## What is no longer here
+ *
+ * On Hedera this file also carried an exchange-rate client, a rate cache, and
+ * tinybar conversions, because a job could be priced in HBAR *or* USDC and the
+ * two needed a live rate to relate. Arc has one asset: USDC is the money and
+ * USDC is the gas. There is no second denomination, so there is no rate to
+ * fetch, no cache to keep warm, and no window in which a stale quote misprices
+ * someone's work. Roughly eighty lines of correct, well-tested code deleted
+ * because the chain made the problem not exist.
+ *
+ * What replaced it is the one conversion Arc genuinely needs: between the two
+ * views of a single balance.
  */
 
-import { HBAR_DECIMALS, HEDERA_USDC_DECIMALS, mirrorNodeUrl } from "./constants.js";
+import { NATIVE_DECIMALS, USDC_DECIMALS } from "./constants.js";
 
 /** One US dollar, in micro-USD. */
 export const USD_MICROS = 1_000_000;
@@ -42,13 +55,13 @@ export function formatUsd(micros: number, opts: { compact?: boolean } = {}): str
 
 /** micro-USD → USDC smallest units, as the integer string x402 wants. */
 export function usdMicrosToUsdcUnits(micros: number): string {
-  const scale = 10 ** (HEDERA_USDC_DECIMALS - 6);
+  const scale = 10 ** (USDC_DECIMALS - 6);
   return String(Math.round(micros * scale));
 }
 
 /** USDC smallest units → micro-USD. */
 export function usdcUnitsToUsdMicros(units: string | number): number {
-  const scale = 10 ** (HEDERA_USDC_DECIMALS - 6);
+  const scale = 10 ** (USDC_DECIMALS - 6);
   return Math.round(Number(units) / scale);
 }
 
@@ -57,92 +70,42 @@ export function formatUsdc(units: string | number): string {
   return formatUsd(usdcUnitsToUsdMicros(units));
 }
 
-/** Render tinybars as an ℏ string. */
-export function formatHbar(tinybars: string | number): string {
-  const hbar = Number(tinybars) / 10 ** HBAR_DECIMALS;
-  return `${hbar.toFixed(hbar >= 1 ? 4 : 8).replace(/0+$/, "").replace(/\.$/, "")} ℏ`;
-}
-
 /**
- * The network's own HBAR/USD rate, straight from the Mirror Node.
+ * The scale between the two views of one balance: 10^12.
  *
- * Hedera publishes the exchange rate it charges fees at, so the HBAR price of a
- * job comes from the ledger rather than from a third-party oracle we'd have to
- * trust and keep alive. The shape is `cent_equivalent / hbar_equivalent` cents
- * per HBAR.
+ * Named, exported, and used everywhere rather than written inline, because a
+ * literal `10n ** 12n` in a payment path is indistinguishable from a typo and
+ * the consequence of getting it wrong is off by a factor of a trillion.
  */
-export interface HbarRate {
-  /** US cents per 1 HBAR. */
-  centsPerHbar: number;
-  /** Epoch seconds this rate expires; Hedera rotates it hourly. */
-  expiresAt: number;
-  fetchedAt: number;
-}
-
-interface MirrorExchangeRate {
-  current_rate: { cent_equivalent: number; hbar_equivalent: number; expiration_time: number };
-}
-
-/** Fetch the current HBAR/USD rate for a network. Throws on a bad response. */
-export async function fetchHbarRate(network: string): Promise<HbarRate> {
-  const url = `${mirrorNodeUrl(network)}/api/v1/network/exchangerate`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) throw new Error(`mirror node exchangerate → ${res.status}`);
-  const body = (await res.json()) as MirrorExchangeRate;
-  const { cent_equivalent, hbar_equivalent, expiration_time } = body.current_rate;
-  if (!cent_equivalent || !hbar_equivalent) throw new Error("mirror node returned an empty rate");
-  return {
-    centsPerHbar: cent_equivalent / hbar_equivalent,
-    expiresAt: expiration_time,
-    fetchedAt: Date.now(),
-  };
-}
+export const NATIVE_PER_USDC_UNIT = 10n ** BigInt(NATIVE_DECIMALS - USDC_DECIMALS);
 
 /**
- * micro-USD → tinybars at a given rate, rounded up.
+ * The 18-decimal native view of an amount denominated in USDC units.
  *
- * Rounding up rather than to-nearest is deliberate: the provider quoted a price
- * in dollars, and a half-tinybar rounded down is the provider silently eating
- * the difference on every single job.
+ * Needed in exactly one place — proving a buyer paid no gas. The native balance
+ * is not a separate pot that a fee comes out of; it is the same balance, so a
+ * payment of `n` units drops it by `n * 10^12` on its own. Differencing the
+ * native balance across a payment therefore measures *payment plus gas*. Gas is
+ * the surplus over this number, and for a buyer using EIP-3009 it must be zero.
  */
-export function usdMicrosToTinybars(micros: number, rate: HbarRate): string {
-  const cents = micros / 10_000; // 1 cent = 10_000 micro-USD
-  const hbar = cents / rate.centsPerHbar;
-  return String(BigInt(Math.ceil(hbar * 10 ** HBAR_DECIMALS)));
+export function usdcUnitsToNativeWei(units: string | number | bigint): bigint {
+  return BigInt(units) * NATIVE_PER_USDC_UNIT;
 }
 
-/** tinybars → micro-USD at a given rate. */
-export function tinybarsToUsdMicros(tinybars: string | number, rate: HbarRate): number {
-  const hbar = Number(tinybars) / 10 ** HBAR_DECIMALS;
-  return Math.round(hbar * rate.centsPerHbar * 10_000);
+/** The 6-decimal ERC-20 view of a native wei amount. Truncates; it never rounds up. */
+export function nativeWeiToUsdcUnits(wei: string | number | bigint): bigint {
+  return BigInt(wei) / NATIVE_PER_USDC_UNIT;
 }
 
 /**
- * A rate cache that survives a burst of quotes without hammering the Mirror
- * Node, and refuses to serve a rate old enough to misprice a job.
+ * Render native wei as a dollar string.
+ *
+ * Used for gas costs, which are the only figures in the system genuinely
+ * denominated at 18 decimals. Six decimal places, because an Arc transaction
+ * costs single-digit thousandths of a cent and `$0.00` says nothing.
  */
-export class HbarRateCache {
-  private cached: HbarRate | null = null;
-  private inflight: Promise<HbarRate> | null = null;
-
-  constructor(
-    private readonly network: string,
-    private readonly maxAgeMs = 60_000,
-  ) {}
-
-  async get(): Promise<HbarRate> {
-    const fresh = this.cached && Date.now() - this.cached.fetchedAt < this.maxAgeMs;
-    if (fresh && this.cached) return this.cached;
-    // Collapse concurrent misses onto one request; a burst of quotes at startup
-    // would otherwise open a dozen sockets for the same number.
-    this.inflight ??= fetchHbarRate(this.network)
-      .then((rate) => {
-        this.cached = rate;
-        return rate;
-      })
-      .finally(() => {
-        this.inflight = null;
-      });
-    return this.inflight;
-  }
+export function formatNative(wei: string | number | bigint): string {
+  const micros = Number(BigInt(wei) / NATIVE_PER_USDC_UNIT);
+  if (micros === 0) return "$0";
+  return `$${(micros / USD_MICROS).toFixed(6)}`;
 }

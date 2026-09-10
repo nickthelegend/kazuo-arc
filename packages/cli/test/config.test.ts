@@ -37,9 +37,9 @@ describe("config round trip", () => {
     const config = {
       nodeId: "abc",
       label: "test-node",
-      network: "hedera:testnet",
+      network: "eip155:5042002",
       brokerUrl: "http://localhost:8402",
-      accountId: "0.0.1001",
+      address: "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B",
       privateKey: "deadbeef",
       capabilities: [mod.defaultCapability("echo")],
       region: "eu-west",
@@ -68,9 +68,9 @@ describe("config round trip", () => {
     mod.saveConfig({
       nodeId: "a",
       label: "n",
-      network: "hedera:testnet",
+      network: "eip155:5042002",
       brokerUrl: "u",
-      accountId: "0.0.1",
+      address: "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B",
       privateKey: "k",
       capabilities: [],
       region: null,
@@ -88,9 +88,9 @@ describe("config round trip", () => {
     mod.saveConfig({
       nodeId: "a",
       label: "n",
-      network: "hedera:testnet",
+      network: "eip155:5042002",
       brokerUrl: "u",
-      accountId: "0.0.1",
+      address: "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B",
       privateKey: "k",
       capabilities: [],
       region: null,
@@ -108,7 +108,7 @@ describe("config round trip", () => {
     fs.writeFileSync(mod.configPath(), JSON.stringify({ label: "old" }));
     const loaded = mod.loadConfig()!;
     expect(loaded.label).toBe("old");
-    expect(loaded.network).toBe("hedera:testnet");
+    expect(loaded.network).toBe("eip155:5042002");
     expect(loaded.capabilities).toEqual([]);
     expect(loaded.tunnel).toEqual({ enabled: false, hostname: null });
   });
@@ -158,7 +158,7 @@ describe("earnings ledger", () => {
     mod.appendEarning({
       at: 2,
       jobId: "job_b",
-      asset: "hbar",
+      asset: "usdc",
       amount: "1462167",
       usdMicros: 1_000,
       durationMs: 700,

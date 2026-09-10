@@ -4,7 +4,7 @@
  * State is in memory on purpose. A provider's membership is *liveness*, not a
  * record: it is only real while heartbeats keep arriving, so there is nothing
  * here worth surviving a restart. The durable half of the story — who
- * registered, who was alive, what each job paid — goes to Hedera Consensus
+ * registered, who was alive, what each job paid — goes to the on-chain
  * Service, where it is public and append-only rather than trapped in our
  * database.
  */
@@ -67,7 +67,7 @@ export class Registry {
       this.persistence.saveStats(
         provider.nodeId,
         provider.label,
-        provider.accountId,
+        provider.address,
         provider.stats,
       );
     } catch (err) {
@@ -92,7 +92,7 @@ export class Registry {
       id: existing?.id ?? newId("prv"),
       nodeId: req.nodeId,
       label: req.label,
-      accountId: req.accountId,
+      address: req.address,
       endpoint: req.endpoint,
       capabilities: req.capabilities,
       status: "online",
@@ -109,13 +109,12 @@ export class Registry {
           jobsCompleted: 0,
           jobsFailed: 0,
           earnedUsdcMicros: 0,
-          earnedTinybars: 0,
           avgDurationMs: 0,
         },
       token: existing?.token ?? randomBytes(24).toString("base64url"),
       available: Object.fromEntries(req.capabilities.map((c) => [c.id, true])),
       uptimeSeconds: 0,
-      registryConsensusAt: existing?.registryConsensusAt ?? null,
+      registryTxHash: existing?.registryTxHash ?? null,
     };
 
     if (existing) this.byToken.delete(existing.token);
@@ -222,7 +221,7 @@ export class Registry {
   /** Note that a job finished, folding the outcome into the provider's stats. */
   jobFinished(
     id: string,
-    outcome: { ok: boolean; durationMs: number; usdcMicros?: number; tinybars?: number },
+    outcome: { ok: boolean; durationMs: number; usdcMicros?: number },
   ): void {
     const provider = this.providers.get(id);
     if (!provider) return;
@@ -235,7 +234,6 @@ export class Registry {
         (provider.stats.avgDurationMs * n + outcome.durationMs) / (n + 1),
       );
       provider.stats.earnedUsdcMicros += outcome.usdcMicros ?? 0;
-      provider.stats.earnedTinybars += outcome.tinybars ?? 0;
     } else {
       provider.stats.jobsFailed += 1;
     }
@@ -286,6 +284,6 @@ function successScore(provider: ProviderRecord): number {
 /** Drop the identity columns, leaving just the ProviderStats shape. */
 function stripKeys(row: PersistedProviderStats | undefined) {
   if (!row) return undefined;
-  const { nodeId: _n, label: _l, accountId: _a, ...stats } = row;
+  const { nodeId: _n, label: _l, address: _a, ...stats } = row;
   return stats;
 }

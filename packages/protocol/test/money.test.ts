@@ -7,20 +7,17 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  HbarRateCache,
+  NATIVE_PER_USDC_UNIT,
   USD_MICROS,
-  formatHbar,
+  formatNative,
   formatUsd,
   formatUsdc,
+  nativeWeiToUsdcUnits,
   parseUsd,
-  tinybarsToUsdMicros,
-  usdMicrosToTinybars,
   usdMicrosToUsdcUnits,
+  usdcUnitsToNativeWei,
   usdcUnitsToUsdMicros,
-  type HbarRate,
 } from "../src/money.js";
-
-const RATE: HbarRate = { centsPerHbar: 6.839166666666666, expiresAt: 0, fetchedAt: Date.now() };
 
 describe("parseUsd", () => {
   it("parses plain numbers, strings and currency-formatted input identically", () => {
@@ -80,106 +77,55 @@ describe("USDC conversion", () => {
   });
 });
 
-describe("HBAR conversion", () => {
-  it("converts micro-USD to tinybars at the given rate", () => {
-    // $0.001 = 0.1 cents; at 6.839166… cents/ℏ that's 0.014621… ℏ = 1_462_1xx tℏ.
-    const tinybars = Number(usdMicrosToTinybars(1_000, RATE));
-    expect(tinybars).toBeGreaterThan(1_462_000);
-    expect(tinybars).toBeLessThan(1_463_000);
+/**
+ * The dual-face conversions are the single most dangerous arithmetic in this
+ * codebase. USDC's ERC-20 view is 6 decimals and the EVM's native/gas view of
+ * *the same balance* is 18, so every mistake here is off by a factor of a
+ * trillion — large enough to be caught instantly in a test and small enough to
+ * look plausible in a log line.
+ */
+describe("the two views of one balance", () => {
+  it("scales by exactly 10^12, not 10^11 or 10^13", () => {
+    expect(NATIVE_PER_USDC_UNIT).toBe(1_000_000_000_000n);
   });
 
-  it("always rounds UP, so the provider never silently eats the remainder", () => {
-    // A rate chosen to land mid-tinybar; rounding down would under-pay.
-    const awkward: HbarRate = { centsPerHbar: 7.3, expiresAt: 0, fetchedAt: 0 };
-    const exact = (1_000 / 10_000 / 7.3) * 1e8;
-    const got = Number(usdMicrosToTinybars(1_000, awkward));
-    expect(got).toBe(Math.ceil(exact));
-    expect(got).toBeGreaterThanOrEqual(exact);
+  it("converts a payment amount into its native-view equivalent", () => {
+    // $0.001 = 1000 units on the ERC-20 face = 1e15 wei on the native face.
+    expect(usdcUnitsToNativeWei(1_000)).toBe(1_000_000_000_000_000n);
+    expect(usdcUnitsToNativeWei("250000")).toBe(250_000_000_000_000_000n);
   });
 
-  it("returns an integer string with no exponent, even for large amounts", () => {
-    const big = usdMicrosToTinybars(10_000 * USD_MICROS, RATE);
-    expect(big).toMatch(/^\d+$/);
-    expect(big).not.toContain("e");
+  it("round-trips a whole number of units in both directions", () => {
+    for (const units of [0n, 1n, 1_000n, 250_000n, 20_000_000n]) {
+      expect(nativeWeiToUsdcUnits(usdcUnitsToNativeWei(units))).toBe(units);
+    }
   });
 
-  it("round-trips back to approximately the original dollar amount", () => {
-    const micros = 10_000;
-    const back = tinybarsToUsdMicros(usdMicrosToTinybars(micros, RATE), RATE);
-    // Round-up on the way out means back >= original, within one tinybar's worth.
-    expect(back).toBeGreaterThanOrEqual(micros);
-    expect(back - micros).toBeLessThan(10);
+  it("truncates sub-unit dust rather than rounding it up into money", () => {
+    // Anything below 10^12 wei is less than one USDC unit and cannot be paid.
+    expect(nativeWeiToUsdcUnits(999_999_999_999n)).toBe(0n);
+    expect(nativeWeiToUsdcUnits(1_999_999_999_999n)).toBe(1n);
+  });
+
+  it("makes the zero-gas proof arithmetic come out right", () => {
+    // This is the exact computation the settlement proof performs. A buyer's
+    // native balance falls by the payment even when they pay no gas, because
+    // there is only one balance. Gas is the surplus over that.
+    const before = 20_000_000n * NATIVE_PER_USDC_UNIT;
+    const paid = 1_000n;
+    const after = before - usdcUnitsToNativeWei(paid);
+    const gas = before - after - usdcUnitsToNativeWei(paid);
+    expect(gas).toBe(0n);
   });
 });
 
-describe("formatHbar", () => {
-  it("renders tinybars as a trimmed ℏ figure", () => {
-    expect(formatHbar("100000000")).toBe("1 ℏ");
-    expect(formatHbar("1462167")).toContain("0.0146");
-  });
-});
-
-describe("HbarRateCache", () => {
-  it("collapses concurrent misses onto a single fetch", async () => {
-    let calls = 0;
-    const original = globalThis.fetch;
-    globalThis.fetch = (async () => {
-      calls += 1;
-      // A small delay so all three callers arrive while the first is in flight.
-      await new Promise((r) => setTimeout(r, 20));
-      return {
-        ok: true,
-        json: async () => ({
-          current_rate: { cent_equivalent: 821, hbar_equivalent: 120, expiration_time: 0 },
-        }),
-      } as Response;
-    }) as typeof fetch;
-
-    try {
-      const cache = new HbarRateCache("hedera:testnet");
-      const [a, b, c] = await Promise.all([cache.get(), cache.get(), cache.get()]);
-      expect(calls).toBe(1);
-      expect(a.centsPerHbar).toBeCloseTo(821 / 120);
-      expect(b).toEqual(a);
-      expect(c).toEqual(a);
-    } finally {
-      globalThis.fetch = original;
-    }
+describe("formatNative", () => {
+  it("renders gas costs at six decimals, because Arc fees are thousandths of a cent", () => {
+    expect(formatNative(4_281_188_000_000_000n)).toBe("$0.004281");
+    expect(formatNative(0n)).toBe("$0");
   });
 
-  it("serves a cached rate inside the max age and refetches after it", async () => {
-    let calls = 0;
-    const original = globalThis.fetch;
-    globalThis.fetch = (async () => {
-      calls += 1;
-      return {
-        ok: true,
-        json: async () => ({
-          current_rate: { cent_equivalent: 700, hbar_equivalent: 100, expiration_time: 0 },
-        }),
-      } as Response;
-    }) as typeof fetch;
-
-    try {
-      const cache = new HbarRateCache("hedera:testnet", 30);
-      await cache.get();
-      await cache.get();
-      expect(calls).toBe(1);
-      await new Promise((r) => setTimeout(r, 45));
-      await cache.get();
-      expect(calls).toBe(2);
-    } finally {
-      globalThis.fetch = original;
-    }
-  });
-
-  it("propagates a failed fetch rather than serving a made-up rate", async () => {
-    const original = globalThis.fetch;
-    globalThis.fetch = (async () => ({ ok: false, status: 503 }) as Response) as typeof fetch;
-    try {
-      await expect(new HbarRateCache("hedera:testnet").get()).rejects.toThrow(/503/);
-    } finally {
-      globalThis.fetch = original;
-    }
+  it("renders dust below one micro-dollar as $0 rather than a misleading rounding", () => {
+    expect(formatNative(999_999_999_999n)).toBe("$0");
   });
 });

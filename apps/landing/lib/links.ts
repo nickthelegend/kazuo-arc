@@ -6,26 +6,36 @@ export const BROKER_URL = (
 export const APP_URL = process.env.NEXT_PUBLIC_XORV_APP_URL ?? "http://localhost:3002";
 export const LOOM_URL = "https://loompad.tech";
 export const X402_URL = "https://x402.org";
-export const HEDERA_URL = "https://hedera.com";
-export const NPM_URL = "https://www.npmjs.com/package/xorv";
+export const ARC_URL = "https://www.circle.com/arc";
+export const CIRCLE_URL = "https://www.circle.com";
+export const NPM_URL = "https://www.npmjs.com/package/@xorv/cli";
 
 /**
  * The live testnet ids this site links to.
  *
  * Every number quoted on the page resolves to something a reader can open on
- * HashScan. A marketing site for a payments network that can't show you the
+ * ArcScan. A marketing site for a payments network that can't show you the
  * payments is just a claim.
  */
+const EXPLORER = "https://testnet.arcscan.app";
+
 export const CHAIN = {
-  network: "hedera:testnet",
-  usdc: "0.0.429274",
-  usdcUrl: "https://hashscan.io/testnet/token/0.0.429274",
-  topics: {
-    registry: "0.0.9848245",
-    heartbeat: "0.0.9848246",
-    receipts: "0.0.9848247",
-  },
-  topicUrl: (id: string) => `https://hashscan.io/testnet/topic/${id}`,
+  network: "eip155:5042002",
+  chainId: 5042002,
+  /** Circle's FiatTokenV2 — the ERC-20 face of Arc's native USDC. */
+  usdc: "0x3600000000000000000000000000000000000000",
+  usdcUrl: `${EXPLORER}/token/0x3600000000000000000000000000000000000000`,
+  /**
+   * The audit log.
+   *
+   * Three Hedera Consensus Service topics collapsed into one contract with
+   * three indexed event streams — Arc has no HCS, and event logs give the same
+   * ordered, append-only, publicly-readable guarantee.
+   */
+  log: "0x383f5153db8bb18c7c25157fb3493645a465eef3",
+  logUrl: `${EXPLORER}/address/0x383f5153db8bb18c7c25157fb3493645a465eef3`,
+  txUrl: (hash: string) => `${EXPLORER}/tx/${hash}`,
+  addressUrl: (address: string) => `${EXPLORER}/address/${address}`,
 };
 
 export const NAV = [

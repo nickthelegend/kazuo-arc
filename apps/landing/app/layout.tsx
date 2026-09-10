@@ -12,7 +12,7 @@ const inter = Inter({
 const SITE = "https://xorv.network";
 const TITLE = "Xorv — rent out your idle AI subscription, get paid in USDC";
 const DESCRIPTION =
-  "Xorv is a decentralized AI capacity network. Share the Claude, Codex or Grok quota you already pay for, run jobs from anyone on the network, and get paid per job in USDC over x402 on Hedera.";
+  "Xorv is a decentralized AI capacity network. Share the Claude, Codex or Grok quota you already pay for, run jobs from anyone on the network, and get paid per job in USDC over x402 on Arc.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
@@ -21,7 +21,8 @@ export const metadata: Metadata = {
   applicationName: "Xorv",
   keywords: [
     "x402",
-    "Hedera",
+    "Arc",
+    "Circle",
     "USDC",
     "AI capacity network",
     "agent payments",
@@ -80,7 +81,7 @@ const jsonLd = {
       operatingSystem: "macOS, Linux, Windows",
       url: SITE,
       description:
-        "Command-line provider node for the Xorv network. Share idle AI subscription capacity and get paid per job in USDC over x402 on Hedera.",
+        "Command-line provider node for the Xorv network. Share idle AI subscription capacity and get paid per job in USDC over x402 on Arc.",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
       publisher: { "@id": `${SITE}/#organization` },
     },

@@ -17,7 +17,7 @@
  * it inherits every guarantee the CLI already has — the quote is shown before
  * money moves, the price ceiling is enforced, and the settlement transaction
  * comes back with the result. There is no second implementation to keep in
- * sync, and nothing here talks to Hedera directly.
+ * sync, and nothing here touches the chain directly.
  */
 
 import fs from "node:fs";
@@ -82,9 +82,9 @@ live provider that can do the work.
 \`\`\`json
 {
   "jobId": "job_…",
-  "quote": { "provider": { "label": "…", "accountId": "0.0.…" }, "priceLabel": "$0.2500" },
+  "quote": { "provider": { "label": "…", "address": "0.0.…" }, "priceLabel": "$0.2500" },
   "settlementTransaction": "0.0.…@…",
-  "hashscan": "https://hashscan.io/testnet/transaction/…",
+  "arcscan": "https://arcscan.io/testnet/transaction/…",
   "status": "completed",
   "result": "…"
 }
@@ -94,7 +94,7 @@ Report three things back, always:
 
 1. **The answer** — \`result\`.
 2. **Who ran it and what it cost** — the provider label and \`priceLabel\`.
-3. **The receipt** — the \`hashscan\` link.
+3. **The receipt** — the \`arcscan\` link.
 
 The third one is not decoration. A payment happened on a public ledger; the
 user should be able to check it. Never report a paid job without its link.

@@ -124,7 +124,7 @@ it, because that output gets pasted into issues and chat windows.
 
 ### What payment safety does *not* cover
 
-Settlement happens **before** the job runs (a signed Hedera transaction is only
+Settlement happens **before** the job runs (a signed Arc transaction is only
 valid for 180 seconds — see ARCHITECTURE.md). A provider can therefore take the
 money and fail. The mitigation is network-level: the job is reassigned to
 another provider at no extra charge, and the failure counts against the original
@@ -169,7 +169,7 @@ mainnet.
 
 ## On-chain data
 
-Everything published to Hedera Consensus Service is **public and permanent**.
+Everything published to Arc Consensus Service is **public and permanent**.
 Receipts deliberately carry a **SHA-256 of the result**, never the result
 itself, so the payload stays private while the record stays verifiable. Prompts
 and results are never published on-chain.

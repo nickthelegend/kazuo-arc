@@ -3,41 +3,84 @@
  *
  * Two things live here that the broker and the CLI both need:
  *
- *  1. `buildFacilitator` — Xorv can run its **own** facilitator in-process
- *     instead of calling out to a hosted one. That matters beyond independence:
- *     on Hedera the facilitator is the fee payer, so running it ourselves is
- *     what lets a job poster hold nothing but USDC and still transact. They
- *     sign a transfer; Xorv adds the second signature and pays the HBAR.
+ *  1. `buildFacilitator` — Xorv runs its **own** facilitator in-process instead
+ *     of calling out to a hosted one. That matters beyond independence: the
+ *     facilitator is the party that broadcasts, so running it ourselves is what
+ *     lets a job poster hold nothing but USDC and still transact. They sign an
+ *     authorization; Xorv submits it and pays the fee.
  *
- *  2. `paymentOptionsFor` — the `accepts` array a 402 offers, which is where
- *     "pay in USDC or pay in HBAR, your choice" comes from.
+ *  2. `paymentOptionsFor` — the `accepts` array a 402 offers.
+ *
+ * ## What changed from the Hedera version, and what didn't
+ *
+ * The mechanism is completely different and the guarantee is identical.
+ *
+ * On Hedera the buyer built a native protobuf `TransferTransaction`, signed it,
+ * and handed over a *partially signed transaction* for the facilitator to
+ * counter-sign as fee payer. On Arc the buyer signs an **EIP-3009
+ * authorization** — an EIP-712 typed-data message, not a transaction — and the
+ * facilitator calls `transferWithAuthorization` on the USDC contract with it.
+ * The buyer's bytes are never a transaction and never touch the mempool.
+ *
+ * Both end in the same place: the buyer needs no gas token, and the money moves
+ * buyer → provider directly with no escrow in between.
+ *
+ * The consequence for this file is that there is **no Xorv-specific scheme
+ * code**. Hedera needed a bespoke signer that built a fresh SDK client per
+ * settlement, because submitting a transaction frozen by someone else's client
+ * corrupted the submitting client's internal state and every payment after the
+ * first came back as a bare 402. Arc needs `registerExactEvmScheme` and a viem
+ * client. The stock scheme settles as-is.
  */
 
-import type { Client, PrivateKey } from "@hiero-ledger/sdk";
 import type { FacilitatorClient } from "@x402/core/server";
 import type { PaymentOption } from "@x402/core/http";
 import type { Network, PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { x402Facilitator } from "@x402/core/facilitator";
 import { HTTPFacilitatorClient } from "@x402/core/server";
-import { ExactHederaScheme as ExactHederaFacilitator } from "@x402/hedera/exact/facilitator";
-import {
-  createHederaPreflightTransfer,
-  createHederaSignAndSubmitTransaction,
-  createHederaVerifyPayerSignature,
-  toFacilitatorHederaSigner,
-} from "@x402/hedera";
-import { HBAR_ASSET_ID, QUOTE_TTL_SECONDS, XORV_SCHEME, usdcTokenId } from "./constants.js";
-import { hederaClient } from "./hedera.js";
-import { type HbarRate, usdMicrosToTinybars, usdMicrosToUsdcUnits } from "./money.js";
+import { registerExactEvmScheme } from "@x402/evm/exact/facilitator";
+import { toFacilitatorEvmSigner } from "@x402/evm";
+import { getAddress, type PublicClient, type WalletClient } from "viem";
+import { QUOTE_TTL_SECONDS, XORV_SCHEME, usdcAddress } from "./constants.js";
+import { readClient, writeClient } from "./chain.js";
+import { usdMicrosToUsdcUnits } from "./money.js";
 
 /**
- * The public x402 facilitator, which supports Hedera testnet with no signup.
- * Kept as a named fallback so `XORV_FACILITATOR=hosted` is a one-word change.
+ * A hosted x402 facilitator, kept as a named fallback so switching is a
+ * one-word config change. There is no public Arc facilitator today, which is
+ * part of why Xorv runs its own.
  */
 export const PUBLIC_FACILITATOR_URL = "https://x402.org/facilitator";
 
 /**
- * An in-process facilitator backed by our own Hedera account.
+ * Compose the signer the EVM scheme wants.
+ *
+ * Built by hand rather than spread from the viem clients because the surface
+ * spans both of them — reads and a typed-data check come from the public
+ * client, writes from the wallet — and `writeContract`/`sendTransaction` must
+ * stay bound to the client that actually holds the account. Spreading two viem
+ * clients into one object happens to work today and breaks silently the moment
+ * either changes how its actions are attached.
+ */
+export function facilitatorSigner(opts: {
+  address: string;
+  wallet: WalletClient;
+  public: PublicClient;
+}) {
+  return toFacilitatorEvmSigner({
+    address: getAddress(opts.address),
+    readContract: (args) => opts.public.readContract(args as never) as Promise<unknown>,
+    verifyTypedData: (args) => opts.public.verifyTypedData(args as never),
+    getCode: (args) => opts.public.getCode(args as never),
+    waitForTransactionReceipt: (args) =>
+      opts.public.waitForTransactionReceipt(args as never) as never,
+    writeContract: (args) => opts.wallet.writeContract(args as never),
+    sendTransaction: (args) => opts.wallet.sendTransaction(args as never),
+  });
+}
+
+/**
+ * An in-process facilitator backed by our own Arc account.
  *
  * `x402Facilitator` implements the same `FacilitatorClient` surface the HTTP
  * client does, so the resource server cannot tell the difference — which is the
@@ -45,47 +88,25 @@ export const PUBLIC_FACILITATOR_URL = "https://x402.org/facilitator";
  */
 export function buildLocalFacilitator(opts: {
   network: string;
-  client: Client;
-  feePayerId: string;
-  feePayerKey: PrivateKey;
+  feePayerAddress: string;
+  feePayerKey: string;
 }): FacilitatorClient {
-  const signer = toFacilitatorHederaSigner({
-    getAddresses: () => [opts.feePayerId],
+  const publicClient = readClient(opts.network);
+  const wallet = writeClient(opts.network, opts.feePayerKey);
 
-    /**
-     * One fresh SDK client per settlement, closed when it's done.
-     *
-     * A single long-lived client cannot be reused here. The payload is a
-     * transaction frozen by *someone else's* client — the payer's — carrying
-     * their node account ids and transaction id. Submitting one of those
-     * mutates the submitting client's internal request state, and the next
-     * settlement on the same client dies inside the SDK with "Cannot read
-     * properties of undefined (reading 'length')". The symptom is brutal to
-     * diagnose from outside: the first payment of a process succeeds, every
-     * one after it comes back as a bare 402.
-     *
-     * The `buildClient` factory is called per settlement precisely so this can
-     * be done. Constructing a client is cheap next to a consensus round-trip,
-     * and closing it in `finally` keeps the gRPC pools from accumulating.
-     */
-    signAndSubmitTransaction: async (transactionBase64, feePayer, network) => {
-      const client = hederaClient(network, opts.feePayerId, opts.feePayerKey);
-      try {
-        const submit = createHederaSignAndSubmitTransaction(() => client, opts.feePayerKey);
-        return await submit(transactionBase64, feePayer, network);
-      } finally {
-        client.close();
-      }
-    },
-
-    verifyPayerSignature: createHederaVerifyPayerSignature(),
-    preflightTransfer: createHederaPreflightTransfer(),
+  const facilitator = new x402Facilitator();
+  registerExactEvmScheme(facilitator, {
+    signer: facilitatorSigner({
+      address: opts.feePayerAddress,
+      wallet,
+      public: publicClient,
+    }),
+    // Not optional, and it fails confusingly when omitted: scheme routing is
+    // derived from this set, and the `eip155:*` wildcard is only synthesised
+    // when two or more networks share a namespace. With it missing, verify()
+    // throws from inside a regex helper rather than saying what is unconfigured.
+    networks: [opts.network as Network],
   });
-
-  const facilitator = new x402Facilitator().register(
-    opts.network as Network,
-    new ExactHederaFacilitator(signer),
-  );
 
   // Adapt x402Facilitator to the FacilitatorClient shape the resource server
   // expects. Everything is local, so there is no network hop and no retry.
@@ -130,22 +151,20 @@ export function buildHostedFacilitator(url: string): FacilitatorClient {
  * Pick a facilitator from config.
  *
  * `self` (the default) runs one in-process; anything else is treated as the URL
- * of a hosted facilitator, with the public x402.org one as the shorthand
- * `hosted`.
+ * of a hosted facilitator, with `hosted` as shorthand for the public one.
  */
 export function buildFacilitator(opts: {
   mode: string;
   network: string;
-  client: Client;
-  feePayerId: string;
-  feePayerKey: PrivateKey;
+  feePayerAddress: string;
+  feePayerKey: string;
 }): { facilitator: FacilitatorClient; description: string; feePayer: string } {
   const mode = (opts.mode || "self").trim();
   if (mode === "self") {
     return {
       facilitator: buildLocalFacilitator(opts),
       description: "self-hosted (in-process)",
-      feePayer: opts.feePayerId,
+      feePayer: opts.feePayerAddress,
     };
   }
   const url = mode === "hosted" ? PUBLIC_FACILITATOR_URL : mode;
@@ -157,56 +176,51 @@ export function buildFacilitator(opts: {
 }
 
 /**
- * The `accepts` array for a priced resource: the same job, offered in USDC and
- * in HBAR, with the caller free to pick either.
+ * The `accepts` array for a priced resource.
+ *
+ * One option, where Hedera offered two. There is no second asset on Arc to
+ * offer — USDC is both the money and the gas — so the "pay in USDC or pay in
+ * HBAR, your choice" branch, along with the live exchange rate it depended on,
+ * has no counterpart here.
  *
  * `payTo` is a resolver rather than a fixed string because Xorv pays the
  * matched **provider** directly — the broker never takes custody of a job's
  * money, it only introduces the two parties and witnesses the result.
+ *
+ * `extra` carries the token's EIP-712 domain, which the caller must have read
+ * from the contract. It is not optional and it is not guessable: an EIP-3009
+ * signature is made over `(name, version, chainId, verifyingContract)`, and a
+ * wrong `version` yields a signature that verifies against nothing, reported as
+ * an opaque failure with no field to point at.
  */
 export function paymentOptionsFor(opts: {
   network: string;
   priceUsdMicros: number;
   payTo: PaymentOption["payTo"];
-  hbarRate?: HbarRate | null;
+  domain: { name: string; version: string };
   maxTimeoutSeconds?: number;
 }): PaymentOption[] {
-  const network = opts.network as Network;
-  const maxTimeoutSeconds = opts.maxTimeoutSeconds ?? QUOTE_TTL_SECONDS;
-
-  const options: PaymentOption[] = [
+  return [
     {
       scheme: XORV_SCHEME,
-      network,
+      network: opts.network as Network,
       payTo: opts.payTo,
       price: {
-        asset: usdcTokenId(opts.network),
+        asset: usdcAddress(opts.network),
         amount: usdMicrosToUsdcUnits(opts.priceUsdMicros),
       },
-      maxTimeoutSeconds,
-    },
+      maxTimeoutSeconds: opts.maxTimeoutSeconds ?? QUOTE_TTL_SECONDS,
+      extra: { name: opts.domain.name, version: opts.domain.version },
+    } as PaymentOption,
   ];
-
-  // HBAR is only offered when we have a live rate. Quoting it from a stale or
-  // missing rate would misprice the job in the provider's disfavour, and a
-  // missing option is easier to explain than a wrong price.
-  if (opts.hbarRate) {
-    options.push({
-      scheme: XORV_SCHEME,
-      network,
-      payTo: opts.payTo,
-      price: {
-        asset: HBAR_ASSET_ID,
-        amount: usdMicrosToTinybars(opts.priceUsdMicros, opts.hbarRate),
-      },
-      maxTimeoutSeconds,
-    });
-  }
-
-  return options;
 }
 
-/** Which asset a settled payment used, for display and receipts. */
-export function assetKind(assetId: string): "usdc" | "hbar" {
-  return assetId === HBAR_ASSET_ID ? "hbar" : "usdc";
+/**
+ * Which asset a settled payment used, for display and receipts.
+ *
+ * Always USDC on Arc. Kept as a function so receipt-rendering code is identical
+ * across both chains and a future second asset is a change here, not everywhere.
+ */
+export function assetKind(_assetId: string): "usdc" {
+  return "usdc";
 }

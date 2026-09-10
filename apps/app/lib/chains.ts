@@ -1,44 +1,60 @@
 import { defineChain } from "viem";
 
 /**
- * Hedera testnet, as an EVM chain.
+ * Arc, as viem and the wallet see it.
  *
- * Hedera runs a JSON-RPC relay in front of the ledger, so wallets can treat it
- * like any EVM network. Two things about it routinely surprise people:
+ * One thing about this chain routinely surprises people, and it is the same
+ * thing everywhere in this codebase:
  *
- *  - **HBAR is 18 decimals here, not 8.** The ledger counts tinybars (8dp); the
- *    relay scales to weibars (18dp) so `value` fields behave like every other
- *    EVM chain. A balance read through a wallet and one read through the Hedera
- *    SDK will differ by 10^10 if you forget.
- *  - **Chain id 296 is testnet**, 295 is mainnet, 297 is previewnet.
+ * **USDC is the native gas token, and it appears at two precisions.** The
+ * `nativeCurrency.decimals: 18` below is not a mistake and does not contradict
+ * USDC's 6. An EVM meters gas at 18 decimals, so that is what the native
+ * balance is denominated in; the ERC-20 face of *the same balance* reports 6,
+ * and that is what money is denominated in. A wallet showing "16.997 USDC" and
+ * `balanceOf` returning `16997575` are the same figure viewed twice.
  *
- * Defined locally rather than imported from viem/chains so the RPC and explorer
- * are pinned in one readable place next to that warning.
+ * Every payment amount in this application is the 6-decimal view.
  */
-export const hederaTestnet = defineChain({
-  id: 296,
-  name: "Hedera Testnet",
-  nativeCurrency: { name: "HBAR", symbol: "HBAR", decimals: 18 },
+export const arcTestnet = defineChain({
+  id: 5042002,
+  name: "Arc Testnet",
+  nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 18 },
   rpcUrls: {
-    default: { http: ["https://testnet.hashio.io/api"] },
+    default: { http: ["https://rpc.testnet.arc.network"] },
   },
   blockExplorers: {
-    default: { name: "HashScan", url: "https://hashscan.io/testnet" },
+    default: { name: "ArcScan", url: "https://testnet.arcscan.app" },
   },
   testnet: true,
 });
 
-export const hederaMainnet = defineChain({
-  id: 295,
-  name: "Hedera",
-  nativeCurrency: { name: "HBAR", symbol: "HBAR", decimals: 18 },
+export const arcMainnet = defineChain({
+  id: 5042,
+  name: "Arc",
+  nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 18 },
   rpcUrls: {
-    default: { http: ["https://mainnet.hashio.io/api"] },
+    default: { http: ["https://rpc.arc.network"] },
   },
   blockExplorers: {
-    default: { name: "HashScan", url: "https://hashscan.io/mainnet" },
+    default: { name: "ArcScan", url: "https://arcscan.app" },
   },
 });
 
-export const XORV_CHAIN =
-  process.env.NEXT_PUBLIC_XORV_NETWORK === "hedera:mainnet" ? hederaMainnet : hederaTestnet;
+export const ARC_CHAIN =
+  process.env.NEXT_PUBLIC_XORV_NETWORK === "eip155:5042" ? arcMainnet : arcTestnet;
+
+/** The ERC-20 face of native USDC — a Circle FiatTokenV2, same on both networks. */
+export const USDC_ADDRESS = "0x3600000000000000000000000000000000000000" as const;
+
+/** CAIP-2 for the chain above, which is how x402 names networks. */
+export const XORV_NETWORK = `eip155:${ARC_CHAIN.id}`;
+
+/** ArcScan link for a transaction hash. */
+export function explorerTx(hash: string): string {
+  return `${ARC_CHAIN.blockExplorers.default.url}/tx/${hash}`;
+}
+
+/** ArcScan link for an address or contract. */
+export function explorerAddress(address: string): string {
+  return `${ARC_CHAIN.blockExplorers.default.url}/address/${address}`;
+}

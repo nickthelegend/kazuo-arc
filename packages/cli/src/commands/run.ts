@@ -2,28 +2,31 @@
  * `xorv run "<prompt>"` — the buyer side.
  *
  * Posts a job, pays for it with a real on-chain transfer over x402, watches it
- * execute on a stranger's machine, and prints the answer plus a HashScan link.
+ * execute on a stranger's machine, and prints the answer plus an ArcScan link.
  * The whole protocol, end to end, in one command and about four seconds.
+ *
+ * The buyer never broadcasts a transaction. It signs an EIP-3009
+ * authorization — typed data, not a transaction — and the facilitator relays
+ * it. So this command works from an address holding nothing but USDC, which is
+ * the entire point.
  *
  * This is also the honest test of the network: it uses the same public HTTP
  * surface and the same `@x402/*` client any third party would, with no
  * privileged access to the broker.
  */
 
-import { PrivateKey } from "@hiero-ledger/sdk";
 import { x402Client, x402HTTPClient } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
-import { ExactHederaScheme } from "@x402/hedera/exact/client";
-import { createClientHederaSigner } from "@x402/hedera";
+import { registerExactEvmScheme } from "@x402/evm/exact/client";
+import { toClientEvmSigner } from "@x402/evm";
 import {
-  HBAR_ASSET_ID,
+  accountFor,
   formatDuration,
-  formatHbar,
   formatUsd,
-  hashscanTx,
+  explorerTx,
   networkLabel,
-  parsePrivateKey,
   parseUsd,
+  readClient,
   type AdapterKind,
 } from "@xorv/protocol";
 import { loadConfig } from "../config.js";
@@ -35,7 +38,6 @@ interface RunOptions {
   adapter?: string;
   account?: string;
   key?: string;
-  hbar?: boolean;
   yes?: boolean;
   json?: boolean;
 }
@@ -49,8 +51,8 @@ interface QuoteResponse {
   provider: {
     id: string;
     label: string;
-    accountId: string;
-    accountUrl: string;
+    address: string;
+    addressUrl: string;
     capability: string;
     adapter: string;
     model: string | null;
@@ -62,11 +64,11 @@ interface QuoteResponse {
 /**
  * Leave the process, having flushed stdout.
  *
- * `createClientHederaSigner` builds a Hedera SDK client internally and does not
- * hand it back, and that client holds gRPC channels open — so a `xorv run` that
- * has printed its answer and settled its payment would otherwise sit there
- * forever with nothing left to do. There is no handle to close, so the honest
- * fix is to exit deliberately once the work is genuinely finished.
+ * Less load-bearing than it was. The Hedera client held gRPC channels open with
+ * no handle to close them, so a finished `xorv run` would sit there forever;
+ * viem's HTTP transport has no such problem. Kept because the streaming job
+ * watcher can still have a socket in flight, and because a CLI that exits
+ * deliberately beats one that exits because nothing happened to be pending.
  */
 async function exitAfterFlush(code: number): Promise<never> {
   await new Promise<void>((resolve) => {
@@ -109,17 +111,31 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
     "http://localhost:8402"
   ).replace(/\/+$/, "");
 
-  // The buyer's account. Falls back to the node's own payout account, which is
-  // handy for a solo demo but means you'd be paying yourself — called out below.
-  const accountId = opts.account ?? process.env.XORV_PAYER_ID ?? config?.accountId ?? "";
+  // The buyer's key. Falls back to the node's own payout key, which is handy
+  // for a solo demo but means you'd be paying yourself — called out below.
+  //
+  // Only a key: the address is derived from it. The Hedera version took an
+  // account id *and* a key and could not check that they belonged together —
+  // a mismatched pair produced INVALID_SIGNATURE on settlement and nothing
+  // sooner.
   const rawKey = opts.key ?? process.env.XORV_PAYER_KEY ?? config?.privateKey ?? "";
-  const network = config?.network ?? "hedera:testnet";
+  const network = config?.network ?? "eip155:5042002";
 
-  if (!accountId || !rawKey) {
-    ui.bad("no payer account — pass --account and --key, or set XORV_PAYER_ID / XORV_PAYER_KEY");
+  if (!rawKey) {
+    ui.bad("no payer key — pass --key, or set XORV_PAYER_KEY");
     process.exitCode = 1;
     return;
   }
+
+  let payer;
+  try {
+    payer = accountFor(rawKey);
+  } catch (err) {
+    ui.bad(`payer key: ${err instanceof Error ? err.message : String(err)}`);
+    process.exitCode = 1;
+    return;
+  }
+  const payerAddress = payer.address;
 
   if (!opts.json) console.log(ui.banner("post a job"));
 
@@ -153,9 +169,7 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
   }
   quoteSpin?.succeed(`matched ${ui.c.bold(quote.provider.label)}`);
 
-  const hbarOption = quote.accepts.find((a) => a.asset === HBAR_ASSET_ID);
-  const usdcOption = quote.accepts.find((a) => a.asset !== HBAR_ASSET_ID);
-  const payingHbar = Boolean(opts.hbar && hbarOption);
+  const usdcOption = quote.accepts[0];
 
   if (!opts.json) {
     ui.blank();
@@ -167,17 +181,16 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
           ["price", ui.c.money(ui.c.bold(quote.priceLabel))],
           [
             "paying in",
-            payingHbar
-              ? `${ui.c.bold("HBAR")} ${ui.c.muted(hbarOption ? `(${formatHbar(hbarOption.amount)})` : "")}`
-              : `${ui.c.bold("USDC")} ${ui.c.muted(usdcOption ? `(${usdcOption.amount} units)` : "")}`,
+            `${ui.c.bold("USDC")} ${ui.c.muted(usdcOption ? `(${usdcOption.amount} units)` : "")}`,
           ],
-          ["goes to", `${quote.provider.accountId} ${ui.c.muted("— straight to the provider, not the broker")}`],
-          ["from", accountId],
+          ["goes to", `${quote.provider.address} ${ui.c.muted("— straight to the provider, not the broker")}`],
+          ["from", payerAddress],
+          ["gas", ui.c.muted("none — the facilitator relays and pays the fee")],
         ]),
         { title: "quote" },
       ),
     );
-    if (accountId === quote.provider.accountId) {
+    if (payerAddress.toLowerCase() === quote.provider.address.toLowerCase()) {
       ui.blank();
       ui.warn("payer and provider are the same account — you're paying yourself");
     }
@@ -195,25 +208,34 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
 
   // -- 2. pay ---------------------------------------------------------------
 
-  const signer = createClientHederaSigner(accountId, parsePrivateKey(rawKey) as PrivateKey, {
-    network,
-  });
-  const client = new x402Client().register("hedera:*", new ExactHederaScheme(signer));
-
-  // Narrow the server's `accepts` to the asset the buyer asked for. The policy
-  // must never return an empty list — that would leave the client with nothing
-  // to pay with and fail a request the server was willing to serve — so an
-  // unavailable preference falls back to whatever was offered.
-  client.registerPolicy((_version, requirements) => {
-    const preferred = payingHbar
-      ? requirements.filter((r) => r.asset === HBAR_ASSET_ID)
-      : requirements.filter((r) => r.asset !== HBAR_ASSET_ID);
-    return preferred.length > 0 ? preferred : requirements;
+  // No asset-preference policy, because there is only one asset to prefer. On
+  // Hedera this had to narrow `accepts` to USDC or HBAR and fall back rather
+  // than return an empty list, which would have failed a request the server was
+  // perfectly willing to serve.
+  const client = new x402Client();
+  // Registered as the `eip155:*` wildcard rather than one named network, which
+  // `registerExactEvmScheme` does when `networks` is omitted.
+  //
+  // This is a correctness fix, not a shortcut. Pinning the client to a network
+  // read from *local* config means a buyer can only pay a broker that happens
+  // to match their own node's configuration — and the failure is baffling:
+  // the 402 arrives correctly, the requirements are valid, and the client
+  // refuses with "no network/scheme registered" while naming two networks that
+  // look fine in isolation. A buyer should be able to pay whatever the broker
+  // quotes.
+  //
+  // Nothing is lost by widening it. The EIP-712 domain binds the signature to a
+  // specific chain id and verifying contract, so an authorization signed for one
+  // network cannot be replayed on another, and the price ceiling still applies.
+  registerExactEvmScheme(client, {
+    signer: toClientEvmSigner(payer, readClient(network)),
   });
 
   const paidFetch = wrapFetchWithPayment(fetch, client);
   const httpClient = new x402HTTPClient(client);
-  const paySpin = opts.json ? null : ui.spinner("signing the transfer and settling on Hedera…");
+  const paySpin = opts.json
+    ? null
+    : ui.spinner("signing the authorization and settling on Arc…");
 
   // Seeded rather than left definite-assigned: the catch below exits the
   // process, but that's an `await` of a never-returning call, which TypeScript's
@@ -235,8 +257,8 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
   } catch (err) {
     if (!opts.json) paySpin?.fail(`payment failed: ${err instanceof Error ? err.message : String(err)}`);
     await failOut(opts.json, "payment", err, [
-      "common causes: the payer holds no USDC, isn't associated with the token,",
-      "or is the same account as the provider (you can't pay yourself)",
+      "common causes: the payer holds no USDC, or is the same address as the",
+      "provider (you can't pay yourself)",
       "check with: xorv wallet",
     ]);
   }
@@ -244,7 +266,7 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
   paySpin?.succeed(`paid ${ui.c.money(quote.priceLabel)} — job ${ui.c.bold(jobId)}`);
   if (settleTx && !opts.json) {
     ui.ok(`${ui.glyph.chain()} settled on ${networkLabel(network)}`);
-    ui.muted(`  ${hashscanTx(network, settleTx)}`);
+    ui.muted(`  ${explorerTx(network, settleTx)}`);
   }
 
   // -- 3. watch -------------------------------------------------------------
@@ -258,9 +280,9 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
   let final = await watchJob(brokerUrl, jobId, opts.json ?? false);
 
   if (final?.status === "completed") {
-    const spin = opts.json ? null : ui.spinner("waiting for the HCS receipt to reach consensus…");
+    const spin = opts.json ? null : ui.spinner("waiting for the on-chain receipt…");
     final = await awaitReceipt(brokerUrl, jobId, final);
-    if (final?.receiptConsensusAt) spin?.succeed("receipt on the Hedera receipts topic");
+    if (final?.receiptTxHash) spin?.succeed("receipt appended to the on-chain audit log");
     else spin?.stop();
   }
 
@@ -271,7 +293,7 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
           jobId,
           quote,
           settlementTransaction: settleTx,
-          hashscan: settleTx ? hashscanTx(network, settleTx) : null,
+          arcscan: settleTx ? explorerTx(network, settleTx) : null,
           status: final?.status,
           result: final?.result,
           error: final?.error,
@@ -297,14 +319,14 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
       ui.box(
         ui.kv([
           ["paid", ui.c.money(quote.priceLabel)],
-          ["to", `${quote.provider.label} ${ui.c.muted(quote.provider.accountId)}`],
+          ["to", `${quote.provider.label} ${ui.c.muted(quote.provider.address)}`],
           ["tx", settleTx ? ui.c.accent(settleTx) : ui.c.muted("—")],
-          ["hashscan", settleTx ? ui.c.muted(hashscanTx(network, settleTx)) : ui.c.muted("—")],
+          ["arcscan", settleTx ? ui.c.muted(explorerTx(network, settleTx)) : ui.c.muted("—")],
           ["result sha256", ui.c.muted((final.resultHash ?? "").slice(0, 32) + "…")],
           [
-            "hcs receipt",
-            final.receiptConsensusAt
-              ? ui.c.muted(hashscanTx(network, final.receiptConsensusAt))
+            "receipt",
+            final.receiptTxHash
+              ? ui.c.muted(explorerTx(network, final.receiptTxHash))
               : ui.c.muted("publishing…"),
           ],
         ]),
@@ -323,7 +345,7 @@ interface JobView {
   result?: string | null;
   error?: string | null;
   resultHash?: string | null;
-  receiptConsensusAt?: string | null;
+  receiptTxHash?: string | null;
 }
 
 /**
@@ -408,7 +430,7 @@ function printEvent(kind: string, text: string): void {
 }
 
 /**
- * Pull the settled Hedera transaction id off the response.
+ * Pull the settled transaction hash off the response.
  *
  * Goes through the protocol client's own reader rather than base64-decoding the
  * header by hand: the header's name and encoding are x402's to change, and a
@@ -425,7 +447,7 @@ function readSettlementTx(httpClient: x402HTTPClient, res: Response): string | n
 }
 
 /**
- * Wait for the broker's HCS receipt to reach consensus.
+ * Wait for the broker's on-chain receipt to land.
  *
  * The receipt is written after settlement, so a fast job outruns it. Polling
  * briefly here means the command's final output carries the audit link instead
@@ -438,7 +460,7 @@ async function awaitReceipt(
   current: JobView | null,
   timeoutMs = 25_000,
 ): Promise<JobView | null> {
-  if (current?.receiptConsensusAt) return current;
+  if (current?.receiptTxHash) return current;
   const deadline = Date.now() + timeoutMs;
   let latest = current;
   while (Date.now() < deadline) {
@@ -450,7 +472,7 @@ async function awaitReceipt(
       if (!res.ok) continue;
       const body = (await res.json()) as { job: JobView };
       latest = body.job;
-      if (latest.receiptConsensusAt) return latest;
+      if (latest.receiptTxHash) return latest;
     } catch {
       /* keep trying until the deadline */
     }

@@ -27,7 +27,7 @@ interface Quote {
   priceLabel: string;
   provider: {
     label: string;
-    accountId: string;
+    address: string;
     capability: string;
     adapter: string;
     model: string | null;
@@ -46,8 +46,6 @@ const MODELS: ModelOption[] = [
   { id: "echo", label: "Echo", hint: "test" },
 ];
 
-const HBAR = "0.0.0";
-
 export function Composer() {
   const router = useRouter();
   const animate = useEntrance();
@@ -56,8 +54,7 @@ export function Composer() {
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState("");
   const [maxUsd, setMaxUsd] = useState("0.50");
-  const [asset, setAsset] = useState<"usdc" | "hbar">("usdc");
-  const { session, accountId } = useWallet();
+  const { session, address } = useWallet();
 
   const [quote, setQuote] = useState<Quote | null>(null);
   const [busy, setBusy] = useState<"quoting" | "paying" | null>(null);
@@ -113,14 +110,14 @@ export function Composer() {
       // different money, and worth being honest about in the button label.
       if (session) {
         const { payQuoteWithWallet } = await import("@/lib/pay-with-wallet");
-        const { jobId } = await payQuoteWithWallet(session, BROKER_URL, quote.quoteId, asset);
+        const { jobId } = await payQuoteWithWallet(session, BROKER_URL, quote.quoteId);
         router.push(`/jobs/${jobId}`);
         return;
       }
       const res = await fetch("/api/pay", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quoteId: quote.quoteId, asset }),
+        body: JSON.stringify({ quoteId: quote.quoteId }),
       });
       const body = (await res.json()) as { jobId?: string; error?: string };
       if (!res.ok || !body.jobId) throw new Error(body.error ?? `Payment failed (${res.status}).`);
@@ -131,7 +128,6 @@ export function Composer() {
     }
   }
 
-  const hbarAmount = quote?.accepts.find((a) => a.asset === HBAR)?.amount;
   const rise = (delay: number) =>
     animate
       ? {
@@ -267,35 +263,23 @@ export function Composer() {
                     {quote.provider.stats.jobsCompleted} done
                   </p>
                   <p className="mono mt-1.5 truncate text-[11.5px] text-fg-4">
-                    pays → {quote.provider.accountId}
+                    pays → {quote.provider.address}
                   </p>
                 </div>
                 <p className="tnum shrink-0 text-[19px] font-semibold text-fg">{quote.priceLabel}</p>
               </div>
 
-              <div className="mt-4 flex gap-2" role="group" aria-label="Payment asset">
-                {(["usdc", "hbar"] as const).map((option) => {
-                  const disabled = option === "hbar" && !hbarAmount;
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      disabled={disabled}
-                      aria-pressed={asset === option}
-                      onClick={() => setAsset(option)}
-                      className={cn(
-                        "flex-1 rounded-lg border px-3 py-2 text-[12.5px] font-medium transition-colors",
-                        asset === option
-                          ? "border-[var(--line-3)] bg-white/[0.07] text-fg"
-                          : "border-[var(--line)] text-fg-3 hover:text-fg-2",
-                        disabled && "cursor-not-allowed opacity-40",
-                      )}
-                    >
-                      Pay in {option.toUpperCase()}
-                    </button>
-                  );
-                })}
-              </div>
+              {/*
+                A USDC/HBAR toggle used to live here. Arc has one asset — USDC
+                is both the money and the gas — so a picker with a single option
+                is chrome that asks a question with no answer. What replaced it
+                is the fact that actually matters to someone about to pay.
+              */}
+              <p className="mt-4 text-[12px] leading-relaxed text-fg-3">
+                Paid in USDC, straight to the provider. You pay{" "}
+                <span className="text-fg-2">no gas</span> — you sign an authorization and the
+                facilitator covers the network fee.
+              </p>
 
               <button
                 type="button"

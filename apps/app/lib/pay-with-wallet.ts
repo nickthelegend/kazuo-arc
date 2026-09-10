@@ -3,23 +3,30 @@
 /**
  * Paying a quote from the browser, with the user's own wallet.
  *
- * This is the whole point of replacing Privy. The x402 round trip happens
- * *here*, in the tab: the broker answers 402 with terms, this builds the
- * transfer, HashPack signs it, and the signed transaction goes back on the
- * retry. The server never sees a key and never signs anything.
+ * The x402 round trip happens *here*, in the tab: the broker answers 402 with
+ * terms, the wallet signs an EIP-3009 authorization over them, and the signed
+ * authorization goes back on the retry. The server never sees a key and never
+ * signs anything.
  *
  * `/api/pay` still exists and still works — it is the fallback for a visitor
- * with no wallet connected, using a demo account the deployment holds. The two
- * differ in exactly one way that matters: with a wallet, the money is the
- * user's and they approved it; without one, it is the demo's.
+ * with no wallet, using a demo account the deployment holds. The two differ in
+ * exactly one way that matters: with a wallet, the money is the user's and they
+ * approved it; without one, it is the demo's.
  *
- * Loaded lazily. `@x402/*` plus the Hedera SDK is a large graph with `window`
- * assumptions, and none of it should be in the first paint of a page whose job
- * is a text box.
+ * ## The user pays no gas, and that is not a figure of speech
+ *
+ * What the wallet signs is **typed data, not a transaction**. It is never
+ * broadcast, it never enters a mempool, and the signer needs no balance beyond
+ * the USDC being spent. The facilitator takes that signature to
+ * `transferWithAuthorization` and pays the fee itself. A visitor can arrive
+ * holding nothing but a stablecoin and complete a purchase, which on most
+ * chains is precisely where a normal person's crypto payment dies.
+ *
+ * Loaded lazily. `@x402/*` is a large graph and none of it belongs in the first
+ * paint of a page whose job is a text box.
  */
 
-import type { WalletSession } from "@/lib/hashpack";
-import { createWalletHederaSigner } from "@/lib/hedera-wallet";
+import type { WalletSession } from "@/lib/wallet";
 
 export interface WalletPaymentResult {
   jobId: string;
@@ -38,33 +45,29 @@ export async function payQuoteWithWallet(
   session: WalletSession,
   brokerUrl: string,
   quoteId: string,
-  asset: "usdc" | "hbar",
 ): Promise<WalletPaymentResult> {
-  const [{ x402Client, x402HTTPClient }, { wrapFetchWithPayment }, { ExactHederaScheme }] =
+  const [{ x402Client, x402HTTPClient }, { wrapFetchWithPayment }, { registerExactEvmScheme }] =
     await Promise.all([
       import("@x402/core/client"),
       import("@x402/fetch"),
-      import("@x402/hedera/exact/client"),
+      import("@x402/evm/exact/client"),
     ]);
 
-  const signer = createWalletHederaSigner(session.accountId, session.signTransaction);
-  const client = new x402Client().register(
-    "hedera:*",
-    // Structurally the ClientHederaSigner the scheme wants; the cast is only
-    // because our signer is built on @hashgraph/sdk types rather than the
-    // @hiero-ledger ones the package declares. Base64 is the real contract.
-    new ExactHederaScheme(signer as never),
-  );
-
-  // Narrow to the requested asset, but never to nothing — an empty list would
-  // refuse a payment the broker was willing to accept.
-  client.registerPolicy((_version, requirements) => {
-    const wantHbar = asset === "hbar";
-    const preferred = wantHbar
-      ? requirements.filter((r) => r.asset === "0.0.0")
-      : requirements.filter((r) => r.asset !== "0.0.0");
-    return preferred.length > 0 ? preferred : requirements;
+  const client = new x402Client();
+  registerExactEvmScheme(client, {
+    // The wallet session satisfies `ClientEvmSigner` as it stands: an address
+    // and `signTypedData`. No adapter, no second SDK, no protobuf — this is
+    // the whole reason an ordinary EVM wallet can pay here and could not on
+    // Hedera, where the scheme needed a signature over a native transaction.
+    signer: { address: session.address, signTypedData: session.signTypedData },
+    // The `eip155:*` wildcard, so the browser can pay whatever the broker
+    // quotes rather than only a network baked in at build time. The EIP-712
+    // domain binds each signature to one chain id, so widening this cannot let
+    // an authorization be replayed elsewhere.
   });
+
+  // No asset-preference policy. Hedera offered USDC or HBAR and this had to
+  // narrow the list without ever emptying it; Arc has one asset.
 
   const paidFetch = wrapFetchWithPayment(fetch, client);
   const httpClient = new x402HTTPClient(client);

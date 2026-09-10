@@ -42,19 +42,19 @@ function quoteInput(price = 1_000) {
     request: { prompt: "persisted prompt", maxPriceUsdMicros: 50_000 },
     providerId: "prv_1",
     providerLabel: "node-a",
-    providerAccountId: "0.0.1001",
+    providerAddress: "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B",
     capabilityId: "echo",
     capabilityName: "Echo (test)",
     priceUsdMicros: price,
     usdcAmount: String(price),
-    hbarAmount: "1462167",
+    domain: { name: "USDC", version: "2" },
   };
 }
 
 function registration(over: Partial<RegisterRequest> = {}): RegisterRequest {
   return {
     label: "node-a",
-    accountId: "0.0.1001",
+    address: "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B",
     endpoint: "http://localhost:1",
     capabilities: [
       {
@@ -102,15 +102,15 @@ describe("jobs survive a restart", () => {
     const job = first.createJob(first.createQuote(quoteInput()));
     first.patch(job.id, {
       payment: {
-        asset: "hbar",
-        assetId: "0.0.0",
-        amount: "1462167",
-        network: "hedera:testnet",
-        transactionId: "0.0.9842030@1785475549.131327424",
-        payer: "0.0.9848440",
-        payTo: "0.0.9848438",
+        asset: "usdc",
+        assetId: "0x3600000000000000000000000000000000000000",
+        amount: "1000",
+        network: "eip155:5042002",
+        transactionHash: "0x9c1fed2b2c87bf85bef22045ff3a440e3d4463c2147cdd00f66777163f4f0c67",
+        payer: "0x03294Ce27e218d1611B2ebc0b0ffdDb95F129F36",
+        payTo: "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B",
         settledAt: Date.now(),
-        hashscanUrl: "https://hashscan.io/testnet/transaction/x",
+        explorerUrl: "https://testnet.arcscan.app/tx/0x9c1fed",
       },
     });
     first.addEvent(job.id, { at: Date.now(), kind: "message", text: "working" });
@@ -124,8 +124,10 @@ describe("jobs survive a restart", () => {
     expect(restored.status).toBe("completed");
     expect(restored.result).toBe("the durable answer");
     expect(restored.resultHash).toBe("hash123");
-    expect(restored.payment!.transactionId).toBe("0.0.9842030@1785475549.131327424");
-    expect(restored.payment!.payTo).toBe("0.0.9848438");
+    expect(restored.payment!.transactionHash).toBe(
+      "0x9c1fed2b2c87bf85bef22045ff3a440e3d4463c2147cdd00f66777163f4f0c67",
+    );
+    expect(restored.payment!.payTo).toBe("0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B");
     expect(restored.events.length).toBeGreaterThan(0);
     expect(second.restoredCount).toBe(1);
   });
@@ -194,16 +196,15 @@ describe("earnings survive a restart", () => {
     expect(newcomer.stats.earnedUsdcMicros).toBe(0);
   });
 
-  it("keeps HBAR and USDC earnings separate across a restart", () => {
+  it("accumulates earnings across a restart rather than starting over", () => {
     const first = new Registry(store());
     const provider = first.register(registration());
     first.jobFinished(provider.id, { ok: true, durationMs: 1, usdcMicros: 3_000 });
-    first.jobFinished(provider.id, { ok: true, durationMs: 1, tinybars: 1_462_167 });
+    first.jobFinished(provider.id, { ok: true, durationMs: 1, usdcMicros: 1_000 });
 
     const second = new Registry(store());
     const again = second.register(registration());
-    expect(again.stats.earnedUsdcMicros).toBe(3_000);
-    expect(again.stats.earnedTinybars).toBe(1_462_167);
+    expect(again.stats.earnedUsdcMicros).toBe(4_000);
   });
 });
 

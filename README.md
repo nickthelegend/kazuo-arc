@@ -3,19 +3,17 @@
 <img src="brand/xorv-logo.svg" alt="Xorv" width="260" />
 
 **A decentralized AI capacity network.**
-Rent out the Claude / Codex / Grok subscription you already pay for, and get paid **per job in USDC over [x402](https://x402.org) on [Hedera](https://hedera.com)**.
+Rent out the Claude / Codex / Grok subscription you already pay for, and get paid **per job in USDC over [x402](https://x402.org) on [Arc](https://www.circle.com/arc)**.
 
 [![x402](https://img.shields.io/badge/x402-v2-7C5CFF?style=flat-square)](https://x402.org)
-[![Hedera](https://img.shields.io/badge/Hedera-testnet-3DDCFF?style=flat-square)](https://hashscan.io/testnet)
+[![Arc](https://img.shields.io/badge/Arc-testnet-3DDCFF?style=flat-square)](https://testnet.arcscan.app)
 [![License](https://img.shields.io/badge/license-MIT-50F0C8?style=flat-square)](LICENSE)
 
 </div>
 
 <div align="center">
 
-**[Landing](https://xorv.vercel.app)** · **[App](https://xorv-app.vercel.app)** · **[`npm i -g @xorv/cli`](https://www.npmjs.com/package/@xorv/cli)**
-
-**▶ [Watch the trailer](videos/xorv-launch/renders/video.mp4)** — 60 seconds
+**[`npm i -g @xorv/cli`](https://www.npmjs.com/package/@xorv/cli)** — the Hedera release. The Arc port in this repo is not published yet.
 
 </div>
 
@@ -27,47 +25,50 @@ Rent out the Claude / Codex / Grok subscription you already pay for, and get pai
 pnpm install && pnpm build && pnpm test
 ```
 
-272 tests, **no credentials and no network required** — the two pieces that
-touch Hedera (the facilitator and the HCS writer) are stubbed, so everything
-from a buyer's first request to a published receipt runs as production code.
+**295 tests, no credentials and no network required** — the two pieces that
+touch the chain (the facilitator and the audit writer) are stubbed, so
+everything from a buyer's first request to a published receipt runs as
+production code.
 
-Then the live proof, all on Hedera testnet and all openly readable:
+Then one command that proves the claim against live Arc testnet:
+
+```bash
+pnpm m1
+```
+
+It prints both faces of the buyer's balance, has them sign an EIP-3009
+authorization, relays it through the facilitator, and **asserts the buyer's gas
+came to zero**.
+
+Then the live proof, all on Arc testnet and all openly readable:
 
 | What | Where |
 |---|---|
-| A job paid for **through the deployed app** | [`0.0.9842030@1785526598.292531686`](https://hashscan.io/testnet/transaction/0.0.9842030-1785526598-292531686) — Vercel → broker → settlement → Claude Code → result |
-| A real Claude Code job settled in **Circle USDC** | [`0.0.9842030@1785516412.478664506`](https://hashscan.io/testnet/transaction/0.0.9842030-1785516412-478664506) — buyer −0.2500 USDC, provider +0.2500, **buyer paid zero gas** |
-| A real Claude Code job, paid | [`0.0.9842030@1785475549.131327424`](https://hashscan.io/testnet/transaction/0.0.9842030-1785475549-131327424) |
-| Receipts topic | [`0.0.9848247`](https://hashscan.io/testnet/topic/0.0.9848247) |
+| **A real model job, bought and paid for** | [`0x83f81832…5e77f7c`](https://testnet.arcscan.app/tx/0x83f81832a17b95e3c390f264abc8cb24d2cf35ad48955155bddc21e8a5e77f7c) — $0.20 to a Codex node, prompt in, working code out, 4.7s |
+| The browser wallet path | [`0xb495004c…ce4c5c14`](https://testnet.arcscan.app/tx/0xb495004c5f6edf913bd80b3522e0c6c6776d967d77376c19baed83cace4c5c14) — the app's production payment code |
+| Full lifecycle, quote → 402 → pay → dispatch → result → receipt | [`0xad0887af…ff8113d`](https://testnet.arcscan.app/tx/0xad0887afa017182d22f82fd7a51336381fae0f69cbb8df42686b63e45ff8113d) |
+| The audit log | [`0x383f5153…65eef3`](https://testnet.arcscan.app/address/0x383f5153db8bb18c7c25157fb3493645a465eef3) |
 
 ### What is proven, and what isn't
 
 | | |
 |---|---|
-| ✅ x402 payments settling on Hedera | Many, on-chain, links above |
-| ✅ HTS token settlement (USDC's exact shape) | Six jobs — token `0.0.9858754`, 6dp fungible |
-| ✅ Real Claude Code jobs, paid per job | Prompt in, working code out |
-| ✅ HCS audit trail | Registry, heartbeat and receipt topics |
+| ✅ x402 payments settling on Arc | Many, on-chain, links above |
+| ✅ Buyer pays **zero gas** | Asserted, not assumed — `pnpm m1` fails if it isn't 0 wei |
+| ✅ A real model job, paid per job | Codex: prompt in, working code out |
+| ✅ On-chain audit trail | `XorvLog` — registrations, liveness, receipts as indexed events |
+| ✅ Browser wallet paying directly | EIP-712 typed data; any EVM wallet, no relay, no project id |
 | ✅ MCP: an agent buying capacity | Verified over stdio |
 | ✅ Survives a broker restart | SQLite + MongoDB |
-| ✅ **Circle USDC** (`0.0.429274`) | A real Claude Code job settled in it — [`0.0.9842030@1785516412.478664506`](https://hashscan.io/testnet/transaction/0.0.9842030-1785516412-478664506) |
-| ✅ Browser wallet paying directly | HashPack over WalletConnect signs the **native** transfer the facilitator verifies. Proven from a real extension: [`0.0.9842030@1785583332.923427914`](https://hashscan.io/testnet/transaction/0.0.9842030-1785583332-923427914) — wallet `0.0.9862584` paid 0.2500 USDC, and its HBAR moved by exactly zero |
-| ✅ **Deployed and public** | [landing](https://xorv.vercel.app) · [app](https://xorv-app.vercel.app) — a job paid for through the deployed app, above |
-| ✅ **Published to npm** | [`@xorv/cli`](https://www.npmjs.com/package/@xorv/cli) · [`@xorv/protocol`](https://www.npmjs.com/package/@xorv/protocol) · [`@xorv/mcp`](https://www.npmjs.com/package/@xorv/mcp) |
 | ✅ OS-level job sandbox | Seatbelt / bubblewrap / container — a hostile prompt cannot read the payout key |
-| ⚠️ Docker | Written, never built — Docker Desktop's VM would not start here |
+| ⚠️ Claude Code, paid | Its OAuth token had expired on this host; the paid attempt failed *after* settlement. `xorv doctor` names it exactly. Codex was used for the proof instead |
+| ⚠️ Three of five adapters under the sandbox | Codex and OpenCode can't start under seatbelt, Grok returns empty. `xorv test` catches all three before a node goes live. The real-model proof above ran with `XORV_SANDBOX=none` |
+| ⚠️ Public deployment | Proven locally against live Arc testnet; not deployed yet |
+
+Every one of those caveats is expanded, with the failing output, in
+[SUBMISSION.md](SUBMISSION.md).
 
 ---
-
-## The trailer
-
-**[videos/xorv-launch/renders/video.mp4](videos/xorv-launch/renders/video.mp4)** — 62s, 1080p.
-
-Built with HyperFrames from this repo's own design tokens, and every value on
-screen is real and checkable: the transaction id, the account pair, the USDC
-token, the HCS topic. The whole project is in `videos/xorv-launch/` — storyboard,
-script, and the eight frame compositions — so it re-renders with
-`npx hyperframes render`.
 
 ---
 
@@ -121,17 +122,18 @@ xorv start
 answers 402 with machine-readable payment terms, the client signs, and the same request succeeds a
 round-trip later. No checkout, no accounts, no API keys.
 
-**Hedera makes sub-cent pricing real.** Three properties this specifically needs:
+**Arc makes sub-cent pricing real, and removes the gas token entirely.**
 
 | Property | Why it matters here |
 |---|---|
-| Fixed fees (~$0.0001) | A $0.001 job isn't eaten by gas |
-| ~3s finality | The buyer isn't waiting on confirmations |
-| Native fee-payer model | **Buyers never need HBAR** — Xorv's facilitator pays the gas |
-| Consensus Service | A public, ordered audit log without deploying a contract |
+| **USDC *is* the native gas token** | There is no second currency to acquire, and no exchange rate that can go stale between quoting a job and paying for it |
+| EIP-3009 on a real Circle FiatTokenV2 | The buyer signs typed data, never broadcasts, and **needs no gas at all** — the facilitator relays it and pays |
+| Measured $0.00185 to settle | A $0.001 job isn't eaten by gas |
+| Sub-second blocks | The buyer isn't waiting on confirmations |
+| Ordinary EVM | Any wallet can pay with `eth_signTypedData_v4`. No relay, no project id, no chain-specific SDK |
 
-**The broker never touches the money.** The 402 response names the *matched provider's own Hedera
-account* as `payTo`. Funds move buyer → provider in one transfer. Protocol fee is 0%.
+**The broker never touches the money.** The 402 response names the *matched provider's own Arc
+address* as `payTo`. Funds move buyer → provider in one transfer. Protocol fee is 0%.
 
 ---
 
@@ -147,20 +149,21 @@ account* as `payTo`. Funds move buyer → provider in one transfer. Protocol fee
     │                          │                            │
     │  POST /api/jobs/:quote   │                            │
     ├─────────────────────────►│                            │
-    │  ◄─── 402 + accepts[]    │  USDC · HBAR               │
+    │  ◄─── 402 + accepts[]    │  USDC + EIP-712 domain     │
     │                          │                            │
-    │  signs a Hedera transfer │                            │
-    │  X-PAYMENT ─────────────►│  facilitator co-signs,     │
-    │                          │  pays gas, submits ──────► Hedera
-    │  ◄─── 200 + job id       │  ~3s, settled              │
+    │  signs an EIP-3009 auth  │                            │
+    │  (typed data, NOT a tx)  │                            │
+    │  X-PAYMENT ─────────────►│  facilitator relays it     │
+    │                          │  and pays the fee ───────► Arc
+    │  ◄─── 200 + job id       │  ~1s, settled              │
     │       X-PAYMENT-RESPONSE │                            │
     │                          ├──── job.dispatch ─────────►│
     │  ◄═══ SSE: live events ══╪◄═══ tool calls, edits ═════┤
     │  ◄─── result             │◄──── answer ───────────────┤
-    │                          ├──── receipt ─────────────► HCS topic
+    │                          ├──── receipt ─────────────► XorvLog
 ```
 
-Payment settles **before** the job runs. That isn't laziness: a signed Hedera transaction is only
+Payment settles **before** the job runs. That isn't laziness: a signed authorization is only
 valid for 180 seconds, so waiting for a five-minute coding job would leave the provider unpaid for
 work already done. The other risk is covered at the network level — a failed job is **reassigned to
 another provider at no extra charge**, and the failure counts against the original provider's
@@ -175,10 +178,10 @@ xorv/
 ├── packages/
 │   ├── cli/          @xorv/cli — the provider node; the binary is `xorv`
 │   ├── mcp/          @xorv/mcp — Xorv as an MCP server, so agents can buy capacity
-│   └── protocol/     @xorv/protocol — shared types, money math, Hedera + x402 wiring
+│   └── protocol/     @xorv/protocol — shared types, money math, Arc + x402 wiring
 ├── services/
 │   └── broker/       @xorv/broker — registry, matching, x402 gating, self-hosted
-│                     facilitator, HCS audit trail, SQLite, metrics
+│                     facilitator, on-chain audit trail, SQLite, metrics
 ├── apps/
 │   ├── app/          xorv-app — the job board (Next.js)
 │   └── landing/      xorv-landing — marketing site (Next.js + GSAP)
@@ -189,14 +192,16 @@ xorv/
 
 ## Quickstart
 
-Needs Node ≥ 20.11 and pnpm. A funded Hedera **testnet** account takes ~60s at
-[portal.hedera.com](https://portal.hedera.com).
+Needs Node ≥ 20.11 and pnpm. Claim Arc **testnet** USDC at
+[faucet.circle.com](https://faucet.circle.com) — pick Arc Testnet. There is no
+separate gas token to acquire; USDC is the gas.
 
 ```bash
 git clone https://github.com/nickthelegend/xorv.git
 cd xorv && pnpm install
 cp .env.example .env          # paste your operator id + key
-pnpm --filter @xorv/broker setup   # creates the 3 HCS topics + demo accounts
+pnpm deploy:log                   # deploys the audit contract
+pnpm setup                        # checks the config, reports what's funded
 pnpm build
 ```
 
@@ -222,11 +227,13 @@ xorv run "Explain what a Merkle tree is, briefly." --max 0.02
 ╭─ quote ──────────────────────────────────────────────────╮
 │ provider   nivesh-macbook · 12 jobs done                 │
 │ price      $0.0010                                       │
-│ goes to    0.0.9848438 — straight to the provider        │
+│ goes to    0xff21…489B — straight to the provider        │
+│ from       0x0329…9F36                                   │
+│ gas        none — the facilitator relays and pays the fee │
 ╰──────────────────────────────────────────────────────────╯
 ✔ paid $0.0010 — job job_TwzS96BhAx81
 ✔ ⛓ settled on testnet
-  https://hashscan.io/testnet/transaction/0.0.9842030-1785475156-150213566
+  https://testnet.arcscan.app/tx/0xad0887afa017182d22f82fd7a51336381fae0f69cbb8df42686b63e45ff8113d
 ```
 
 </details>
@@ -250,7 +257,7 @@ The provider node. Full docs in [`packages/cli/README.md`](packages/cli/README.m
 | `xorv status` | Who's live on the network, and what they charge |
 | `xorv pause` / `resume` | Stop taking new jobs without going offline |
 | `xorv cancel <job>` | Stop a running job |
-| `xorv wallet` | Balances, USDC association, key rotation |
+| `xorv wallet` | The payout address, what it holds, key rotation |
 | `xorv logs` / `config` | Local job log; current configuration (key redacted) |
 | `xorv completion` | Shell completions for bash, zsh, fish |
 
@@ -276,8 +283,7 @@ claude mcp add xorv -- node /absolute/path/to/xorv/packages/mcp/dist/index.js
 ```
 
 ```bash
-XORV_PAYER_ID=0.0.xxxxx    # the account the agent spends from
-XORV_PAYER_KEY=...
+XORV_PAYER_KEY=0x...       # the key the agent spends from; its address is derived
 XORV_MAX_USD=0.05          # hard ceiling per call, enforced client-side too
 ```
 
@@ -293,9 +299,9 @@ Reply with a haiku about paying for compute.
 > …
 
 ---
-Paid $0.0010 to nivesh-macbook (0.0.9848438)
-Transaction: https://hashscan.io/testnet/transaction/0.0.9842030-1785476993-771264136
-HCS receipt: https://hashscan.io/testnet/transaction/0.0.9842030-1785477001-566190167
+Paid $0.0010 to nivesh-macbook (0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B)
+Transaction: https://testnet.arcscan.app/tx/0xad0887af…ff8113d
+On-chain receipt: https://testnet.arcscan.app/tx/0xd36ae7e5…b4d65cba
 ```
 
 ---
@@ -303,14 +309,14 @@ HCS receipt: https://hashscan.io/testnet/transaction/0.0.9842030-1785477001-5661
 ## Tests
 
 ```bash
-pnpm test    # 220 tests, no credentials, no network
+pnpm test    # 295 tests, no credentials, no network
 ```
 
 Unit tests for money math, key parsing, the matcher and the terminal layout —
 plus a **full-lifecycle integration suite** that boots a real HTTP server, the
 real Hono app, the real x402 resource server and the real WebSocket hub, and
 drives a fake provider through quote → pay → dispatch → stream → result →
-receipt. Only the two pieces that touch Hedera are stubbed.
+receipt. Only the two pieces that touch the chain are stubbed.
 
 They earn their keep: writing them turned up five real bugs, including a stale
 provider status being read by the guard that decides whether a quoted node is
@@ -328,50 +334,44 @@ Persists to a volume, health-checks itself, and runs as a non-root user. Set
 `XORV_TRUST_PROXY=1` behind a reverse proxy so rate limiting sees real client
 IPs. `/metrics` speaks Prometheus.
 
-> The Dockerfile and compose file are written and reviewed but **have not been
-> built on this machine** — Docker wasn't available. Treat them as unverified
-> until you run them.
+> The image was built and run under the Hedera version of this project, where
+> doing so found a real bug (the broker advertised its control-channel URL from
+> its own `publicUrl`, which is wrong behind any port map or tunnel — and failed
+> silently, because HTTP heartbeats kept working while every dispatched job
+> died). That fix is carried over here. The image has **not** been rebuilt since
+> the Arc port; the compose file's environment has been updated but not
+> exercised.
 
 ---
 
-## Live on Hedera testnet
+## Live on Arc testnet
 
 Everything below is real and checkable.
 
 | | |
 |---|---|
-| Network | `hedera:testnet` |
-| USDC | [`0.0.429274`](https://hashscan.io/testnet/token/0.0.429274) |
-| Registry topic | [`0.0.9848245`](https://hashscan.io/testnet/topic/0.0.9848245) |
-| Heartbeat topic | [`0.0.9848246`](https://hashscan.io/testnet/topic/0.0.9848246) |
-| Receipts topic | [`0.0.9848247`](https://hashscan.io/testnet/topic/0.0.9848247) |
+| Network | `eip155:5042002` — Arc testnet |
+| USDC | [`0x3600…0000`](https://testnet.arcscan.app/token/0x3600000000000000000000000000000000000000) — Circle FiatTokenV2, the ERC-20 face of native USDC |
+| Audit log | [`0x383f5153…65eef3`](https://testnet.arcscan.app/address/0x383f5153db8bb18c7c25157fb3493645a465eef3) — one contract, three indexed streams |
 
-**Circle USDC settlement, verified on-chain.** Ten jobs across the CLI, the web app and the MCP
-server — and the buyer's HBAR balance unchanged through every one of them, because the facilitator
-paid every fee:
+**Settlement, verified on-chain.** Jobs across the CLI, the browser payment path
+and the MCP client — and the buyer's gas spend was zero through every one of
+them, because the buyer never broadcast anything:
 
 | | |
 |---|---|
-| Token | [`0.0.429274`](https://hashscan.io/testnet/token/0.0.429274) — Circle's USDC on Hedera testnet |
-| A Claude Code job | [`0.0.9842030@1785516412.478664506`](https://hashscan.io/testnet/transaction/0.0.9842030-1785516412-478664506) — buyer `0.0.9848440` −0.2500 USDC, provider `0.0.9848438` +0.2500 |
-| Its HCS receipt | [`https://hashscan.io/testnet/transaction/0.0.9842030-1785516420-464719452`](https://hashscan.io/testnet/transaction/0.0.9842030-1785516420-464719452) |
-| Buyer's gas | **zero.** Every HBAR fee was debited from the facilitator |
+| A real Codex job | [`0x83f81832…5e77f7c`](https://testnet.arcscan.app/tx/0x83f81832a17b95e3c390f264abc8cb24d2cf35ad48955155bddc21e8a5e77f7c) — $0.20, prompt in, `print(input()[::-1])` out |
+| Its on-chain receipt | job id, both addresses, amount, and a SHA-256 of the result |
+| The browser wallet path | [`0xb495004c…ce4c5c14`](https://testnet.arcscan.app/tx/0xb495004c5f6edf913bd80b3522e0c6c6776d967d77376c19baed83cace4c5c14) |
+| Buyer's gas | **zero wei.** Asserted by `pnpm m1`, which fails if it isn't |
 
-**A real Claude Code job, paid for over x402.** Prompt in, working Python out, $0.0100 moved from
-buyer to provider on-chain:
+Measured costs, from those exact transactions:
 
 | | |
 |---|---|
-| Job | `job_2eHjgDqDuMyv` · adapter `claude-code` · $0.0100 |
-| Payment | [`0.0.9842030@1785475549.131327424`](https://hashscan.io/testnet/transaction/0.0.9842030-1785475549-131327424) — buyer `0.0.9848440` → provider `0.0.9848438` |
-| HCS receipt | [`0.0.9842030@1785475558.951801626`](https://hashscan.io/testnet/transaction/0.0.9842030-1785475558-951801626) |
-
-Earlier echo-adapter settlements on the same topics:
-[transfer](https://hashscan.io/testnet/transaction/0.0.9842030-1785475156-150213566)
-· [receipt](https://hashscan.io/testnet/transaction/0.0.9842030-1785475156-278830202)
-
-Each receipt carries the job id, both accounts, the amount, the settlement transaction id and a
-**SHA-256 of the result** — so the payload stays private while the record stays verifiable.
+| x402 settlement | 91,641 gas — $0.00185 |
+| Audit-log append | 43,460 gas — $0.00088 |
+| Contract deploy | 211,940 gas — $0.0043 |
 
 ---
 
@@ -418,16 +418,23 @@ A few decisions that aren't obvious:
   Cloudflare tunnel is supported and useful (public status page, second delivery path) but earnings
   never depend on it.
 - **The broker's state is deliberately in memory.** Membership *is* liveness — a provider is only
-  real while heartbeats keep arriving. The durable half goes to HCS, where it's public and
-  append-only rather than trapped in our database.
+  real while heartbeats keep arriving. The durable half goes to the `XorvLog` contract, where it's
+  public and append-only rather than trapped in our database — but every entry costs gas, so the
+  on-chain liveness proof is sampled hourly rather than written every beat. At the cadence inherited
+  from Hedera it would have cost $0.25/day per idle provider, which is more than a hundred settled
+  jobs earn.
 - **A quote is a first-class object.** x402 asks the server for payment requirements twice (once to
   answer 402, once to check the payment). Both answers must name the same provider at the same
-  price, so the amounts are frozen at quote time — including the HBAR figure, which derives from a
-  live exchange rate read from the Mirror Node.
-- **Settlement gets its own SDK client, built fresh per payment.** The payload is a transaction
-  frozen by the *payer's* client; submitting one mutates the submitting client's internal state, and
-  reusing it makes every payment after the first fail deep inside the SDK. This one cost real
-  debugging time.
+  price, so the amounts are frozen at quote time — along with the token's EIP-712 domain, which the
+  buyer signs against. x402's EVM scheme fills that domain in automatically only for networks in its
+  built-in stablecoin registry, and Arc is not one of them (checked, not assumed). Leave it out and
+  the buyer signs against a domain of its own guessing, producing a valid signature that verifies
+  against nothing.
+- **The client registers the `eip155:*` wildcard, not one named network.** Pinning it to a network
+  read from local config means a buyer can only pay a broker that happens to match their own node's
+  configuration, and the failure is baffling — the 402 arrives correctly and the client refuses with
+  "no network/scheme registered". Nothing is lost by widening it: the EIP-712 domain binds each
+  signature to one chain id, so an authorization can't be replayed elsewhere.
 
 ---
 
@@ -447,5 +454,5 @@ A few decisions that aren't obvious:
 
 MIT — see [LICENSE](LICENSE).
 
-Built for the [Hedera x402 bounty](https://hedera.com/x402-bounty/).
+Built for the [Arc hackathon](https://www.encodeclub.com/) — Agentic Economy track.
 Part of the [Loompad](https://loompad.tech) ecosystem.

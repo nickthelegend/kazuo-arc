@@ -52,8 +52,8 @@ export interface Provider {
   id: string;
   /** Display name chosen by the operator. */
   label: string;
-  /** Hedera account that receives USDC/HBAR for this provider's jobs. */
-  accountId: string;
+  /** Arc address that receives USDC for this provider's jobs. */
+  address: string;
   /** Publicly reachable base URL of the node (usually a Cloudflare tunnel). */
   endpoint: string;
   capabilities: Capability[];
@@ -68,8 +68,8 @@ export interface Provider {
   /** Free-form region hint the operator set, e.g. "eu-west". */
   region?: string | null;
   stats: ProviderStats;
-  /** Consensus timestamp of the HCS registry message, when it was published. */
-  registryConsensusAt?: string | null;
+  /** Transaction hash of the on-chain registration entry, when published. */
+  registryTxHash?: string | null;
 }
 
 export interface ProviderStats {
@@ -77,8 +77,6 @@ export interface ProviderStats {
   jobsFailed: number;
   /** Lifetime earnings in micro-USDC (6dp), summed across settled jobs. */
   earnedUsdcMicros: number;
-  /** Lifetime earnings in tinybars, for jobs paid in HBAR. */
-  earnedTinybars: number;
   /** Rolling mean job duration in ms; 0 until the first job lands. */
   avgDurationMs: number;
 }
@@ -92,8 +90,17 @@ export type JobStatus =
   | "failed"
   | "expired";
 
-/** Which asset a job was paid in. */
-export type PayAsset = "usdc" | "hbar";
+/**
+ * Which asset a job was paid in.
+ *
+ * One member, and it stays a union on purpose. On Hedera this was
+ * `"usdc" | "hbar"` because the chain had a separate gas token you could also
+ * price in. On Arc, USDC *is* the gas token — there is nothing else to be paid
+ * in. Keeping the type rather than collapsing it to a string means receipts
+ * written under either chain still parse, and a second asset would be an
+ * additive change rather than a schema break.
+ */
+export type PayAsset = "usdc";
 
 /** What the poster asked for. */
 export interface JobRequest {
@@ -118,20 +125,20 @@ export interface JobEvent {
 /** Proof that a job was paid for, with everything needed to audit it. */
 export interface PaymentRecord {
   asset: PayAsset;
-  /** Hedera token id, or "0.0.0" for native HBAR. */
+  /** ERC-20 contract address of the token that moved. */
   assetId: string;
-  /** Amount in the asset's smallest unit, as an integer string. */
+  /** Amount in the asset's smallest unit (6dp), as an integer string. */
   amount: string;
   network: string;
-  /** Hedera transaction id of the settled transfer. */
-  transactionId: string;
-  /** Account debited. */
+  /** Hash of the settled transfer. */
+  transactionHash: string;
+  /** Address debited — the buyer, who signed but never broadcast. */
   payer: string;
-  /** Account credited — the provider. */
+  /** Address credited — the provider. */
   payTo: string;
   settledAt: number;
-  /** Direct HashScan link, precomputed so every surface shows the same one. */
-  hashscanUrl: string;
+  /** Direct ArcScan link, precomputed so every surface shows the same one. */
+  explorerUrl: string;
 }
 
 export interface Job {
@@ -142,7 +149,7 @@ export interface Job {
   /** Provider the quote was pinned to; set as soon as the job is quoted. */
   providerId?: string | null;
   providerLabel?: string | null;
-  providerAccountId?: string | null;
+  providerAddress?: string | null;
   capabilityId?: string | null;
   /** Agreed price in micro-USD, fixed at quote time. */
   priceUsdMicros?: number | null;
@@ -152,12 +159,12 @@ export interface Job {
   completedAt?: number | null;
   /** The answer, when the job succeeded. */
   result?: string | null;
-  /** sha-256 of `result`, mirrored into the HCS receipt so it's tamper-evident. */
+  /** sha-256 of `result`, mirrored into the on-chain receipt so it's tamper-evident. */
   resultHash?: string | null;
   error?: string | null;
   events: JobEvent[];
-  /** Consensus timestamp of the HCS receipt, once published. */
-  receiptConsensusAt?: string | null;
+  /** Transaction hash of the on-chain receipt entry, once published. */
+  receiptTxHash?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -166,7 +173,7 @@ export interface Job {
 
 export interface RegisterRequest {
   label: string;
-  accountId: string;
+  address: string;
   endpoint: string;
   capabilities: Capability[];
   version: string;
@@ -179,8 +186,8 @@ export interface RegisterResponse {
   provider: Provider;
   /** Bearer token the node presents on heartbeat and job callbacks. */
   token: string;
-  /** HCS registry message, when publishing succeeded. */
-  registry?: { topicId: string; transactionId: string; hashscanUrl: string } | null;
+  /** On-chain registration entry, when publishing succeeded. */
+  registry?: { contract: string; transactionHash: string; explorerUrl: string } | null;
 }
 
 export interface HeartbeatRequest {
@@ -212,41 +219,47 @@ export interface DispatchedJob {
 }
 
 // ---------------------------------------------------------------------------
-// HCS envelopes
+// Audit-log envelopes
 // ---------------------------------------------------------------------------
 
-export type HcsMessageKind = "provider.registered" | "provider.heartbeat" | "job.receipt";
+/**
+ * The envelope shape is deliberately unchanged from the Hedera Consensus
+ * Service version. The audit format is protocol — a consumer written against
+ * the old topics parses these entries without modification, and the only field
+ * that moved is the chain-specific transaction identifier inside a receipt.
+ */
+export type LogMessageKind = "provider.registered" | "provider.heartbeat" | "job.receipt";
 
-export interface HcsEnvelope<T> {
+export interface LogEnvelope<T> {
   v: number;
-  kind: HcsMessageKind;
+  kind: LogMessageKind;
   at: number;
   data: T;
 }
 
-export interface HcsProviderRegistered {
+export interface LogProviderRegistered {
   providerId: string;
   label: string;
-  accountId: string;
+  address: string;
   capabilities: Array<{ id: string; adapter: string; priceUsdMicros: number }>;
   version: string;
 }
 
-export interface HcsHeartbeat {
+export interface LogHeartbeat {
   providerId: string;
   activeJobs: number;
   capacity: number;
   uptimeSeconds: number;
 }
 
-export interface HcsJobReceipt {
+export interface LogJobReceipt {
   jobId: string;
   providerId: string;
-  providerAccountId: string;
+  providerAddress: string;
   payer: string;
   asset: string;
   amount: string;
-  transactionId: string;
+  transactionHash: string;
   /** sha-256 of the result text, so the payload is auditable without publishing it. */
   resultHash: string;
   durationMs: number;

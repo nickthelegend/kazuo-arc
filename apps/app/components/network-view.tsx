@@ -5,28 +5,28 @@ import { api, formatUsd, type NetworkInfo } from "@/lib/api";
 import { Empty, Ext, Panel, Row, Skeleton } from "@/components/ui";
 
 interface Receipt {
-  consensusAt: string;
   sequence: number;
+  blockNumber: number;
+  transactionHash: string;
+  author: string;
   payload: {
     data?: {
       jobId?: string;
-      providerAccountId?: string;
+      providerAddress?: string;
       payer?: string;
       amount?: string;
       asset?: string;
-      transactionId?: string;
+      transactionHash?: string;
       durationMs?: number;
       ok?: boolean;
     };
   } | null;
 }
 
-const HBAR = "0.0.0";
-
 export function NetworkView() {
   const [info, setInfo] = useState<NetworkInfo | null>(null);
   const [receipts, setReceipts] = useState<Receipt[] | null>(null);
-  const [topic, setTopic] = useState<{ id: string; url: string } | null>(null);
+  const [log, setLog] = useState<{ address: string; url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,11 +36,11 @@ export function NetworkView() {
         const [net, rec] = await Promise.all([api.network(), api.receipts()]);
         if (!alive) return;
         setInfo(net);
-        // The broker types the topic payload as `unknown` on purpose — a
-        // message on a public topic could have been written by anyone. Narrow
-        // it here, where we know what shape our own receipts take.
+        // The broker types the entry payload as `unknown` on purpose — anyone
+        // can append to the log, so an entry could have been written by someone
+        // else. Narrow it here, where we know what shape our own receipts take.
         setReceipts(rec.receipts as Receipt[]);
-        setTopic(rec.topic);
+        setLog(rec.log);
         setError(null);
       } catch (err) {
         if (alive) setError(err instanceof Error ? err.message : String(err));
@@ -63,8 +63,8 @@ export function NetworkView() {
       <Panel className="p-5">
         <h2 className="text-[13px] font-medium text-fg">Settlement</h2>
         <p className="measure mt-1.5 text-[12.5px] leading-relaxed text-fg-3">
-          The facilitator co-signs and pays the network fee on every settlement, which is why a
-          buyer needs no HBAR at all.
+          The facilitator relays the buyer&rsquo;s signed authorization and pays the network fee,
+          which is why a buyer needs no gas at all — on Arc, gas is USDC, and they never spend any.
         </p>
         <div className="mt-4 border-t border-[var(--line)] pt-1">
           <Row label="network">{info?.network ?? "—"}</Row>
@@ -73,8 +73,10 @@ export function NetworkView() {
           <Row label="usdc">
             {info ? (
               <Ext
-                href={`https://hashscan.io/${
-                  info.network === "hedera:mainnet" ? "mainnet" : "testnet"
+                href={`${
+                  info.network === "eip155:5042"
+                    ? "https://arcscan.app"
+                    : "https://testnet.arcscan.app"
                 }/token/${info.usdc}`}
               >
                 {info.usdc} ↗
@@ -96,44 +98,37 @@ export function NetworkView() {
       </Panel>
 
       <Panel className="p-5">
-        <h2 className="text-[13px] font-medium text-fg">Consensus topics</h2>
+        <h2 className="text-[13px] font-medium text-fg">Audit log</h2>
         <p className="measure mt-1.5 text-[12.5px] leading-relaxed text-fg-3">
-          Append-only, publicly readable, ordered by consensus timestamp. You don&rsquo;t have to
-          trust this dashboard — read them yourself.
+          One contract, three indexed streams. Append-only, publicly readable, ordered by block.
+          You don&rsquo;t have to trust this dashboard — read the events yourself from any Arc RPC.
         </p>
         <div className="mt-4 border-t border-[var(--line)]">
           {info
-            ? Object.entries(info.topics).map(([kind, t]) => (
+            ? Object.entries(info.logPublished).map(([stream, count]) => (
                 <div
-                  key={kind}
+                  key={stream}
                   className="flex items-center justify-between gap-4 border-b border-[var(--line)] py-3"
                 >
-                  <div>
-                    <p className="text-[13px] capitalize text-fg-2">{kind}</p>
-                    <p className="mono text-[11.5px] text-fg-4">{t?.id ?? "not configured"}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="tnum text-[13px] text-fg">
-                      {info.hcsPublished[kind as keyof NetworkInfo["hcsPublished"]] ?? 0}
-                    </p>
-                    {t ? (
-                      <p className="text-[11.5px] text-fg-4">
-                        <Ext href={t.url}>open ↗</Ext>
-                      </p>
-                    ) : null}
-                  </div>
+                  <p className="text-[13px] capitalize text-fg-2">{stream}</p>
+                  <p className="tnum text-[13px] text-fg">{count}</p>
                 </div>
               ))
             : null}
         </div>
+        {info?.log ? (
+          <p className="mono mt-3 truncate text-[11.5px] text-fg-4">
+            <Ext href={info.log.url}>{info.log.address} ↗</Ext>
+          </p>
+        ) : null}
       </Panel>
 
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-[13px] font-medium text-fg">Receipts from the ledger</h2>
-          {topic ? (
+          <h2 className="text-[13px] font-medium text-fg">Receipts from the chain</h2>
+          {log ? (
             <span className="text-[11.5px] text-fg-4">
-              <Ext href={topic.url}>topic {topic.id} ↗</Ext>
+              <Ext href={log.url}>contract ↗</Ext>
             </span>
           ) : null}
         </div>
@@ -143,7 +138,7 @@ export function NetworkView() {
         ) : receipts.length === 0 ? (
           <Empty
             title="No receipts yet"
-            hint="Every completed job writes one here, read straight from a Hedera mirror node."
+            hint="Every completed job writes one here, read straight from the chain."
           />
         ) : (
           <ul className="border-t border-[var(--line)]">
@@ -156,11 +151,9 @@ export function NetworkView() {
                 >
                   <span className="mono text-[12.5px] text-fg-2">{d.jobId ?? "—"}</span>
                   <span className="mono truncate text-[11.5px] text-fg-4">
-                    {d.payer} → {d.providerAccountId}
+                    {d.payer} → {d.providerAddress}
                   </span>
-                  <span className="mono tnum text-[12.5px] text-fg-2">
-                    {d.amount} {d.asset === HBAR ? "tℏ" : "µUSDC"}
-                  </span>
+                  <span className="mono tnum text-[12.5px] text-fg-2">{d.amount} µUSDC</span>
                 </li>
               );
             })}

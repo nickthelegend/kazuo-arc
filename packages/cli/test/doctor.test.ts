@@ -27,9 +27,9 @@ import type { NodeConfig } from "../src/config.js";
 
 const config = (over: Partial<NodeConfig> = {}): NodeConfig =>
   ({
-    network: "hedera:testnet",
-    accountId: "0.0.9848438",
-    privateKey: "302e0201",
+    network: "eip155:5042002",
+    address: "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B",
+    privateKey: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d",
     label: "test-node",
     capabilities: [
       { id: "claude-code", adapter: "claude-code", displayName: "Claude Code", model: null, priceUsdMicros: 250_000, maxConcurrency: 1 },
@@ -38,11 +38,11 @@ const config = (over: Partial<NodeConfig> = {}): NodeConfig =>
   }) as NodeConfig;
 
 const balances = (over = {}) => ({
-  hbarTinybars: "554130000",
   usdcUnits: "1250000",
-  usdcAssociated: true,
-  canReceiveUsdc: true,
-  maxAutoAssociations: 0,
+  // 1.25 USDC seen at 18 decimals — the same balance, which is the invariant
+  // these checks exist to police.
+  nativeWei: "1250000000000000000",
+  viewsAgree: true,
   ...over,
 });
 
@@ -75,7 +75,7 @@ describe("configChecks", () => {
   });
 
   it("fails a node with no payout account — it cannot be paid", () => {
-    expect(find(configChecks(config({ accountId: "" })), "payout")?.status).toBe("fail");
+    expect(find(configChecks(config({ address: "" })), "payout")?.status).toBe("fail");
   });
 
   it("warns when a price is set below plausible cost", () => {
@@ -116,46 +116,50 @@ describe("sandboxChecks", () => {
 });
 
 describe("payoutChecks", () => {
-  it("fails an account that cannot receive USDC", () => {
-    // The failure that looks like success: the payment is rejected at
-    // settlement, long after the buyer thinks they've paid.
-    const checks = payoutChecks("hedera:testnet", "0.0.1", balances({ canReceiveUsdc: false, usdcAssociated: false }));
+  const ADDRESS = "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B";
+
+  it("fails when the two views of the balance disagree", () => {
+    // The failure that looks like success: the ERC-20 and native views are the
+    // same money, so if they diverge the configured token is not Arc's USDC —
+    // every amount this node reports is wrong, and nothing else can notice.
+    const checks = payoutChecks("eip155:5042002", ADDRESS, balances({ viewsAgree: false }));
     expect(find(checks, "usdc")?.status).toBe("fail");
-    expect(find(checks, "usdc")?.fix).toBe("xorv wallet associate");
+    expect(find(checks, "usdc")?.detail).toContain("not Arc's native USDC");
   });
 
-  it("accepts automatic association without demanding an explicit one", () => {
-    const checks = payoutChecks(
-      "hedera:testnet",
-      "0.0.1",
-      balances({ usdcAssociated: false, maxAutoAssociations: -1 }),
-    );
+  it("passes when the 6dp and 18dp views describe one balance", () => {
+    const checks = payoutChecks("eip155:5042002", ADDRESS, balances());
     expect(find(checks, "usdc")?.status).toBe("ok");
-    expect(find(checks, "usdc")?.detail).toContain("unlimited");
+    expect(find(checks, "usdc")?.detail).toContain("one balance, two views");
   });
 
-  it("does not treat a zero HBAR balance as a problem", () => {
-    // The facilitator pays gas; a provider never needs HBAR.
-    const checks = payoutChecks("hedera:testnet", "0.0.1", balances({ hbarTinybars: "0" }));
+  it("does not treat an empty payout account as a problem", () => {
+    // A provider only ever receives, so it needs nothing to operate. Flagging
+    // an empty balance would send people to a faucet they do not need.
+    const checks = payoutChecks(
+      "eip155:5042002",
+      ADDRESS,
+      balances({ usdcUnits: "0", nativeWei: "0" }),
+    );
     expect(find(checks, "balance")?.status).toBe("ok");
-    expect(find(checks, "balance")?.detail).toContain("facilitator pays gas");
+    expect(find(checks, "balance")?.detail).toContain("only receives");
   });
 });
 
 describe("brokerChecks", () => {
   const info = {
-    network: "hedera:testnet",
-    facilitator: { description: "self-hosted", feePayer: "0.0.9842030" },
+    network: "eip155:5042002",
+    facilitator: { description: "self-hosted", feePayer: "0xeEE4CA97A7Af69B42d9cafD3955735C1130eB51E" },
     stats: { providersLive: 3 },
   };
 
   it("fails a network mismatch, which breaks every settlement", () => {
-    const checks = brokerChecks("http://b", { ...info, network: "hedera:mainnet" }, "hedera:testnet");
+    const checks = brokerChecks("http://b", { ...info, network: "eip155:5042" }, "eip155:5042002");
     expect(find(checks, "network")?.status).toBe("fail");
   });
 
   it("passes when both sides agree", () => {
-    expect(find(brokerChecks("http://b", info, "hedera:testnet"), "network")?.status).toBe("ok");
+    expect(find(brokerChecks("http://b", info, "eip155:5042002"), "network")?.status).toBe("ok");
   });
 });
 

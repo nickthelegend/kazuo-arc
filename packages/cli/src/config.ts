@@ -14,7 +14,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { HEDERA_TESTNET_CAIP2, type AdapterKind, type Capability } from "@xorv/protocol";
+import { ARC_TESTNET_CAIP2, type AdapterKind, type Capability } from "@xorv/protocol";
 
 export interface NodeConfig {
   /** Stable identity across restarts, so the broker re-uses the provider slot. */
@@ -22,7 +22,8 @@ export interface NodeConfig {
   label: string;
   network: string;
   brokerUrl: string;
-  accountId: string;
+  /** The Arc address earnings are paid to. Derived from the key, never typed. */
+  address: string;
   /** Empty when the key is supplied via XORV_PRIVATE_KEY instead. */
   privateKey: string;
   capabilities: Capability[];
@@ -105,9 +106,9 @@ function withDefaults(config: Partial<NodeConfig>): NodeConfig {
   return {
     nodeId: config.nodeId ?? "",
     label: config.label ?? "xorv-node",
-    network: config.network ?? HEDERA_TESTNET_CAIP2,
+    network: config.network ?? ARC_TESTNET_CAIP2,
     brokerUrl: config.brokerUrl ?? "http://localhost:8402",
-    accountId: config.accountId ?? "",
+    address: config.address ?? "",
     privateKey: config.privateKey ?? "",
     capabilities: config.capabilities ?? [],
     region: config.region ?? null,
@@ -142,12 +143,12 @@ export function resolveBrokerUrl(config: NodeConfig): string {
 export interface EarningRow {
   at: number;
   jobId: string;
-  asset: "usdc" | "hbar";
+  asset: "usdc";
   amount: string;
   usdMicros: number;
   durationMs: number;
   ok: boolean;
-  transactionId?: string;
+  transactionHash?: string;
   adapter?: string;
 }
 
@@ -156,7 +157,7 @@ export function appendEarning(row: EarningRow): void {
   try {
     fs.appendFileSync(EARNINGS_PATH, `${JSON.stringify(row)}\n`, { mode: 0o600 });
   } catch {
-    // The ledger is a convenience; the ledger of record is on Hedera. Never let
+    // The ledger is a convenience; the ledger of record is on chain. Never let
     // a disk problem here fail a job that already ran and already got paid.
   }
 }

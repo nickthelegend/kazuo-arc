@@ -2,16 +2,16 @@
  * Typed access to the broker.
  *
  * The browser reads freely — providers, jobs, receipts are all public — but it
- * never signs. Paying requires a Hedera key, and a key in a browser tab is a
- * key on someone's clipboard, so the one privileged call goes through a server
- * route (see app/api/pay/route.ts).
+ * never signs with a server key. A connected wallet signs in the tab (see
+ * lib/pay-with-wallet.ts); the fallback for a visitor without one goes through
+ * a server route holding the demo account (see app/api/pay/route.ts).
  */
 
 export const BROKER_URL = (
   process.env.NEXT_PUBLIC_XORV_BROKER_URL ?? "http://localhost:8402"
 ).replace(/\/+$/, "");
 
-export const NETWORK = process.env.NEXT_PUBLIC_XORV_NETWORK ?? "hedera:testnet";
+export const NETWORK = process.env.NEXT_PUBLIC_XORV_NETWORK ?? "eip155:5042002";
 
 export interface Capability {
   id: string;
@@ -25,8 +25,8 @@ export interface Capability {
 export interface Provider {
   id: string;
   label: string;
-  accountId: string;
-  accountUrl: string;
+  address: string;
+  addressUrl: string;
   endpoint: string;
   status: "online" | "busy" | "offline";
   connected: boolean;
@@ -41,21 +41,20 @@ export interface Provider {
     jobsCompleted: number;
     jobsFailed: number;
     earnedUsdcMicros: number;
-    earnedTinybars: number;
     avgDurationMs: number;
   };
 }
 
 export interface PaymentRecord {
-  asset: "usdc" | "hbar";
+  asset: "usdc";
   assetId: string;
   amount: string;
   network: string;
-  transactionId: string;
+  transactionHash: string;
   payer: string;
   payTo: string;
   settledAt: number;
-  hashscanUrl: string;
+  explorerUrl: string;
 }
 
 export interface JobEvent {
@@ -76,14 +75,14 @@ export interface Job {
   completedAt: number | null;
   providerId: string | null;
   providerLabel: string | null;
-  providerAccountId: string | null;
+  providerAddress: string | null;
   priceUsdMicros: number | null;
   priceLabel: string | null;
   payment: PaymentRecord | null;
   result: string | null;
   resultHash: string | null;
   error: string | null;
-  receiptConsensusAt: string | null;
+  receiptTxHash: string | null;
   eventCount: number;
   events?: JobEvent[];
 }
@@ -91,12 +90,11 @@ export interface Job {
 export interface NetworkInfo {
   network: string;
   facilitator: { mode: string; description: string; feePayer: string };
-  operator: { accountId: string; url: string };
+  operator: { address: string; url: string };
   usdc: string;
-  topics: Record<string, { id: string; url: string } | null>;
-  hcsPublished: { registry: number; heartbeat: number; receipts: number };
-  hcsLastError: string | null;
-  hbarRate: { centsPerHbar: number } | null;
+  log: { address: string; url: string } | null;
+  logPublished: { registry: number; heartbeat: number; receipts: number };
+  logLastError: string | null;
   stats: {
     providersLive: number;
     providersConnected: number;
@@ -127,7 +125,16 @@ export const api = {
   jobs: (limit = 25) => get<{ jobs: Job[] }>(`/api/jobs?limit=${limit}`).then((r) => r.jobs),
   job: (id: string) => get<{ job: Job }>(`/api/jobs/${id}`).then((r) => r.job),
   receipts: () =>
-    get<{ topic: { id: string; url: string } | null; receipts: Array<{ consensusAt: string; sequence: number; payload: unknown }> }>(
+    get<{
+      log: { address: string; url: string } | null;
+      receipts: Array<{
+        sequence: number;
+        blockNumber: number;
+        transactionHash: string;
+        author: string;
+        payload: unknown;
+      }>;
+    }>(
       "/api/receipts",
     ),
 };
@@ -157,7 +164,23 @@ export function formatDuration(ms: number): string {
   return `${m}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
-export function hashscanAccount(accountId: string): string {
-  const net = NETWORK === "hedera:mainnet" ? "mainnet" : "testnet";
-  return `https://hashscan.io/${net}/account/${accountId}`;
+/** ArcScan base for the configured network. */
+function explorerBase(): string {
+  return NETWORK === "eip155:5042" ? "https://arcscan.app" : "https://testnet.arcscan.app";
+}
+
+export function explorerAddress(address: string): string {
+  return `${explorerBase()}/address/${address}`;
+}
+
+/**
+ * ArcScan link for a transaction.
+ *
+ * A plain hash, appended. Its Hedera predecessor had to rewrite the separators
+ * first — the SDK renders a transaction id as `0.0.123@1699.000000000` and
+ * HashScan wants `0.0.123-1699-000000000` — which is the kind of formatting
+ * detail that silently produces 404 links when someone forgets it.
+ */
+export function explorerTx(transactionHash: string): string {
+  return `${explorerBase()}/tx/${transactionHash}`;
 }

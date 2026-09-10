@@ -10,7 +10,7 @@ import {
   formatAgo,
   formatDuration,
   formatUsd,
-  hashscanAccount,
+  explorerAddress,
   networkLabel,
 } from "@xorv/protocol";
 import { requireConfig, resolveBrokerUrl } from "../config.js";
@@ -99,9 +99,9 @@ export async function startCommand(opts: StartOptions): Promise<void> {
     reg.succeed(`registered as ${ui.c.bold(result.providerId)}`);
     if (result.registry) {
       ui.ok(
-        `${ui.glyph.chain()} registration recorded on HCS ${ui.c.muted(result.registry.topicId)}`,
+        `${ui.glyph.chain()} registration recorded on chain ${ui.c.muted(result.registry.contract)}`,
       );
-      ui.muted(`  ${result.registry.hashscanUrl}`);
+      ui.muted(`  ${result.registry.explorerUrl}`);
     }
   } catch (err) {
     reg.fail(`registration failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -233,7 +233,7 @@ function dashboard(
   lines.push("");
   lines.push(
     ui.c.muted(
-      `  payout ${node.config.accountId} · ${endpoint.replace(/^https?:\/\//, "")} · ctrl-c to stop`,
+      `  payout ${node.config.address} · ${endpoint.replace(/^https?:\/\//, "")} · ctrl-c to stop`,
     ),
   );
   return lines;

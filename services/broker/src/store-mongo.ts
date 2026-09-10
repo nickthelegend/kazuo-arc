@@ -171,9 +171,9 @@ export class LayeredPersistence implements Persistence {
     void this.flushJob(job);
   }
 
-  saveStats(nodeId: string, label: string, accountId: string, stats: ProviderStats): void {
-    this.local.saveStats(nodeId, label, accountId, stats);
-    const row: PersistedProviderStats = { nodeId, label, accountId, ...stats };
+  saveStats(nodeId: string, label: string, address: string, stats: ProviderStats): void {
+    this.local.saveStats(nodeId, label, address, stats);
+    const row: PersistedProviderStats = { nodeId, label, address, ...stats };
     this.pendingStats.set(nodeId, row);
     void this.flushStats(row);
   }

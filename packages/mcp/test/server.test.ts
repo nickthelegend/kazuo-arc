@@ -43,7 +43,7 @@ class Client {
         // Point at a port nothing is listening on, so "broker unreachable" is
         // deterministic rather than depending on a dev server being up.
         XORV_BROKER_URL: "http://127.0.0.1:59999",
-        XORV_NETWORK: "hedera:testnet",
+        XORV_NETWORK: "eip155:5042002",
         ...env,
       },
       stdio: ["pipe", "pipe", "pipe"],

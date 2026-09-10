@@ -21,7 +21,7 @@ import type { Job, ProviderStats } from "@xorv/protocol";
 export interface PersistedProviderStats extends ProviderStats {
   nodeId: string;
   label: string;
-  accountId: string;
+  address: string;
 }
 
 export interface Persistence {
@@ -32,7 +32,7 @@ export interface Persistence {
   saveJob(job: Job): void;
   /** Lifetime stats keyed by the node's stable id, so a restart keeps earnings. */
   loadStats(): Map<string, PersistedProviderStats>;
-  saveStats(nodeId: string, label: string, accountId: string, stats: ProviderStats): void;
+  saveStats(nodeId: string, label: string, address: string, stats: ProviderStats): void;
   /** Drop jobs older than the retention window; returns how many went. */
   prune(olderThanMs: number): number;
   close(): void;
@@ -67,7 +67,7 @@ interface JobRow {
 interface StatsRow {
   node_id: string;
   label: string;
-  account_id: string;
+  address: string;
   body: string;
 }
 
@@ -132,7 +132,7 @@ class SqlitePersistence implements Persistence {
       CREATE TABLE IF NOT EXISTS provider_stats (
         node_id    TEXT PRIMARY KEY,
         label      TEXT NOT NULL,
-        account_id TEXT NOT NULL,
+        address TEXT NOT NULL,
         body       TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
@@ -177,7 +177,7 @@ class SqlitePersistence implements Persistence {
 
   loadStats(): Map<string, PersistedProviderStats> {
     const rows = this.db
-      .prepare("SELECT node_id, label, account_id, body FROM provider_stats")
+      .prepare("SELECT node_id, label, address, body FROM provider_stats")
       .all() as unknown as StatsRow[];
     const out = new Map<string, PersistedProviderStats>();
     for (const row of rows) {
@@ -185,7 +185,7 @@ class SqlitePersistence implements Persistence {
         out.set(row.node_id, {
           nodeId: row.node_id,
           label: row.label,
-          accountId: row.account_id,
+          address: row.address,
           ...(JSON.parse(row.body) as ProviderStats),
         });
       } catch {
@@ -195,18 +195,18 @@ class SqlitePersistence implements Persistence {
     return out;
   }
 
-  saveStats(nodeId: string, label: string, accountId: string, stats: ProviderStats): void {
+  saveStats(nodeId: string, label: string, address: string, stats: ProviderStats): void {
     this.db
       .prepare(
-        `INSERT INTO provider_stats (node_id, label, account_id, body, updated_at)
+        `INSERT INTO provider_stats (node_id, label, address, body, updated_at)
          VALUES (?, ?, ?, ?, ?)
          ON CONFLICT(node_id) DO UPDATE SET
            label = excluded.label,
-           account_id = excluded.account_id,
+           address = excluded.address,
            body = excluded.body,
            updated_at = excluded.updated_at`,
       )
-      .run(nodeId, label, accountId, JSON.stringify(stats), Date.now());
+      .run(nodeId, label, address, JSON.stringify(stats), Date.now());
   }
 
   prune(olderThanMs: number): number {

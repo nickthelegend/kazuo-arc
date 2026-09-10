@@ -5,8 +5,12 @@
  * This is the part of the story x402 was actually invented for: an agent that
  * needs work done finds capacity, pays for it, and gets the result — without a
  * human opening a browser, creating an account, or pasting a card number. The
- * agent holds a Hedera key, the network quotes a price, the payment settles in
- * about three seconds, and the job runs on a stranger's machine.
+ * agent holds an Arc key, the network quotes a price, the payment settles in
+ * about a second, and the job runs on a stranger's machine.
+ *
+ * The agent never broadcasts a transaction and needs no gas token. It signs an
+ * EIP-3009 authorization and a facilitator relays it — which is what makes an
+ * autonomous wallet holding nothing but USDC a workable thing to give a model.
  *
  * Point any MCP client at it:
  *
@@ -16,9 +20,9 @@
  * another program and has no terminal to prompt at:
  *
  *   XORV_BROKER_URL   broker to buy from (default http://localhost:8402)
- *   XORV_PAYER_ID     Hedera account that pays for jobs
- *   XORV_PAYER_KEY    its private key
- *   XORV_NETWORK      default hedera:testnet
+ *   XORV_PAYER_KEY    the private key that pays for jobs (the address is
+ *                     derived from it — there is nothing else to configure)
+ *   XORV_NETWORK      default eip155:5042002 (Arc testnet)
  *   XORV_MAX_USD      hard ceiling per job, default 0.05 — see below
  */
 
@@ -27,19 +31,12 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { x402Client, x402HTTPClient } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
-import { createClientHederaSigner } from "@x402/hedera";
-import { ExactHederaScheme } from "@x402/hedera/exact/client";
-import {
-  HBAR_ASSET_ID,
-  formatUsd,
-  hashscanTx,
-  parsePrivateKey,
-  parseUsd,
-} from "@xorv/protocol";
+import { registerExactEvmScheme } from "@x402/evm/exact/client";
+import { toClientEvmSigner } from "@x402/evm";
+import { accountFor, formatUsd, explorerTx, parseUsd, readClient } from "@xorv/protocol";
 
 const BROKER_URL = (process.env.XORV_BROKER_URL ?? "http://localhost:8402").replace(/\/+$/, "");
-const NETWORK = process.env.XORV_NETWORK ?? "hedera:testnet";
-const PAYER_ID = process.env.XORV_PAYER_ID?.trim();
+const NETWORK = process.env.XORV_NETWORK ?? "eip155:5042002";
 const PAYER_KEY = process.env.XORV_PAYER_KEY?.trim();
 
 /**
@@ -60,7 +57,7 @@ interface QuoteResponse {
   provider: {
     id: string;
     label: string;
-    accountId: string;
+    address: string;
     capability: string;
     adapter: string;
     model: string | null;
@@ -78,8 +75,8 @@ interface JobView {
   resultHash: string | null;
   priceLabel: string | null;
   providerLabel: string | null;
-  receiptConsensusAt: string | null;
-  payment: { transactionId: string; hashscanUrl: string; asset: string } | null;
+  receiptTxHash: string | null;
+  payment: { transactionHash: string; explorerUrl: string; asset: string } | null;
 }
 
 function text(body: string) {
@@ -97,22 +94,33 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 /** Build a paying fetch. Throws when no key is configured — read-only still works. */
-function payingClient(preferHbar: boolean) {
-  if (!PAYER_ID || !PAYER_KEY) {
+function payingClient() {
+  if (!PAYER_KEY) {
     throw new Error(
-      "No payer configured. Set XORV_PAYER_ID and XORV_PAYER_KEY in this MCP server's environment to let it buy jobs.",
+      "No payer configured. Set XORV_PAYER_KEY in this MCP server's environment to let it buy jobs.",
     );
   }
-  const signer = createClientHederaSigner(PAYER_ID, parsePrivateKey(PAYER_KEY), {
-    network: NETWORK,
+  const payer = accountFor(PAYER_KEY);
+  const client = new x402Client();
+  // Registered as the `eip155:*` wildcard rather than one named network, which
+  // `registerExactEvmScheme` does when `networks` is omitted.
+  //
+  // This is a correctness fix, not a shortcut. Pinning the client to a network
+  // read from *local* config means a buyer can only pay a broker that happens
+  // to match their own node's configuration — and the failure is baffling:
+  // the 402 arrives correctly, the requirements are valid, and the client
+  // refuses with "no network/scheme registered" while naming two networks that
+  // look fine in isolation. A buyer should be able to pay whatever the broker
+  // quotes.
+  //
+  // Nothing is lost by widening it. The EIP-712 domain binds the signature to a
+  // specific chain id and verifying contract, so an authorization signed for one
+  // network cannot be replayed on another, and the price ceiling still applies.
+  registerExactEvmScheme(client, {
+    signer: toClientEvmSigner(payer, readClient(NETWORK)),
   });
-  const client = new x402Client().register("hedera:*", new ExactHederaScheme(signer));
-  client.registerPolicy((_v, requirements) => {
-    const preferred = preferHbar
-      ? requirements.filter((r) => r.asset === HBAR_ASSET_ID)
-      : requirements.filter((r) => r.asset !== HBAR_ASSET_ID);
-    return preferred.length > 0 ? preferred : requirements;
-  });
+  // No asset-preference policy: Arc has one asset. On Hedera this had to pick
+  // between USDC and HBAR and fall back rather than return an empty list.
   return { paidFetch: wrapFetchWithPayment(fetch, client), httpClient: new x402HTTPClient(client) };
 }
 
@@ -132,7 +140,7 @@ server.tool(
         providers: Array<{
           label: string;
           status: string;
-          accountId: string;
+          address: string;
           region: string | null;
           capabilities: Array<{ displayName: string; adapter: string; priceUsdMicros: number }>;
           stats: { jobsCompleted: number; jobsFailed: number };
@@ -150,7 +158,7 @@ server.tool(
         const caps = p.capabilities
           .map((c) => `${c.displayName} (${c.adapter}) ${formatUsd(c.priceUsdMicros)}/job`)
           .join(", ");
-        return `- ${p.label} [${p.status}]${p.region ? ` · ${p.region}` : ""} — ${caps} · ${p.stats.jobsCompleted} jobs done, ${p.stats.jobsFailed} failed · pays to ${p.accountId}`;
+        return `- ${p.label} [${p.status}]${p.region ? ` · ${p.region}` : ""} — ${caps} · ${p.stats.jobsCompleted} jobs done, ${p.stats.jobsFailed} failed · pays to ${p.address}`;
       });
       return text(`${live.length} provider(s) live on ${NETWORK}:\n${lines.join("\n")}`);
     } catch (err) {
@@ -161,7 +169,7 @@ server.tool(
 
 server.tool(
   "xorv_network_status",
-  "Show the Xorv network's overall state: how many providers are live, how many jobs have settled, the facilitator, and the Hedera Consensus Service topics carrying the public audit trail.",
+  "Show the Xorv network's overall state: how many providers are live, how many jobs have settled, the facilitator, and the on-chain audit log carrying the public record.",
   {},
   async () => {
     try {
@@ -169,7 +177,7 @@ server.tool(
         network: string;
         facilitator: { description: string; feePayer: string };
         usdc: string;
-        topics: Record<string, { id: string; url: string } | null>;
+        log: { address: string; url: string } | null;
         stats: {
           providersLive: number;
           jobsTotal: number;
@@ -178,9 +186,6 @@ server.tool(
         };
       }>("/api/network");
 
-      const topics = Object.entries(info.topics)
-        .map(([kind, t]) => `  ${kind}: ${t ? `${t.id} — ${t.url}` : "not configured"}`)
-        .join("\n");
 
       return text(
         [
@@ -190,8 +195,7 @@ server.tool(
           `Providers live: ${info.stats.providersLive}`,
           `Jobs: ${info.stats.jobsCompleted} completed of ${info.stats.jobsTotal}`,
           `Settled: ${formatUsd(info.stats.paidUsdMicros)}`,
-          `Audit topics (public, on Hedera):`,
-          topics,
+          `Audit log (public, on chain): ${info.log ? `${info.log.address} — ${info.log.url}` : "not configured"}`,
         ].join("\n"),
       );
     } catch (err) {
@@ -229,8 +233,8 @@ server.tool(
           `Price: ${quote.priceLabel}`,
           `Provider: ${quote.provider.label} running ${quote.provider.capability}${quote.provider.model ? ` (${quote.provider.model})` : ""}`,
           `Track record: ${quote.provider.stats.jobsCompleted} completed, ${quote.provider.stats.jobsFailed} failed`,
-          `Payment goes directly to ${quote.provider.accountId} — the broker never holds it.`,
-          `Payable in: ${quote.accepts.map((a) => (a.asset === HBAR_ASSET_ID ? "HBAR" : "USDC")).join(" or ")}`,
+          `Payment goes directly to ${quote.provider.address} — the broker never holds it.`,
+          `Payable in: USDC (${quote.accepts[0]?.amount ?? "?"} units). You need no gas — the facilitator relays and pays the fee.`,
         ].join("\n"),
       );
     } catch (err) {
@@ -245,7 +249,7 @@ server.tool(
 
 server.tool(
   "xorv_run_job",
-  `Run an AI job on the Xorv network and PAY FOR IT with a real on-chain transfer. This spends money — at most ${formatUsd(MAX_USD_MICROS)} per call. The job runs on someone else's machine using their AI subscription, and they are paid directly. Returns the result plus a HashScan link proving the payment.`,
+  `Run an AI job on the Xorv network and PAY FOR IT with a real on-chain transfer. This spends money — at most ${formatUsd(MAX_USD_MICROS)} per call. The job runs on someone else's machine using their AI subscription, and they are paid directly. Returns the result plus an ArcScan link proving the payment.`,
   {
     prompt: z.string().min(1).describe("The job to run."),
     adapter: z
@@ -257,15 +261,16 @@ server.tool(
       .positive()
       .optional()
       .describe(`Most to pay in US dollars. Capped at ${formatUsd(MAX_USD_MICROS)} regardless.`),
-    pay_with: z.enum(["usdc", "hbar"]).optional().describe("Which asset to pay in. Default usdc."),
+    // No `pay_with`: there is one asset on Arc, and offering a choice the
+    // network cannot honour is worse than not offering one.
   },
-  async ({ prompt, adapter, max_usd, pay_with }) => {
+  async ({ prompt, adapter, max_usd }) => {
     const ceiling = Math.min(max_usd ? parseUsd(max_usd) : MAX_USD_MICROS, MAX_USD_MICROS);
 
     let paidFetch: typeof fetch;
     let httpClient: x402HTTPClient;
     try {
-      const built = payingClient(pay_with === "hbar");
+      const built = payingClient();
       paidFetch = built.paidFetch as typeof fetch;
       httpClient = built.httpClient;
     } catch (err) {
@@ -312,9 +317,9 @@ server.tool(
       }
 
       const proof = settlement?.transaction
-        ? `\n\n---\nPaid ${quote.priceLabel} to ${quote.provider.label} (${quote.provider.accountId})\nTransaction: ${hashscanTx(NETWORK, settlement.transaction)}${
-            job.receiptConsensusAt
-              ? `\nHCS receipt: ${hashscanTx(NETWORK, job.receiptConsensusAt)}`
+        ? `\n\n---\nPaid ${quote.priceLabel} to ${quote.provider.label} (${quote.provider.address})\nTransaction: ${explorerTx(NETWORK, settlement.transaction)}${
+            job.receiptTxHash
+              ? `\nOn-chain receipt: ${explorerTx(NETWORK, job.receiptTxHash)}`
               : ""
           }`
         : "";
@@ -338,7 +343,7 @@ server.tool(
           `Job ${job.id} — ${job.status}`,
           `Provider: ${job.providerLabel ?? "unassigned"}`,
           `Price: ${job.priceLabel ?? "—"}`,
-          job.payment ? `Payment: ${job.payment.hashscanUrl}` : "Payment: not settled",
+          job.payment ? `Payment: ${job.payment.explorerUrl}` : "Payment: not settled",
           job.resultHash ? `Result sha256: ${job.resultHash}` : "",
           "",
           job.result ?? job.error ?? "(no result yet)",
@@ -367,8 +372,8 @@ async function pollUntilDone(jobId: string, timeoutMs: number): Promise<JobView>
       const { job } = await getJson<{ job: JobView }>(`/api/jobs/${jobId}`);
       last = job;
       if (job.status === "completed" || job.status === "failed") {
-        // Give the HCS receipt a moment so the proof link is in the answer.
-        if (job.status === "completed" && !job.receiptConsensusAt) {
+        // Give the on-chain receipt a moment so the proof link is in the answer.
+        if (job.status === "completed" && !job.receiptTxHash) {
           await new Promise((r) => setTimeout(r, 4_000));
           const { job: withReceipt } = await getJson<{ job: JobView }>(`/api/jobs/${jobId}`);
           return withReceipt;
@@ -380,7 +385,7 @@ async function pollUntilDone(jobId: string, timeoutMs: number): Promise<JobView>
     }
     await new Promise((r) => setTimeout(r, 2_000));
   }
-  return last ?? { id: jobId, status: "timed out", result: null, error: "timed out waiting for the provider", resultHash: null, priceLabel: null, providerLabel: null, receiptConsensusAt: null, payment: null };
+  return last ?? { id: jobId, status: "timed out", result: null, error: "timed out waiting for the provider", resultHash: null, priceLabel: null, providerLabel: null, receiptTxHash: null, payment: null };
 }
 
 const transport = new StdioServerTransport();

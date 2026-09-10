@@ -9,10 +9,12 @@
 import {
   fetchBalances,
   formatDuration,
+  formatNative,
   formatUsd,
-  hashscanAccount,
+  formatUsdc,
+  explorerAddress,
   networkLabel,
-  usdcTokenId,
+  usdcAddress,
 } from "@xorv/protocol";
 import { loadConfig, readEarnings, type EarningRow } from "../config.js";
 import * as ui from "../ui.js";
@@ -151,27 +153,28 @@ export async function earningsCommand(opts: { json?: boolean; limit?: string }):
 
   // -- on-chain balance -----------------------------------------------------
 
-  if (config?.accountId) {
+  if (config?.address) {
     ui.heading("on-chain");
-    const spin = ui.spinner(`checking ${config.accountId}…`);
+    const spin = ui.spinner(`checking ${config.address}…`);
     try {
-      const balances = await fetchBalances(config.network, config.accountId);
+      const balances = await fetchBalances(config.network, config.address);
       spin.stop();
       console.log(
         ui.box(
           ui.kv([
-            ["account", `${config.accountId} ${ui.c.muted(`(${networkLabel(config.network)})`)}`],
-            ["usdc", ui.c.money(formatUsd(Number(balances.usdcUnits)))],
-            ["hbar", `${(Number(balances.hbarTinybars) / 1e8).toFixed(4)} ℏ`],
-            ["token", ui.c.muted(usdcTokenId(config.network))],
-            ["hashscan", ui.c.muted(hashscanAccount(config.network, config.accountId))],
+            ["account", `${config.address} ${ui.c.muted(`(${networkLabel(config.network)})`)}`],
+            ["usdc", ui.c.money(formatUsdc(balances.usdcUnits))],
+            // The same money at 18 decimals — the view the EVM meters gas in.
+            ["gas view", ui.c.muted(formatNative(balances.nativeWei))],
+            ["token", ui.c.muted(usdcAddress(config.network))],
+            ["arcscan", ui.c.muted(explorerAddress(config.network, config.address))],
           ]),
           { title: "wallet", color: ui.BRAND.mint },
         ),
       );
     } catch {
       spin.stop();
-      ui.warn("  couldn't reach the mirror node for the live balance");
+      ui.warn("  couldn't reach the RPC for the live balance");
     }
   }
   ui.blank();

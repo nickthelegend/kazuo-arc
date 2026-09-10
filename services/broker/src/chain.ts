@@ -1,29 +1,45 @@
 /**
- * The Hedera side of the broker: the audit trail, and the money.
+ * The chain side of the broker: the audit trail, and the money.
  *
  * Two responsibilities that both need the operator's key, kept together so
- * there is exactly one Hedera client in the process.
+ * there is exactly one place in the process that can sign.
+ *
+ * ## One client, not two
+ *
+ * The Hedera version of this file ran two SDK clients on purpose, and the
+ * comment explaining why was the longest in the codebase: the facilitator and
+ * the audit writer could not share one, because `TopicMessageSubmitTransaction`
+ * is chunked and re-freezes itself inside `executeAll`, so a concurrent
+ * settlement mutating the client underneath it produced an intermittent
+ * "transaction must have been frozen" on a call that succeeded in isolation.
+ *
+ * viem clients hold no per-transaction state. Both jobs use the same wallet
+ * client, and the class of bug is gone rather than worked around. What remains
+ * is ordinary nonce management, which the RPC handles.
  */
 
-import { type Client, type PrivateKey } from "@hiero-ledger/sdk";
 import {
+  appendEntrySafe,
   envelope,
-  hashscanTopic,
-  hashscanTx,
-  hederaClient,
-  submitMessageSafe,
-  type HcsHeartbeat,
-  type HcsJobReceipt,
-  type HcsProviderRegistered,
+  explorerAddress,
+  explorerTx,
+  logAddress,
+  readClient,
+  writeClient,
+  type LogHeartbeat,
+  type LogJobReceipt,
+  type LogMessageKind,
+  type LogProviderRegistered,
   type Provider,
 } from "@xorv/protocol";
+import type { PublicClient, WalletClient } from "viem";
 import type { BrokerConfig } from "./config.js";
 
 export interface PublishResult {
-  topicId: string;
-  transactionId: string;
-  hashscanUrl: string;
-  sequenceNumber?: string;
+  contract: string;
+  transactionHash: string;
+  explorerUrl: string;
+  blockNumber?: string;
 }
 
 /**
@@ -31,67 +47,46 @@ export interface PublishResult {
  *
  * Stated as an interface so the app can be booted against a stub in tests. The
  * alternative — reaching for the real `Chain` — means every integration test
- * needs Hedera credentials, a network round-trip and real HBAR, which is a good
- * way to end up with no integration tests at all.
+ * needs a funded account and a network round-trip, which is a good way to end
+ * up with no integration tests at all.
  */
 export interface ChainLike {
   readonly network: string;
-  readonly operatorId: string;
-  readonly settlementClient: Client;
-  describeTopics(): Record<string, { id: string; url: string } | null>;
+  readonly operatorAddress: string;
+  readonly publicClient: PublicClient;
+  readonly walletClient: WalletClient;
+  describeLog(): { address: string; url: string } | null;
   counts(): { registry: number; heartbeat: number; receipts: number };
   lastPublishError(): string | null;
   publishRegistration(provider: Provider): Promise<PublishResult | null>;
-  publishHeartbeat(data: HcsHeartbeat): Promise<PublishResult | null>;
-  publishReceipt(data: HcsJobReceipt): Promise<PublishResult | null>;
+  publishHeartbeat(data: LogHeartbeat): Promise<PublishResult | null>;
+  publishReceipt(data: LogJobReceipt): Promise<PublishResult | null>;
   close(): void;
 }
 
 export class Chain implements ChainLike {
-  /** Client for the audit trail (HCS writes). */
-  readonly client: Client;
-  /**
-   * A second, dedicated client for payment settlement.
-   *
-   * The facilitator and the HCS writer must not share one SDK client. They ran
-   * on the same one at first, and the symptom was ugly and intermittent: a
-   * receipt published seconds after a settlement would fail with "transaction
-   * must have been frozen", while the identical call in isolation succeeded.
-   * `TopicMessageSubmitTransaction` is chunked and re-freezes itself inside
-   * `executeAll`, so it is sensitive to client state being mutated underneath it
-   * by a concurrent execute — which, on the settlement path, is exactly what
-   * happens.
-   *
-   * Two clients cost two gRPC connection pools and remove the whole class of
-   * problem. Money and audit have no reason to share mutable state anyway.
-   */
-  readonly settlementClient: Client;
+  readonly publicClient: PublicClient;
+  readonly walletClient: WalletClient;
   readonly network: string;
-  readonly operatorId: string;
-  readonly operatorKey: PrivateKey;
-  private readonly topics: BrokerConfig["topics"];
+  readonly operatorAddress: string;
+  private readonly contract: string | null;
   /** Publish failures, kept for /api/network so a misconfig is visible. */
   private lastError: string | null = null;
   private published = { registry: 0, heartbeat: 0, receipts: 0 };
 
   constructor(config: BrokerConfig) {
     this.network = config.network;
-    this.operatorId = config.operatorId;
-    this.operatorKey = config.operatorKey;
-    this.topics = config.topics;
-    this.client = hederaClient(config.network, config.operatorId, config.operatorKey);
-    this.settlementClient = hederaClient(config.network, config.operatorId, config.operatorKey);
+    this.operatorAddress = config.operatorAddress;
+    this.contract = config.logAddress ?? logAddress();
+    this.publicClient = readClient(config.network);
+    this.walletClient = writeClient(config.network, config.operatorKey);
   }
 
-  /** Topic ids plus their HashScan links, for the network panel. */
-  describeTopics(): Record<string, { id: string; url: string } | null> {
-    const describe = (id: string | null) =>
-      id ? { id, url: hashscanTopic(this.network, id) } : null;
-    return {
-      registry: describe(this.topics.registry),
-      heartbeat: describe(this.topics.heartbeat),
-      receipts: describe(this.topics.receipts),
-    };
+  /** The log contract plus its ArcScan link, for the network panel. */
+  describeLog(): { address: string; url: string } | null {
+    return this.contract
+      ? { address: this.contract, url: explorerAddress(this.network, this.contract) }
+      : null;
   }
 
   counts(): { registry: number; heartbeat: number; receipts: number } {
@@ -103,34 +98,39 @@ export class Chain implements ChainLike {
   }
 
   private async publish(
-    topicId: string | null,
-    kind: Parameters<typeof envelope>[0],
+    kind: LogMessageKind,
+    subject: string,
     data: unknown,
     counter: keyof typeof this.published,
   ): Promise<PublishResult | null> {
-    const result = await submitMessageSafe(this.client, topicId, envelope(kind, data), (err) => {
-      this.lastError = `${kind}: ${err.message}`;
-      // Keep the stack for the operator; the message alone ("cannot read
-      // properties of undefined") is unactionable when it comes from deep
-      // inside the SDK.
-      console.error(`[broker] HCS ${kind} publish failed:`, err.stack ?? err.message);
-    });
-    if (!result) return null;
+    const contract = this.contract;
+    const result = await appendEntrySafe(
+      { wallet: this.walletClient, public: this.publicClient },
+      contract,
+      kind,
+      subject,
+      envelope(kind, data),
+      (err) => {
+        this.lastError = `${kind}: ${err.message}`;
+        console.error(`[broker] audit ${kind} publish failed:`, err.stack ?? err.message);
+      },
+    );
+    if (!result || !contract) return null;
     this.published[counter] += 1;
     return {
-      topicId: result.topicId,
-      transactionId: result.transactionId,
-      hashscanUrl: hashscanTx(this.network, result.transactionId),
-      sequenceNumber: result.sequenceNumber,
+      contract,
+      transactionHash: result.transactionHash,
+      explorerUrl: explorerTx(this.network, result.transactionHash),
+      blockNumber: result.blockNumber,
     };
   }
 
   /** Announce a provider joining the network. */
   async publishRegistration(provider: Provider): Promise<PublishResult | null> {
-    const data: HcsProviderRegistered = {
+    const data: LogProviderRegistered = {
       providerId: provider.id,
       label: provider.label.slice(0, 64),
-      accountId: provider.accountId,
+      address: provider.address,
       capabilities: provider.capabilities.map((c) => ({
         id: c.id,
         adapter: c.adapter,
@@ -138,29 +138,29 @@ export class Chain implements ChainLike {
       })),
       version: provider.version,
     };
-    return this.publish(this.topics.registry, "provider.registered", data, "registry");
+    return this.publish("provider.registered", provider.id, data, "registry");
   }
 
   /**
    * Record a liveness beat.
    *
-   * Not every beat: at one message per provider per 15s this would be several
-   * thousand transactions a day per node, which is noise rather than evidence.
-   * The caller samples (see `HEARTBEAT_PUBLISH_EVERY`) so the topic carries a
-   * periodic, checkable proof of uptime without paying to write a heartbeat
-   * nobody will ever read.
+   * Not every beat: at one entry per provider per 15s this would be several
+   * thousand transactions a day per node, which is noise rather than evidence —
+   * and unlike a Hedera topic message, every one of them costs gas. The caller samples (see
+   * `HEARTBEAT_PUBLISH_EVERY`) so the log carries a periodic, checkable proof of
+   * uptime without paying to write a heartbeat nobody will ever read.
    */
-  async publishHeartbeat(data: HcsHeartbeat): Promise<PublishResult | null> {
-    return this.publish(this.topics.heartbeat, "provider.heartbeat", data, "heartbeat");
+  async publishHeartbeat(data: LogHeartbeat): Promise<PublishResult | null> {
+    return this.publish("provider.heartbeat", data.providerId, data, "heartbeat");
   }
 
   /** Record what a job paid, and to whom. */
-  async publishReceipt(data: HcsJobReceipt): Promise<PublishResult | null> {
-    return this.publish(this.topics.receipts, "job.receipt", data, "receipts");
+  async publishReceipt(data: LogJobReceipt): Promise<PublishResult | null> {
+    return this.publish("job.receipt", data.jobId, data, "receipts");
   }
 
   close(): void {
-    this.client.close();
-    this.settlementClient.close();
+    // viem clients hold an HTTP transport with no long-lived socket to release.
+    // Kept on the interface so the shutdown path is identical across chains.
   }
 }

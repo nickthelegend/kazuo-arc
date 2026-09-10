@@ -28,7 +28,7 @@ export interface RegisterResult {
   providerId: string;
   token: string;
   wsUrl: string;
-  registry: { topicId: string; transactionId: string; hashscanUrl: string } | null;
+  registry: { contract: string; transactionHash: string; explorerUrl: string } | null;
   network: string;
   usdc: string;
 }
@@ -113,7 +113,7 @@ export class ProviderNode extends EventEmitter<ProviderNodeEvents> {
   async register(endpoint: string): Promise<RegisterResult> {
     const body: RegisterRequest = {
       label: this.config.label,
-      accountId: this.config.accountId,
+      address: this.config.address,
       endpoint,
       capabilities: this.config.capabilities,
       version: VERSION,
