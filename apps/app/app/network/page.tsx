@@ -9,7 +9,7 @@ export default function NetworkPage() {
     <>
       <PageHeader
         title="Network"
-        sub="Xorv keeps its operational state in memory and its record on Hedera. These are the topics anyone can read to check what the broker says is true."
+        sub="Kazuo keeps its operational state in memory and its record on Arc, in the KazuoLog contract. These are the event streams anyone can read to check what the broker says is true."
       />
       <NetworkView />
     </>

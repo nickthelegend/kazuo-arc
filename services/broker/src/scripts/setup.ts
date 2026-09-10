@@ -30,7 +30,7 @@ import {
   readClient,
   usdcAddress,
   usdcDomain,
-} from "@xorv/protocol";
+} from "@kazuo/protocol";
 import { loadConfig } from "../config.js";
 
 const config = loadConfig();
@@ -52,7 +52,7 @@ async function reportBalance(label: string, address: string): Promise<void> {
 
 async function main(): Promise<void> {
   console.log("");
-  console.log(`  ▁▂▃  XORV setup — ${config.network} (${networkLabel(config.network)})`);
+  console.log(`  ▁▂▃  KAZUO setup — ${config.network} (${networkLabel(config.network)})`);
   console.log("");
 
   const client = readClient(config.network);
@@ -68,7 +68,7 @@ async function main(): Promise<void> {
     const domain = await usdcDomain(config.network);
     line("eip-712 domain", `name="${domain.name}" version="${domain.version}"`);
   } catch {
-    line("eip-712 domain", "✖ could not read — is XORV_STABLECOIN a FiatTokenV2?");
+    line("eip-712 domain", "✖ could not read — is KAZUO_STABLECOIN a FiatTokenV2?");
   }
 
   console.log("");
@@ -93,8 +93,8 @@ async function main(): Promise<void> {
     console.log("");
     const env: Record<string, string> = {};
     for (const [name, prefix] of [
-      ["provider (receives)", "XORV_DEMO_PROVIDER"],
-      ["buyer (spends)", "XORV_DEMO_PAYER"],
+      ["provider (receives)", "KAZUO_DEMO_PROVIDER"],
+      ["buyer (spends)", "KAZUO_DEMO_PAYER"],
     ] as const) {
       const key = generatePrivateKey();
       const account = privateKeyToAccount(key);

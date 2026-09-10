@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * xorv — rent out idle AI capacity, get paid per job in USDC over x402 on Arc.
+ * kazuo — rent out idle AI capacity, get paid per job in USDC over x402 on Arc.
  */
 
 import { Command } from "commander";
@@ -12,6 +12,8 @@ import { doctorCommand } from "./commands/doctor.js";
 import { skillsCommand } from "./commands/skills.js";
 import { runCommand } from "./commands/run.js";
 import { walletNew, walletShow } from "./commands/wallet.js";
+import { agentkitRegister, agentkitStatus } from "./commands/agentkit.js";
+import { verifyCommand } from "./commands/verify.js";
 import {
   cancelCommand,
   completionCommand,
@@ -32,7 +34,7 @@ ui.installCursorGuard();
 const program = new Command();
 
 program
-  .name("xorv")
+  .name("kazuo")
   .description(
     "Rent out your idle Claude / Codex / Grok subscription and get paid per job in USDC over x402 on Arc.",
   )
@@ -47,14 +49,14 @@ program
     [
       "",
       `  ${ui.c.bold("provider — earn")}`,
-      `    ${ui.c.accent("xorv init")}          set this machine up`,
-      `    ${ui.c.accent("xorv start")}         go live and take jobs`,
-      `    ${ui.c.accent("xorv earnings")}      what you've made`,
+      `    ${ui.c.accent("kazuo init")}          set this machine up`,
+      `    ${ui.c.accent("kazuo start")}         go live and take jobs`,
+      `    ${ui.c.accent("kazuo earnings")}      what you've made`,
       "",
       `  ${ui.c.bold("buyer — spend")}`,
-      `    ${ui.c.accent('xorv run "…"')}       post a job and pay for it`,
+      `    ${ui.c.accent('kazuo run "…"')}       post a job and pay for it`,
       "",
-      `  ${ui.c.muted("docs: https://github.com/nickthelegend/xorv")}`,
+      `  ${ui.c.muted("docs: https://github.com/nickthelegend/kazuo-arc")}`,
       "",
     ].join("\n"),
   );
@@ -90,7 +92,7 @@ program
 
 program
   .command("skills")
-  .description("install Xorv as a /xorv slash command in Claude Code")
+  .description("install Kazuo as a /kazuo slash command in Claude Code")
   .option("-g, --global", "install for every project (~/.claude), not just this one")
   .option("--force", "overwrite an existing install")
   .option("--print", "print the skill instead of writing it")
@@ -111,6 +113,7 @@ program
   .option("--adapter <kind>", "require a specific adapter (claude-code, codex, grok, …)")
   .option("--key <key>", "private key to pay from (its address is derived)")
   .option("-y, --yes", "skip the confirmation")
+  .option("--human-backed-only", "only use providers proven human-backed with World ID (AgentKit)")
   .option("--json", "machine-readable output")
   .action(wrap(runCommand));
 
@@ -183,6 +186,30 @@ wallet
   .description("generate a fresh payout keypair")
   .action(wrap(walletNew));
 
+program
+  .command("verify")
+  .description("prove a real human runs this node, with World ID (Selfie Check)")
+  .option("--broker <url>", "broker to verify with")
+  .option("--address <address>", "address to prove (default: this node's payout address)")
+  .option("--buyer", "verify as a buyer instead (uses KAZUO_PAYER_KEY)")
+  .option("--timeout <seconds>", "how long to wait for World App", "120")
+  .action(wrap(verifyCommand));
+
+const agentkit = program
+  .command("agentkit")
+  .description("prove a human is behind this node, with World ID (AgentKit)");
+agentkit
+  .command("status", { isDefault: true })
+  .description("is the payout address registered in AgentBook on World Chain?")
+  .option("--address <address>", "check this address instead of the node's")
+  .option("--json", "machine-readable output")
+  .action(wrap(agentkitStatus));
+agentkit
+  .command("register")
+  .description("register the payout address in AgentBook (opens World App verification)")
+  .option("--address <address>", "register this address instead of the node's")
+  .action(wrap(agentkitRegister));
+
 /**
  * Turn a thrown error into one clear line instead of a stack trace.
  *
@@ -197,7 +224,7 @@ function wrap<A extends unknown[]>(fn: (...args: A) => Promise<void>) {
     } catch (err) {
       ui.blank();
       ui.bad(err instanceof Error ? err.message : String(err));
-      if (process.env.XORV_DEBUG && err instanceof Error && err.stack) {
+      if (process.env.KAZUO_DEBUG && err instanceof Error && err.stack) {
         console.error(ui.c.muted(err.stack));
       }
       ui.blank();

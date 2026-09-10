@@ -1,5 +1,5 @@
 /**
- * `xorv run "<prompt>"` — the buyer side.
+ * `kazuo run "<prompt>"` — the buyer side.
  *
  * Posts a job, pays for it with a real on-chain transfer over x402, watches it
  * execute on a stranger's machine, and prints the answer plus an ArcScan link.
@@ -28,8 +28,9 @@ import {
   parseUsd,
   readClient,
   type AdapterKind,
-} from "@xorv/protocol";
+} from "@kazuo/protocol";
 import { loadConfig } from "../config.js";
+import { agentkitProof } from "../agentkit.js";
 import * as ui from "../ui.js";
 
 interface RunOptions {
@@ -40,6 +41,8 @@ interface RunOptions {
   key?: string;
   yes?: boolean;
   json?: boolean;
+  /** Only match providers proven human-backed with World AgentKit. */
+  humanBackedOnly?: boolean;
 }
 
 interface QuoteResponse {
@@ -57,15 +60,17 @@ interface QuoteResponse {
     adapter: string;
     model: string | null;
     stats: { jobsCompleted: number; jobsFailed: number };
+    humanBacked?: boolean;
   };
   accepts: Array<{ asset: string; amount: string }>;
+  buyerHumanBacked?: boolean;
 }
 
 /**
  * Leave the process, having flushed stdout.
  *
  * Less load-bearing than it was. The Hedera client held gRPC channels open with
- * no handle to close them, so a finished `xorv run` would sit there forever;
+ * no handle to close them, so a finished `kazuo run` would sit there forever;
  * viem's HTTP transport has no such problem. Kept because the streaming job
  * watcher can still have a socket in flight, and because a CLI that exits
  * deliberately beats one that exits because nothing happened to be pending.
@@ -106,7 +111,7 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
   const config = loadConfig();
   const brokerUrl = (
     opts.broker ??
-    process.env.XORV_BROKER_URL ??
+    process.env.KAZUO_BROKER_URL ??
     config?.brokerUrl ??
     "http://localhost:8402"
   ).replace(/\/+$/, "");
@@ -118,11 +123,11 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
   // account id *and* a key and could not check that they belonged together —
   // a mismatched pair produced INVALID_SIGNATURE on settlement and nothing
   // sooner.
-  const rawKey = opts.key ?? process.env.XORV_PAYER_KEY ?? config?.privateKey ?? "";
+  const rawKey = opts.key ?? process.env.KAZUO_PAYER_KEY ?? config?.privateKey ?? "";
   const network = config?.network ?? "eip155:5042002";
 
   if (!rawKey) {
-    ui.bad("no payer key — pass --key, or set XORV_PAYER_KEY");
+    ui.bad("no payer key — pass --key, or set KAZUO_PAYER_KEY");
     process.exitCode = 1;
     return;
   }
@@ -146,13 +151,18 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
 
   let quote: QuoteResponse;
   try {
+    // World AgentKit: prove a human is behind this payer, if AgentBook says so.
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const proof = await agentkitProof(brokerUrl, "quote", rawKey);
+    if (proof) headers.agentkit = proof;
     const res = await fetch(`${brokerUrl}/api/quotes`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         prompt,
         adapter: (opts.adapter as AdapterKind | undefined) ?? null,
         maxPriceUsdMicros: maxPrice,
+        humanBackedOnly: Boolean(opts.humanBackedOnly),
       }),
       signal: AbortSignal.timeout(20_000),
     });
@@ -163,11 +173,13 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
     if (!opts.json) quoteSpin?.fail(`no quote: ${err instanceof Error ? err.message : String(err)}`);
     await failOut(opts.json, "quote", err, [
       "no live provider matched that request under your price ceiling",
-      "check with: xorv status",
+      "check with: kazuo status",
     ]);
     return;
   }
-  quoteSpin?.succeed(`matched ${ui.c.bold(quote.provider.label)}`);
+  quoteSpin?.succeed(
+    `matched ${ui.c.bold(quote.provider.label)}${quote.provider.humanBacked ? ui.c.muted(" · human-backed (World ID)") : ""}`,
+  );
 
   const usdcOption = quote.accepts[0];
 
@@ -259,7 +271,7 @@ export async function runCommand(prompt: string, opts: RunOptions): Promise<void
     await failOut(opts.json, "payment", err, [
       "common causes: the payer holds no USDC, or is the same address as the",
       "provider (you can't pay yourself)",
-      "check with: xorv wallet",
+      "check with: kazuo wallet",
     ]);
   }
 

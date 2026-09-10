@@ -9,14 +9,15 @@
  *
  * Backed by `node:sqlite`, which ships with Node — no native build step, no
  * dependency to audit, and real transactions. When it isn't available (or
- * `XORV_DB=off`), the broker falls back to a no-op store and says so at boot
+ * `KAZUO_DB=off`), the broker falls back to a no-op store and says so at boot
  * rather than pretending it persisted anything.
  */
 
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
-import type { Job, ProviderStats } from "@xorv/protocol";
+import type { Job, LogEntry, ProviderStats } from "@kazuo/protocol";
+import type { HumanVerification } from "./worldid.js";
 
 export interface PersistedProviderStats extends ProviderStats {
   nodeId: string;
@@ -35,6 +36,14 @@ export interface Persistence {
   saveStats(nodeId: string, label: string, address: string, stats: ProviderStats): void;
   /** Drop jobs older than the retention window; returns how many went. */
   prune(olderThanMs: number): number;
+  /** World ID proofs, so a restart still knows which nodes a human stands behind. */
+  saveHumanVerification(v: HumanVerification): void;
+  loadHumanVerifications(): HumanVerification[];
+  /** The on-chain audit log, indexed forward so pages never scan the chain. */
+  loadLogEntries(address: string): LogEntry[];
+  saveLogEntries(address: string, entries: LogEntry[]): void;
+  loadLogCursor(address: string): bigint | null;
+  saveLogCursor(address: string, block: bigint): void;
   close(): void;
 }
 
@@ -52,6 +61,29 @@ export class MemoryPersistence implements Persistence {
   saveStats(): void {}
   prune(): number {
     return 0;
+  }
+  // Held for the life of the process only — the same honesty as jobs above.
+  private human: HumanVerification[] = [];
+  saveHumanVerification(v: HumanVerification): void {
+    this.human = [...this.human.filter((h) => !(h.subject === v.subject && h.purpose === v.purpose)), v];
+  }
+  loadHumanVerifications(): HumanVerification[] {
+    return [...this.human];
+  }
+  private logEntries = new Map<string, LogEntry[]>();
+  private logCursors = new Map<string, bigint>();
+  loadLogEntries(address: string): LogEntry[] {
+    return [...(this.logEntries.get(address.toLowerCase()) ?? [])];
+  }
+  saveLogEntries(address: string, entries: LogEntry[]): void {
+    const key = address.toLowerCase();
+    this.logEntries.set(key, [...(this.logEntries.get(key) ?? []), ...entries]);
+  }
+  loadLogCursor(address: string): bigint | null {
+    return this.logCursors.get(address.toLowerCase()) ?? null;
+  }
+  saveLogCursor(address: string, block: bigint): void {
+    this.logCursors.set(address.toLowerCase(), block);
   }
   close(): void {}
 }
@@ -136,7 +168,136 @@ class SqlitePersistence implements Persistence {
         body       TEXT NOT NULL,
         updated_at INTEGER NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS human_verifications (
+        subject     TEXT NOT NULL,
+        purpose     TEXT NOT NULL,
+        nullifier   TEXT NOT NULL,
+        credential  TEXT NOT NULL,
+        verified_at INTEGER NOT NULL,
+        PRIMARY KEY (subject, purpose)
+      );
+      CREATE INDEX IF NOT EXISTS human_verifications_nullifier ON human_verifications (nullifier);
+
+      CREATE TABLE IF NOT EXISTS log_entries (
+        address TEXT NOT NULL,
+        tx      TEXT NOT NULL,
+        seq     INTEGER NOT NULL,
+        block   INTEGER NOT NULL,
+        kind    TEXT,
+        subject TEXT NOT NULL,
+        author  TEXT NOT NULL,
+        payload TEXT,
+        PRIMARY KEY (address, tx, seq)
+      );
+      CREATE INDEX IF NOT EXISTS log_entries_block ON log_entries (address, block DESC);
+
+      CREATE TABLE IF NOT EXISTS log_cursor (
+        address    TEXT PRIMARY KEY,
+        block      INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
     `);
+  }
+
+  loadLogEntries(address: string): LogEntry[] {
+    const rows = this.db
+      .prepare("SELECT tx, seq, block, kind, subject, author, payload FROM log_entries WHERE address = ?")
+      .all(address.toLowerCase()) as unknown as Array<{
+      tx: string;
+      seq: number;
+      block: number;
+      kind: string | null;
+      subject: string;
+      author: string;
+      payload: string | null;
+    }>;
+    return rows.map((r) => {
+      let payload: unknown = null;
+      try {
+        payload = r.payload ? JSON.parse(r.payload) : null;
+      } catch {
+        payload = null;
+      }
+      return {
+        kind: r.kind as LogEntry["kind"],
+        subject: r.subject as `0x${string}`,
+        author: r.author,
+        sequence: r.seq,
+        payload,
+        blockNumber: r.block,
+        transactionHash: r.tx,
+      };
+    });
+  }
+
+  saveLogEntries(address: string, entries: LogEntry[]): void {
+    const insert = this.db.prepare(
+      `INSERT OR IGNORE INTO log_entries (address, tx, seq, block, kind, subject, author, payload)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    for (const e of entries) {
+      insert.run(
+        address.toLowerCase(),
+        e.transactionHash.toLowerCase(),
+        e.sequence,
+        e.blockNumber,
+        e.kind,
+        e.subject,
+        e.author,
+        e.payload === null ? null : JSON.stringify(e.payload),
+      );
+    }
+  }
+
+  loadLogCursor(address: string): bigint | null {
+    const row = this.db
+      .prepare("SELECT block FROM log_cursor WHERE address = ?")
+      .get(address.toLowerCase()) as unknown as { block: number } | undefined;
+    return row ? BigInt(row.block) : null;
+  }
+
+  saveLogCursor(address: string, block: bigint): void {
+    this.db
+      .prepare(
+        `INSERT INTO log_cursor (address, block, updated_at) VALUES (?, ?, ?)
+         ON CONFLICT(address) DO UPDATE SET block = excluded.block, updated_at = excluded.updated_at`,
+      )
+      .run(address.toLowerCase(), Number(block), Date.now());
+  }
+
+  saveHumanVerification(v: HumanVerification): void {
+    this.db
+      .prepare(
+        `INSERT INTO human_verifications (subject, purpose, nullifier, credential, verified_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(subject, purpose) DO UPDATE SET
+           nullifier = excluded.nullifier,
+           credential = excluded.credential,
+           verified_at = excluded.verified_at`,
+      )
+      .run(v.subject.toLowerCase(), v.purpose, v.nullifier, v.credential, v.verifiedAt);
+  }
+
+  loadHumanVerifications(): HumanVerification[] {
+    const rows = this.db
+      .prepare("SELECT subject, purpose, nullifier, credential, verified_at FROM human_verifications")
+      .all() as unknown as Array<{
+      subject: string;
+      purpose: string;
+      nullifier: string;
+      credential: string;
+      verified_at: number;
+    }>;
+    return rows
+      .filter((r) => r.purpose === "provider" || r.purpose === "buyer")
+      .map((r) => ({
+        subject: r.subject,
+        purpose: r.purpose as HumanVerification["purpose"],
+        nullifier: r.nullifier,
+        credential: r.credential,
+        verifiedAt: r.verified_at,
+      }));
   }
 
   loadJobs(limit = 500): Job[] {

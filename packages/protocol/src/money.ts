@@ -1,7 +1,7 @@
 /**
  * Money math.
  *
- * Xorv quotes everything in **micro-USD** (millionths of a dollar) as a plain
+ * Kazuo quotes everything in **micro-USD** (millionths of a dollar) as a plain
  * integer, because the prices involved — $0.001 a job — are exactly where
  * floating point starts lying. A `number` holds micro-USD losslessly well past
  * any price this network will ever see, and JSON carries it without ceremony.

@@ -13,7 +13,7 @@
  * and x402 advertises a 300-second window. The buyer signs an authorization the
  * facilitator must relay inside it, so if the broker waited for a five-minute
  * coding job to finish before submitting, the signed payment would have expired
- * and the provider would be unpaid for work already done. So Xorv verifies and
+ * and the provider would be unpaid for work already done. So Kazuo verifies and
  * settles up front, and covers the other
  * risk — a provider that takes the money and fails — by reassigning the job to
  * another provider at no extra charge (see `reassign`). The poster's downside
@@ -53,7 +53,7 @@ import {
   type JobRequest,
   type PaymentRecord,
   type RegisterRequest,
-} from "@xorv/protocol";
+} from "@kazuo/protocol";
 import type { BrokerConfig } from "./config.js";
 import type { ChainLike } from "./chain.js";
 import type { Hub } from "./hub.js";
@@ -61,6 +61,15 @@ import { JobStore, type Quote } from "./jobs.js";
 import { Registry } from "./registry.js";
 import { bodyLimit, rateLimit, requestLog } from "./guards.js";
 import { Metrics } from "./metrics.js";
+import { AGENTKIT_HEADER, createAgentKitGate, type AgentKitGate } from "./agentkit.js";
+import type { Context } from "hono";
+import type { LogIndex } from "./log-index.js";
+import {
+  WorldIdError,
+  type WorldIdGate,
+  type WorldProofResult,
+  type WorldPurpose,
+} from "./worldid.js";
 
 /**
  * Publish one heartbeat in this many on chain — see Chain.publishHeartbeat.
@@ -106,6 +115,21 @@ export interface AppDeps {
    */
   resolveDomain?: () => Promise<{ name: string; version: string }>;
   metrics?: Metrics;
+  /**
+   * World AgentKit verification.
+   *
+   * Production resolves humans against the real AgentBook on World Chain.
+   * Tests inject a gate whose AgentBook lookup is a fixture, so the signature
+   * path still runs for real while the suite stays off the network.
+   */
+  agentKit?: AgentKitGate;
+  /** World ID (Selfie Check) — absent or unconfigured means the routes answer 503. */
+  worldId?: WorldIdGate;
+  /**
+   * The persisted audit-log index. When present, log reads are served from it
+   * and never touch the RPC on the request path.
+   */
+  logIndex?: LogIndex;
 }
 
 export function createApp(deps: AppDeps) {
@@ -132,6 +156,15 @@ export function createApp(deps: AppDeps) {
   /** Jobs whose receipt is already on chain — see publishReceiptWhenReady. */
   const publishedReceipts = new Set<string>();
   const metrics = deps.metrics ?? new Metrics();
+  const agentKit =
+    deps.agentKit ??
+    createAgentKitGate({
+      publicUrl: config.publicUrl,
+      worldRpcUrl: process.env.KAZUO_WORLD_RPC_URL?.trim() || undefined,
+    });
+  const worldId = deps.worldId ?? null;
+  const registerUri = `${config.publicUrl}/api/providers/register`;
+  const quoteUri = `${config.publicUrl}/api/quotes`;
 
   const built = deps.facilitator
     ? {
@@ -185,6 +218,8 @@ export function createApp(deps: AppDeps) {
         "PAYMENT-SIGNATURE",
         "Payment-Signature",
         "Access-Control-Expose-Headers",
+        // World AgentKit's signed human-backed proof.
+        AGENTKIT_HEADER,
       ],
       // Browsers can't read a response header unless it's exposed, and x402
       // carries its whole contract in two of them.
@@ -215,7 +250,7 @@ export function createApp(deps: AppDeps) {
 
   app.onError((err, c) => {
     console.error("[broker]", err);
-    metrics.inc("xorv_errors_total", { path: c.req.path });
+    metrics.inc("kazuo_errors_total", { path: c.req.path });
     return c.json({ error: err instanceof Error ? err.message : "internal error" }, 500);
   });
 
@@ -306,8 +341,88 @@ export function createApp(deps: AppDeps) {
         version: p.version,
         region: p.region,
         stats: p.stats,
+        humanBacked: Boolean(p.humanBacked),
+        // Which proof backs the label — never the nullifier or human id itself.
+        humanProof: p.humanBacked ? (p.humanId?.startsWith("world:") ? "world-id" : "agentkit") : null,
       })),
     });
+  });
+
+  // -------------------------------------------------------------------------
+  // World ID — Selfie Check, requested and verified by the broker
+  // -------------------------------------------------------------------------
+
+  /**
+   * Mint a signed World ID request for an address.
+   *
+   * `purpose: "provider"` binds the proof to a node's payout address;
+   * `purpose: "buyer"` to the wallet that will pay. The response is everything
+   * IDKit needs to open the request — the RP signing key stays here.
+   */
+  app.post("/api/worldid/request", async (c) => {
+    if (!worldId?.enabled) {
+      return c.json({ error: "World ID is not configured on this broker", code: "not_configured" }, 503);
+    }
+    const body = (await c.req.json().catch(() => ({}))) as { purpose?: string; subject?: string };
+    const purpose: WorldPurpose = body.purpose === "buyer" ? "buyer" : "provider";
+    try {
+      return c.json(worldId.request(purpose, String(body.subject ?? "")));
+    } catch (err) {
+      return worldIdFailure(c, err);
+    }
+  });
+
+  /** Check a proof (nonce, freshness, signal binding), forward it to World, record it. */
+  app.post("/api/worldid/verify", async (c) => {
+    if (!worldId?.enabled) {
+      return c.json({ error: "World ID is not configured on this broker", code: "not_configured" }, 503);
+    }
+    const result = (await c.req.json().catch(() => null)) as WorldProofResult | null;
+    try {
+      const verification = await worldId.verify(result as WorldProofResult);
+      const nodesMarked =
+        verification.purpose === "provider"
+          ? registry.markHuman(verification.subject, `world:${verification.nullifier}`)
+          : 0;
+      return c.json({
+        verified: true,
+        purpose: verification.purpose,
+        subject: verification.subject,
+        credential: verification.credential,
+        verifiedAt: verification.verifiedAt,
+        nodesMarked,
+      });
+    } catch (err) {
+      return worldIdFailure(c, err);
+    }
+  });
+
+  /** Whether an address has a recorded World ID proof. Never exposes the nullifier. */
+  app.get("/api/worldid/status", (c) => {
+    const subject = c.req.query("subject") ?? "";
+    const purpose: WorldPurpose = c.req.query("purpose") === "buyer" ? "buyer" : "provider";
+    const verification = worldId?.status(purpose, subject) ?? null;
+    return c.json({
+      enabled: Boolean(worldId?.enabled),
+      purpose,
+      subject: subject.toLowerCase(),
+      verified: Boolean(verification),
+      credential: verification?.credential ?? null,
+      verifiedAt: verification?.verifiedAt ?? null,
+    });
+  });
+
+  /**
+   * A fresh World AgentKit challenge.
+   *
+   * `for=register` is signed by a provider's payout key before registering;
+   * `for=quote` by a buyer (usually an agent) before asking for a quote. Sign it
+   * with `createAgentkitClient(...).createHeader(challenge)` and send the result
+   * in the `agentkit` header of that request.
+   */
+  app.get("/api/agentkit/challenge", (c) => {
+    const target = c.req.query("for") === "quote" ? quoteUri : registerUri;
+    return c.json({ agentkit: agentKit.challenge(target), header: AGENTKIT_HEADER });
   });
 
   // -------------------------------------------------------------------------
@@ -319,7 +434,28 @@ export function createApp(deps: AppDeps) {
     const invalid = validateRegistration(body);
     if (invalid) return c.json({ error: invalid }, 400);
 
-    const provider = registry.register(body);
+    // Optional: a node that sends a proof must send a valid one, signed by the
+    // same address it wants to be paid at. A node that sends none registers as
+    // before, just without the label.
+    let humanId: string | null = null;
+    try {
+      const proof = await agentKit.verify(c.req.header(AGENTKIT_HEADER), registerUri, body.address);
+      humanId = proof?.humanId ?? null;
+      console.log(
+        `[broker] register ${body.address}: agentkit ${
+          proof ? `proof verified — ${humanId ? "human-backed in AgentBook" : "no human in AgentBook"}` : "no proof sent"
+        }`,
+      );
+    } catch (err) {
+      console.warn(`[broker] register ${body.address}: agentkit rejected — ${err instanceof Error ? err.message : err}`);
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 401);
+    }
+
+    // A World ID Selfie Check recorded for this payout address counts too.
+    const worldProof = worldId?.status("provider", body.address);
+    if (!humanId && worldProof) humanId = `world:${worldProof.nullifier}`;
+
+    const provider = registry.register(body, { humanId });
 
     // Registration is announced on chain, but a slow block must not hold up a
     // node that is ready to work.
@@ -409,22 +545,37 @@ export function createApp(deps: AppDeps) {
       return c.json({ error: "maxPriceUsdMicros must be a positive number" }, 400);
     }
 
-    const match = registry.match({ adapter: body.adapter ?? null, maxPriceUsdMicros: maxPrice });
+    let buyerHumanBacked = false;
+    try {
+      const proof = await agentKit.verify(c.req.header(AGENTKIT_HEADER), quoteUri);
+      buyerHumanBacked = Boolean(proof?.humanId);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 401);
+    }
+
+    const humanBackedOnly = body.humanBackedOnly === true;
+    const match = registry.match({
+      adapter: body.adapter ?? null,
+      maxPriceUsdMicros: maxPrice,
+      humanBackedOnly,
+    });
     if (!match) {
       const live = registry.live().length;
       return c.json(
         {
           error:
             live === 0
-              ? "no providers are online right now — start one with `xorv start`"
-              : `no online provider matches that request under ${formatUsd(maxPrice)}`,
+              ? "no providers are online right now — start one with `kazuo start`"
+              : humanBackedOnly
+                ? `no human-backed provider matches that request under ${formatUsd(maxPrice)}`
+                : `no online provider matches that request under ${formatUsd(maxPrice)}`,
           providersLive: live,
         },
         503,
       );
     }
 
-    metrics.inc('xorv_quotes_total');
+    metrics.inc('kazuo_quotes_total');
     const quote = jobs.createQuote({
       request: { ...body, prompt: body.prompt, maxPriceUsdMicros: maxPrice },
       providerId: match.provider.id,
@@ -435,6 +586,8 @@ export function createApp(deps: AppDeps) {
       priceUsdMicros: match.capability.priceUsdMicros,
       usdcAmount: usdMicrosToUsdcUnits(match.capability.priceUsdMicros),
       domain: await paymentDomain(),
+      providerHumanBacked: Boolean(match.provider.humanBacked),
+      buyerHumanBacked,
     });
 
     return c.json({
@@ -452,7 +605,9 @@ export function createApp(deps: AppDeps) {
         adapter: match.capability.adapter,
         model: match.capability.model ?? null,
         stats: match.provider.stats,
+        humanBacked: Boolean(match.provider.humanBacked),
       },
+      buyerHumanBacked,
       // One row, because Arc has one asset. On Hedera this array carried a
       // second entry priced in HBAR at a live exchange rate.
       accepts: [{ asset: usdcAddress(config.network), amount: quote.usdcAmount }],
@@ -471,8 +626,8 @@ export function createApp(deps: AppDeps) {
 
   const routes: RoutesConfig = {
     "POST /api/jobs/:quoteId": {
-      description: "Run one AI job on a live Xorv provider",
-      serviceName: "Xorv",
+      description: "Run one AI job on a live Kazuo provider",
+      serviceName: "Kazuo",
       mimeType: "application/json",
       // Every field is read from the quote rather than recomputed — see
       // Quote.usdcAmount for why recomputing here silently breaks
@@ -540,7 +695,7 @@ export function createApp(deps: AppDeps) {
     const quote = jobs.getQuote(c.req.param("quoteId") ?? "");
     if (!quote) return c.json({ error: "quote expired during payment" }, 409);
 
-    metrics.inc('xorv_payments_total');
+    metrics.inc('kazuo_payments_total');
     const job = jobs.createJob(quote);
     // The payment record is filled in from the settle response by the hook
     // below; dispatch does not wait on it.
@@ -570,6 +725,15 @@ export function createApp(deps: AppDeps) {
     );
   });
 
+  // A settlement is the one write that must never lose a race for the RPC's
+  // rate budget, so background readers (the log index) wait while it runs.
+  x402Server.onBeforeSettle(async () => {
+    chain.noteWrite?.("start");
+  });
+  x402Server.onSettleFailure(async () => {
+    chain.noteWrite?.("end");
+  });
+
   /**
    * Capture settlement onto the job.
    *
@@ -577,6 +741,7 @@ export function createApp(deps: AppDeps) {
    * only place with both the on-chain transaction hash and the job it paid for.
    */
   x402Server.onAfterSettle(async (ctx) => {
+    chain.noteWrite?.("end");
     const result = ctx.result;
     if (!result?.success || !result.transaction) return;
     const payTo = ctx.requirements.payTo;
@@ -603,6 +768,12 @@ export function createApp(deps: AppDeps) {
       explorerUrl: explorerTx(config.network, result.transaction),
     };
     jobs.patch(candidate.id, { payment: record });
+
+    // The payer is proven by the signature that just settled, so a buyer label
+    // from World ID is only ever applied to the address that actually paid.
+    if (record.payer !== "unknown" && worldId?.status("buyer", record.payer)) {
+      jobs.patch(candidate.id, { buyerHumanBacked: true });
+    }
   });
 
   // -------------------------------------------------------------------------
@@ -646,7 +817,7 @@ export function createApp(deps: AppDeps) {
     }
     jobs.addEvent(job.id, { at: Date.now(), kind: "status", text: reason });
     jobs.fail(job.id, reason);
-    metrics.inc("xorv_jobs_cancelled_total");
+    metrics.inc("kazuo_jobs_cancelled_total");
 
     return c.json({ ok: true, jobId: job.id, status: "failed", refunded: false });
   });
@@ -734,6 +905,19 @@ export function createApp(deps: AppDeps) {
   app.get("/api/receipts", async (c) => {
     const log = chain.describeLog();
     if (!log) return c.json({ receipts: [], log: null });
+    if (deps.logIndex) {
+      return c.json({
+        log,
+        receipts: deps.logIndex.entries({ kind: "job.receipt", limit: 50 }).map((e) => ({
+          sequence: e.sequence,
+          blockNumber: e.blockNumber,
+          transactionHash: e.transactionHash,
+          author: e.author,
+          payload: e.payload,
+        })),
+        sync: deps.logIndex.sync(),
+      });
+    }
     try {
       const entries = await readLog(config.network, {
         kind: "job.receipt",
@@ -766,6 +950,9 @@ export function createApp(deps: AppDeps) {
     if (!mapped) return c.json({ error: `unknown log stream "${kind}"` }, 404);
     const log = chain.describeLog();
     if (!log) return c.json({ error: "no audit log contract configured" }, 404);
+    if (deps.logIndex) {
+      return c.json({ log, entries: deps.logIndex.entries({ kind: mapped, limit: 50 }), sync: deps.logIndex.sync() });
+    }
     const entries = await readLog(config.network, {
       kind: mapped,
       limit: 50,
@@ -862,8 +1049,8 @@ export function createApp(deps: AppDeps) {
 
     const earned = earnings(job);
     registry.jobFinished(providerId, { ok: true, durationMs, ...earned });
-    metrics.inc('xorv_jobs_completed_total');
-    metrics.observe('xorv_job_duration', durationMs);
+    metrics.inc('kazuo_jobs_completed_total');
+    metrics.observe('kazuo_job_duration', durationMs);
     void publishReceiptWhenReady(job.id, durationMs, true);
   }
 
@@ -928,7 +1115,7 @@ export function createApp(deps: AppDeps) {
     const job = jobs.get(jobId);
     if (!job) return;
     registry.jobFinished(providerId, { ok: false, durationMs });
-    metrics.inc('xorv_jobs_failed_total');
+    metrics.inc('kazuo_jobs_failed_total');
 
     // One free retry elsewhere before the poster is told it failed.
     if (job.status !== "completed" && reassign(job)) return;
@@ -1006,8 +1193,17 @@ function validateRegistration(body: RegisterRequest): string | null {
 }
 
 /** Strip the bearer token before a provider record goes anywhere public. */
-function stripSecrets<T extends { token?: string }>(record: T): Omit<T, "token"> {
-  const { token: _token, ...rest } = record;
+function worldIdFailure(c: Context, err: unknown) {
+  if (err instanceof WorldIdError) return c.json({ error: err.message, code: err.code }, err.status);
+  return c.json({ error: err instanceof Error ? err.message : String(err), code: "internal" }, 500);
+}
+
+function stripSecrets<T extends { token?: string; humanId?: string | null }>(
+  record: T,
+): Omit<T, "token" | "humanId"> {
+  // The AgentBook human id is pseudonymous but stable across every service
+  // that queries it; publishing it would let anyone link one person's nodes.
+  const { token: _token, humanId: _humanId, ...rest } = record;
   return rest;
 }
 
@@ -1032,6 +1228,8 @@ function publicJob(job: Job, opts: { events?: boolean } = {}) {
     resultHash: job.resultHash ?? null,
     error: job.error ?? null,
     receiptTxHash: job.receiptTxHash ?? null,
+    providerHumanBacked: Boolean(job.providerHumanBacked),
+    buyerHumanBacked: Boolean(job.buyerHumanBacked),
     eventCount: job.events.length,
     events: opts.events ? job.events : undefined,
   };

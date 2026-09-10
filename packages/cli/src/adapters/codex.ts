@@ -10,7 +10,7 @@
 
 import os from "node:os";
 import path from "node:path";
-import type { AdapterKind } from "@xorv/protocol";
+import type { AdapterKind } from "@kazuo/protocol";
 import {
   clampResult,
   cliAvailable,
@@ -22,7 +22,7 @@ import {
 } from "./base.js";
 
 function codexBin(): string | null {
-  if (process.env.XORV_CODEX_BIN) return process.env.XORV_CODEX_BIN;
+  if (process.env.KAZUO_CODEX_BIN) return process.env.KAZUO_CODEX_BIN;
   const bundled = firstExisting([
     "/Applications/Codex.app/Contents/Resources/codex",
     path.join(os.homedir(), "Applications/Codex.app/Contents/Resources/codex"),

@@ -1,5 +1,5 @@
 /**
- * Xorv's terminal look.
+ * Kazuo's terminal look.
  *
  * All of it is hand-rolled ANSI rather than a rendering library, for one
  * practical reason: this CLI is the thing a stranger installs to earn money on
@@ -18,7 +18,12 @@ import pc from "picocolors";
 // ---------------------------------------------------------------------------
 
 const isTTY = Boolean(process.stdout.isTTY);
-const noColor = Boolean(process.env.NO_COLOR) || process.env.TERM === "dumb";
+// Off a terminal (a log file, a service manager) escape codes are noise in the
+// file, so colour is off unless FORCE_COLOR asks for it.
+const noColor =
+  Boolean(process.env.NO_COLOR) ||
+  process.env.TERM === "dumb" ||
+  (!isTTY && !process.env.FORCE_COLOR);
 const truecolor =
   !noColor && (process.env.COLORTERM === "truecolor" || process.env.COLORTERM === "24bit");
 
@@ -30,7 +35,7 @@ export function width(): number {
 }
 
 // ---------------------------------------------------------------------------
-// Palette — electric violet → cyan, the Xorv gradient
+// Palette — electric violet → cyan, the Kazuo gradient
 // ---------------------------------------------------------------------------
 
 export const BRAND = {
@@ -105,12 +110,12 @@ export const c = {
 // ---------------------------------------------------------------------------
 
 const WORDMARK = [
-  "██╗  ██╗ ██████╗ ██████╗ ██╗   ██╗",
-  "╚██╗██╔╝██╔═══██╗██╔══██╗██║   ██║",
-  " ╚███╔╝ ██║   ██║██████╔╝██║   ██║",
-  " ██╔██╗ ██║   ██║██╔══██╗╚██╗ ██╔╝",
-  "██╔╝ ██╗╚██████╔╝██║  ██║ ╚████╔╝ ",
-  "╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝  ╚═══╝  ",
+  "██╗  ██╗ █████╗ ███████╗██╗   ██╗ ██████╗ ",
+  "██║ ██╔╝██╔══██╗╚══███╔╝██║   ██║██╔═══██╗",
+  "█████╔╝ ███████║  ███╔╝ ██║   ██║██║   ██║",
+  "██╔═██╗ ██╔══██║ ███╔╝  ██║   ██║██║   ██║",
+  "██║  ██╗██║  ██║███████╗╚██████╔╝╚██████╔╝",
+  "╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝  ╚═════╝ ",
 ];
 
 /**
@@ -131,7 +136,7 @@ export function banner(subtitle = "decentralized AI capacity network"): string {
 
 /** One-line mark for tight spots. */
 export function markLine(): string {
-  return `${gradient("▁▂▃")} ${c.bold(gradient("XORV"))}`;
+  return `${gradient("▁▂▃")} ${c.bold(gradient("KAZUO"))}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -354,7 +359,7 @@ export interface Spinner {
  * A spinner that knows when it isn't wanted.
  *
  * Piped output gets one static line per state change instead of a stream of
- * cursor-control escapes, so `xorv start | tee node.log` stays readable.
+ * cursor-control escapes, so `kazuo start | tee node.log` stays readable.
  */
 export function spinner(initial: string): Spinner {
   let text = initial;
@@ -510,9 +515,9 @@ export function liveRegion(): { render(lines: string[]): void; clear(): void; do
   return {
     render(lines: string[]) {
       if (!enabled) {
-        // Non-TTY: print only the last line, so logs stay linear.
-        const last = lines[lines.length - 1];
-        if (last) console.log(stripAnsi(last));
+        // Non-TTY: nothing to repaint. Printing the last line on every render
+        // (the old behaviour) repeated a static footer once a second into logs;
+        // callers print their own linear output instead.
         return;
       }
       if (painted > 0) process.stdout.write(`[${painted}A`);

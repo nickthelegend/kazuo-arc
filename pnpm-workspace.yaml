@@ -3,9 +3,7 @@ packages:
   - "services/*"
   - "apps/*"
 
-# The Hiero SDK ships protobuf builders that run on install.
+# Packages whose install scripts are allowed to run.
 onlyBuiltDependencies:
-  - protobufjs
-  - "@hiero-ledger/proto"
   - esbuild
   - sharp

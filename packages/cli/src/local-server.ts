@@ -8,7 +8,7 @@
  */
 
 import http from "node:http";
-import { formatUsd } from "@xorv/protocol";
+import { formatUsd } from "@kazuo/protocol";
 import type { ProviderNode } from "./node.js";
 
 export interface LocalServer {
@@ -115,7 +115,7 @@ function page(node: ProviderNode): string {
   return `<!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escapeHtml(node.config.label)} · Xorv node</title>
+<title>${escapeHtml(node.config.label)} · Kazuo node</title>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
@@ -142,7 +142,7 @@ function page(node: ProviderNode): string {
   a { color:#3ddcff; }
   footer { margin-top:36px; color:#575d72; font-size:13px; }
 </style></head><body><div class="wrap">
-  <div class="mark">Xorv provider node</div>
+  <div class="mark">Kazuo provider node</div>
   <h1>${escapeHtml(node.config.label)}</h1>
   <p class="sub">Selling idle AI capacity, paid per job in USDC over x402 on Arc.</p>
   <span class="pill"><span class="dot"></span>${node.stats.connected ? "connected to the network" : "reconnecting"}</span>
@@ -155,6 +155,6 @@ function page(node: ProviderNode): string {
   <table><thead><tr><th>Capability</th><th>Adapter</th><th class="right">Price / job</th></tr></thead>
   <tbody>${rows}</tbody></table>
   <footer>Payouts to <span class="mono">${escapeHtml(node.config.address)}</span> on ${escapeHtml(node.config.network)}.
-  <br>Run your own: <span class="mono">npm i -g @xorv/cli &amp;&amp; xorv init</span></footer>
+  <br>Run your own: <span class="mono">npm i -g @kazuo/cli &amp;&amp; kazuo init</span></footer>
 </div></body></html>`;
 }

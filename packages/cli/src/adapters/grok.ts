@@ -13,7 +13,7 @@
 
 import os from "node:os";
 import path from "node:path";
-import type { AdapterKind } from "@xorv/protocol";
+import type { AdapterKind } from "@kazuo/protocol";
 import {
   clampResult,
   cliAvailable,
@@ -25,7 +25,7 @@ import {
 } from "./base.js";
 
 function grokBin(): string | null {
-  if (process.env.XORV_GROK_BIN) return process.env.XORV_GROK_BIN;
+  if (process.env.KAZUO_GROK_BIN) return process.env.KAZUO_GROK_BIN;
   const bundled = firstExisting([
     path.join(os.homedir(), ".grok/bin/grok"),
     "/usr/local/bin/grok",

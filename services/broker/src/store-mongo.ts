@@ -24,8 +24,9 @@
  * unreachable.
  */
 
-import type { Job, ProviderStats } from "@xorv/protocol";
+import type { Job, LogEntry, ProviderStats } from "@kazuo/protocol";
 import { MemoryPersistence, type PersistedProviderStats, type Persistence } from "./store.js";
+import type { HumanVerification } from "./worldid.js";
 
 interface MongoLike {
   db(name?: string): {
@@ -53,7 +54,7 @@ export interface LayeredOptions {
 /**
  * Load the driver without making it a hard dependency of the broker.
  *
- * Someone running Xorv with SQLite only should not have to install a MongoDB
+ * Someone running Kazuo with SQLite only should not have to install a MongoDB
  * driver, and a missing module must degrade rather than refuse to boot.
  */
 async function loadDriver(): Promise<{ MongoClient: new (uri: string, opts?: object) => MongoLike } | null> {
@@ -112,7 +113,7 @@ export class LayeredPersistence implements Persistence {
       this.client = client;
       this.connected = true;
 
-      const db = client.db(this.options.dbName ?? "xorv");
+      const db = client.db(this.options.dbName ?? "kazuo");
       await db.collection("jobs").createIndex({ createdAt: -1 });
       await db.collection("jobs").createIndex({ id: 1 }, { unique: true });
       await db.collection("providerStats").createIndex({ nodeId: 1 }, { unique: true });
@@ -182,6 +183,32 @@ export class LayeredPersistence implements Persistence {
     return this.local.prune(olderThanMs);
   }
 
+  // World ID proofs are few and small; SQLite is their store of record.
+  saveHumanVerification(v: HumanVerification): void {
+    this.local.saveHumanVerification(v);
+  }
+
+  loadHumanVerifications(): HumanVerification[] {
+    return this.local.loadHumanVerifications();
+  }
+
+  // The audit-log index is a cache of public chain data; SQLite is enough.
+  loadLogEntries(address: string): LogEntry[] {
+    return this.local.loadLogEntries(address);
+  }
+
+  saveLogEntries(address: string, entries: LogEntry[]): void {
+    this.local.saveLogEntries(address, entries);
+  }
+
+  loadLogCursor(address: string): bigint | null {
+    return this.local.loadLogCursor(address);
+  }
+
+  saveLogCursor(address: string, block: bigint): void {
+    this.local.saveLogCursor(address, block);
+  }
+
   close(): void {
     this.local.close();
     void this.client?.close().catch(() => {});
@@ -190,7 +217,7 @@ export class LayeredPersistence implements Persistence {
   // -- background ------------------------------------------------------------
 
   private collection(name: string) {
-    return this.client?.db(this.options.dbName ?? "xorv").collection(name);
+    return this.client?.db(this.options.dbName ?? "kazuo").collection(name);
   }
 
   private async flushJob(job: Job): Promise<void> {

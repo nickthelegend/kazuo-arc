@@ -27,12 +27,12 @@ export const runtime = "nodejs";
 /** Never prerender or cache: this route moves funds. */
 export const dynamic = "force-dynamic";
 
-const BROKER_URL = (process.env.XORV_BROKER_URL ?? "http://localhost:8402").replace(/\/+$/, "");
+const BROKER_URL = (process.env.KAZUO_BROKER_URL ?? "http://localhost:8402").replace(/\/+$/, "");
 
 /**
  * Parse an EVM private key.
  *
- * Duplicated from @xorv/protocol rather than imported: this module is bundled
+ * Duplicated from @kazuo/protocol rather than imported: this module is bundled
  * for a Next.js route, and pulling the whole protocol package in drags the
  * broker's dependency graph along with it for the sake of six lines.
  *
@@ -45,7 +45,7 @@ function parseKey(raw: string): `0x${string}` {
   const key = raw.trim();
   const hex = key.startsWith("0x") ? key.slice(2) : key;
   if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
-    throw new Error("XORV_DEMO_PAYER_KEY is not a 32-byte hex private key");
+    throw new Error("KAZUO_DEMO_PAYER_KEY is not a 32-byte hex private key");
   }
   return `0x${hex}`;
 }
@@ -65,7 +65,7 @@ function decodePaymentRequiredError(res: Response): string | null {
 }
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const payerKey = process.env.XORV_DEMO_PAYER_KEY?.trim();
+  const payerKey = process.env.KAZUO_DEMO_PAYER_KEY?.trim();
 
   // Only a key is needed. The address is derived from it, so there is no second
   // value to configure and no way for the two to disagree.
@@ -73,7 +73,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json(
       {
         error:
-          "No demo payer configured. Set XORV_DEMO_PAYER_KEY in .env.local — see .env.example.",
+          "No demo payer configured. Set KAZUO_DEMO_PAYER_KEY in .env.local — see .env.example.",
       },
       { status: 501 },
     );

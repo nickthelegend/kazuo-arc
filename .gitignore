@@ -14,7 +14,7 @@ out/
 .env.local
 .env.*.local
 *.pem
-.xorv/
+.kazuo/
 
 # reference clones (not part of this repo)
 references_/

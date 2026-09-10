@@ -1,6 +1,16 @@
 import Link from "next/link";
 import { Mark } from "@/components/ui/logo";
-import { ARC_URL, CHAIN, CIRCLE_URL, LOOM_URL, NPM_URL, REPO_URL, X402_URL } from "@/lib/links";
+import {
+  ARC_URL,
+  CHAIN,
+  CIRCLE_URL,
+  LOOM_URL,
+  NPM_URL,
+  PRIVY_URL,
+  REPO_URL,
+  WORLD_AGENTKIT_URL,
+  X402_URL,
+} from "@/lib/links";
 
 const COLUMNS = [
   {
@@ -20,6 +30,8 @@ const COLUMNS = [
       { label: "x402", href: X402_URL, external: true },
       { label: "Arc", href: ARC_URL, external: true },
       { label: "Circle", href: CIRCLE_URL, external: true },
+      { label: "World AgentKit", href: WORLD_AGENTKIT_URL, external: true },
+      { label: "Privy", href: PRIVY_URL, external: true },
     ],
   },
   {
@@ -40,11 +52,12 @@ export function Footer() {
           <div>
             <div className="flex items-center gap-2.5 text-fg">
               <Mark className="h-5 w-5" />
-              <span className="text-[15px] font-semibold tracking-[-0.02em]">Xorv</span>
+              <span className="text-[15px] font-semibold tracking-[-0.02em]">Kazuo</span>
             </div>
             <p className="mt-4 max-w-[26ch] text-[13.5px] leading-relaxed text-fg-3">
               A decentralized AI capacity network. Idle subscriptions in, paid jobs out — settled
-              per request in USDC on Arc.
+              per request in USDC on Arc, with human-backed nodes proven by World ID and wallets
+              anyone can open with an email.
             </p>
           </div>
 
@@ -72,7 +85,7 @@ export function Footer() {
 
         <div className="mt-14 flex flex-col items-start justify-between gap-3 border-t border-[var(--line)] pt-6 sm:flex-row sm:items-center">
           <p className="text-[12.5px] text-fg-4">
-            © {new Date().getFullYear()} Xorv · MIT ·{" "}
+            © {new Date().getFullYear()} Kazuo · MIT ·{" "}
             <Link
               href={LOOM_URL}
               target="_blank"

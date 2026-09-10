@@ -6,16 +6,16 @@
  *
  * ## The security model, stated plainly
  *
- * A Xorv provider runs prompts written by people they have never met, on their
+ * A Kazuo provider runs prompts written by people they have never met, on their
  * own machine, against their own paid subscription. That is the product, and it
  * is also the risk. Three things contain it:
  *
- *  1. **Every job gets a fresh empty directory** under `~/.xorv/jobs/`, which is
+ *  1. **Every job gets a fresh empty directory** under `~/.kazuo/jobs/`, which is
  *     the process's cwd. Agent CLIs resolve relative paths and their own
  *     permission scopes against cwd, so the blast radius of a hostile prompt is
  *     a scratch directory, not the operator's source tree.
  *  2. **The directory is deleted when the job ends**, pass or fail.
- *  3. **`XORV_SAFE_MODE=1` turns tools off entirely** and leaves a pure
+ *  3. **`KAZUO_SAFE_MODE=1` turns tools off entirely** and leaves a pure
  *     text-generation service — worth less per job, but it cannot touch a disk.
  *
  * What this does *not* do is contain a determined attacker: these CLIs can run
@@ -28,7 +28,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import type { AdapterKind, JobEvent } from "@xorv/protocol";
+import type { AdapterKind, JobEvent } from "@kazuo/protocol";
 import { DEFAULT_LIMITS, detectSandbox, sandboxEnv, wrapCommand, type SandboxTier } from "../sandbox.js";
 import { agentCredentials } from "../credentials.js";
 
@@ -47,7 +47,7 @@ export interface RunInput {
    * What the job actually cost the provider, in USD, when the CLI reports it.
    *
    * Only Claude Code volunteers a dollar figure; Codex reports tokens and the
-   * rest report nothing. It exists so `xorv test` can tell an operator that
+   * rest report nothing. It exists so `kazuo test` can tell an operator that
    * they are selling below cost, which is otherwise invisible until the
    * subscription bill arrives.
    */
@@ -58,20 +58,20 @@ export interface JobAdapter {
   readonly kind: AdapterKind;
   /** Is the underlying CLI installed and runnable? */
   available(): Promise<boolean>;
-  /** Where to get it, shown by `xorv doctor` when it's missing. */
+  /** Where to get it, shown by `kazuo doctor` when it's missing. */
   readonly installHint: string;
   run(input: RunInput): Promise<string>;
 }
 
 /** Tools off — see the safety note above. */
 export function safeMode(): boolean {
-  return process.env.XORV_SAFE_MODE === "1" || process.env.XORV_SAFE_MODE === "true";
+  return process.env.KAZUO_SAFE_MODE === "1" || process.env.KAZUO_SAFE_MODE === "true";
 }
 
 /**
  * Is a CLI on PATH?
  *
- * Bounded, because this runs behind `xorv doctor` and behind every heartbeat's
+ * Bounded, because this runs behind `kazuo doctor` and behind every heartbeat's
  * availability check — a binary that hangs on `--version` must not wedge the
  * node's reporting.
  */
@@ -271,7 +271,7 @@ export function removeJobDir(dir: string): void {
   try {
     fs.rmSync(dir, { recursive: true, force: true });
   } catch {
-    /* leave it; `xorv doctor` reports the leftovers */
+    /* leave it; `kazuo doctor` reports the leftovers */
   }
 }
 

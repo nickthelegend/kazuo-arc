@@ -1,5 +1,5 @@
 /**
- * `xorv earnings` — what this machine has actually made.
+ * `kazuo earnings` — what this machine has actually made.
  *
  * Reads the local append-only ledger written as each job settles, so it works
  * with the broker down and with no network at all. The authoritative record is
@@ -15,7 +15,7 @@ import {
   explorerAddress,
   networkLabel,
   usdcAddress,
-} from "@xorv/protocol";
+} from "@kazuo/protocol";
 import { loadConfig, readEarnings, type EarningRow } from "../config.js";
 import * as ui from "../ui.js";
 
@@ -36,7 +36,7 @@ export async function earningsCommand(opts: { json?: boolean; limit?: string }):
         [
           `${ui.glyph.money()} ${ui.c.bold("no jobs yet")}`,
           "",
-          `  Run ${ui.c.accent("xorv start")} and leave it running.`,
+          `  Run ${ui.c.accent("kazuo start")} and leave it running.`,
           `  Every completed job appends a line here.`,
         ],
         { title: "earnings", color: ui.BRAND.slate },

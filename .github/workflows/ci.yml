@@ -41,10 +41,10 @@ jobs:
       - name: Build
         run: pnpm build
 
-      # Every test in the repo runs with no Hedera credentials and no network:
-      # the two pieces that would touch the ledger — the facilitator and the HCS
-      # writer — are stubbed, so CI proves the logic without spending testnet
-      # HBAR or depending on a mirror node being up.
+      # Every test in the repo runs with no credentials and no network:
+      # the two pieces that would touch the chain — the facilitator and the
+      # audit-log writer — are stubbed, so CI proves the logic without spending
+      # testnet USDC or depending on an Arc RPC being up.
       - name: Test
         run: pnpm test
 
@@ -64,9 +64,9 @@ jobs:
           node-version: "20.11"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @xorv/protocol build
-      - run: pnpm --filter xorv build
-      # The floor that matters for `npm i -g @xorv/cli`: it has to at least start.
+      - run: pnpm --filter @kazuo/protocol build
+      - run: pnpm --filter kazuo build
+      # The floor that matters for `npm i -g @kazuo/cli`: it has to at least start.
       - run: node packages/cli/dist/index.js --version
 
   secrets:

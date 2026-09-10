@@ -1,5 +1,5 @@
 {
-  "name": "xorv-landing",
+  "name": "kazuo-landing",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -31,5 +31,5 @@
     "tailwindcss": "^4",
     "typescript": "^5"
   },
-  "description": "Xorv marketing site — decentralized AI capacity network paid in USDC over x402 on Hedera."
+  "description": "Kazuo marketing site — decentralized AI capacity network paid in USDC over x402 on Arc."
 }

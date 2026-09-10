@@ -43,50 +43,50 @@ export class Metrics {
       lines.push(`# TYPE ${name} ${type}`);
     };
 
-    help("xorv_uptime_seconds", "Broker uptime.", "gauge");
-    lines.push(`xorv_uptime_seconds ${Math.floor((Date.now() - this.startedAt) / 1000)}`);
+    help("kazuo_uptime_seconds", "Broker uptime.", "gauge");
+    lines.push(`kazuo_uptime_seconds ${Math.floor((Date.now() - this.startedAt) / 1000)}`);
 
     const providers = deps.registry.list();
-    help("xorv_providers", "Providers by status.", "gauge");
+    help("kazuo_providers", "Providers by status.", "gauge");
     for (const status of ["online", "busy", "offline"] as const) {
       lines.push(
-        `xorv_providers{status="${status}"} ${providers.filter((p) => p.status === status).length}`,
+        `kazuo_providers{status="${status}"} ${providers.filter((p) => p.status === status).length}`,
       );
     }
 
-    help("xorv_providers_connected", "Providers holding a control socket.", "gauge");
-    lines.push(`xorv_providers_connected ${deps.connected}`);
+    help("kazuo_providers_connected", "Providers holding a control socket.", "gauge");
+    lines.push(`kazuo_providers_connected ${deps.connected}`);
 
-    help("xorv_capacity", "Advertised capabilities across live providers.", "gauge");
+    help("kazuo_capacity", "Advertised capabilities across live providers.", "gauge");
     lines.push(
-      `xorv_capacity ${deps.registry.live().reduce((n, p) => n + p.capabilities.length, 0)}`,
+      `kazuo_capacity ${deps.registry.live().reduce((n, p) => n + p.capabilities.length, 0)}`,
     );
 
     const jobs = deps.jobs.list({ limit: 10_000 });
-    help("xorv_jobs", "Jobs by status.", "gauge");
+    help("kazuo_jobs", "Jobs by status.", "gauge");
     const byStatus = new Map<string, number>();
     for (const job of jobs) byStatus.set(job.status, (byStatus.get(job.status) ?? 0) + 1);
     for (const [status, count] of byStatus) {
-      lines.push(`xorv_jobs{status="${status}"} ${count}`);
+      lines.push(`kazuo_jobs{status="${status}"} ${count}`);
     }
 
-    help("xorv_settled_usd_micros_total", "Total settled, in micro-USD.", "counter");
+    help("kazuo_settled_usd_micros_total", "Total settled, in micro-USD.", "counter");
     lines.push(
-      `xorv_settled_usd_micros_total ${jobs
+      `kazuo_settled_usd_micros_total ${jobs
         .filter((j) => j.payment)
         .reduce((sum, j) => sum + (j.priceUsdMicros ?? 0), 0)}`,
     );
 
     const audit = deps.chain.counts();
-    help("xorv_audit_entries_total", "Entries appended to the on-chain audit log.", "counter");
+    help("kazuo_audit_entries_total", "Entries appended to the on-chain audit log.", "counter");
     for (const [stream, count] of Object.entries(audit)) {
-      lines.push(`xorv_audit_entries_total{stream="${stream}"} ${count}`);
+      lines.push(`kazuo_audit_entries_total{stream="${stream}"} ${count}`);
     }
 
     for (const [key, value] of this.counters) {
       const { name } = parseKey(key);
       if (!lines.some((l) => l.startsWith(`# TYPE ${name} `))) {
-        help(name, "Xorv counter.", "counter");
+        help(name, "Kazuo counter.", "counter");
       }
       lines.push(`${key} ${value}`);
     }
@@ -94,7 +94,7 @@ export class Metrics {
     for (const [key, samples] of this.histograms) {
       if (samples.length === 0) continue;
       const { name, labelPart } = parseKey(key);
-      help(`${name}_seconds`, "Xorv duration summary.", "summary");
+      help(`${name}_seconds`, "Kazuo duration summary.", "summary");
       const sorted = [...samples].sort((a, b) => a - b);
       for (const q of [0.5, 0.9, 0.99]) {
         const value = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))] ?? 0;

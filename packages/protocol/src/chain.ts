@@ -33,32 +33,43 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import type { PrivateKeyAccount } from "viem/accounts";
-import { ARC_MAINNET_CHAIN_ID, chainIdFor, rpcUrl, usdcAddress } from "./constants.js";
+import {
+  ARC_MAINNET_CHAIN_ID,
+  chainIdFor,
+  isWorldChain,
+  networkInfo,
+  rpcUrl,
+  usdcAddress,
+} from "./constants.js";
 
 /**
  * Arc as viem sees it.
  *
  * Built here rather than imported from `viem/chains` so the RPC honours
- * `XORV_RPC_URL` — a self-hosted or paid endpoint is the difference between a
+ * `KAZUO_RPC_URL` — a self-hosted or paid endpoint is the difference between a
  * demo that works and one that rate-limits halfway through.
  */
 export function arcChain(network: string): Chain {
   const id = chainIdFor(network);
+  const info = networkInfo(network);
+  const world = isWorldChain(network);
   return defineChain({
     id,
-    name: id === ARC_MAINNET_CHAIN_ID ? "Arc" : "Arc Testnet",
+    name: info.name,
     // 18 decimals here is not a contradiction of USDC's 6. This field describes
     // the *native* view the EVM meters gas in; money in this codebase uses the
-    // ERC-20 view. See constants.ts.
-    nativeCurrency: { name: "USD Coin", symbol: "USDC", decimals: 18 },
+    // ERC-20 view. See constants.ts. On World Chain the gas token is ETH.
+    nativeCurrency: world
+      ? { name: "Ether", symbol: "ETH", decimals: 18 }
+      : { name: "USD Coin", symbol: "USDC", decimals: 18 },
     rpcUrls: { default: { http: [rpcUrl(network)] } },
     blockExplorers: {
       default: {
-        name: "ArcScan",
-        url: id === ARC_MAINNET_CHAIN_ID ? "https://arcscan.app" : "https://testnet.arcscan.app",
+        name: world ? "WorldScan" : "ArcScan",
+        url: info.explorer,
       },
     },
-    testnet: id !== ARC_MAINNET_CHAIN_ID,
+    testnet: info.testnet && id !== ARC_MAINNET_CHAIN_ID,
   });
 }
 
@@ -87,11 +98,23 @@ export function accountFor(rawKey: string): PrivateKeyAccount {
   return privateKeyToAccount(parsePrivateKey(rawKey));
 }
 
+/**
+ * How long to keep trying when the RPC pushes back.
+ *
+ * Arc's public endpoint answers bursts with "Request exceeds defined limit"
+ * (-32005). viem already retries that code, but its default backoff — 150ms,
+ * doubling, three attempts — is spent in about a second, well inside the limit
+ * window. Observed live: an audit heartbeat and a registration that met a busy
+ * moment simply failed. 1s doubling over five attempts rides out the window
+ * without hiding a genuinely dead endpoint for long.
+ */
+const RPC_RETRY = { retryCount: 5, retryDelay: 1_000 } as const;
+
 /** A read-only client, for balances and contract reads. */
 export function readClient(network: string): PublicClient {
   return createPublicClient({
     chain: arcChain(network),
-    transport: http(rpcUrl(network), { timeout: 30_000 }),
+    transport: http(rpcUrl(network), { timeout: 30_000, ...RPC_RETRY }),
   }) as PublicClient;
 }
 
@@ -100,7 +123,7 @@ export function writeClient(network: string, rawKey: string): WalletClient {
   return createWalletClient({
     account: accountFor(rawKey),
     chain: arcChain(network),
-    transport: http(rpcUrl(network), { timeout: 30_000 }),
+    transport: http(rpcUrl(network), { timeout: 30_000, ...RPC_RETRY }),
   });
 }
 
@@ -119,7 +142,7 @@ export interface AccountBalances {
   /**
    * True when the two views describe the same balance, as they must.
    *
-   * A mismatch means the configured `XORV_STABLECOIN` is some other token that
+   * A mismatch means the configured `KAZUO_STABLECOIN` is some other token that
    * merely happens to live on this chain, and every balance shown to a user is
    * about to be wrong.
    */
@@ -142,7 +165,9 @@ export async function fetchBalances(network: string, address: string): Promise<A
   return {
     nativeWei: nativeWei.toString(),
     usdcUnits: usdcUnits.toString(),
-    viewsAgree: nativeWei / 10n ** 12n === usdcUnits,
+    // The dual view is an Arc property. On World Chain the native balance is
+    // ETH — a different asset — so there is nothing for the two to agree on.
+    viewsAgree: isWorldChain(network) ? true : nativeWei / 10n ** 12n === usdcUnits,
   };
 }
 

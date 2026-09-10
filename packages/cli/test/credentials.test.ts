@@ -64,7 +64,7 @@ describe("the keychain stays closed", () => {
   });
 
   it("is denied in the generated profile", () => {
-    const jobDir = fs.mkdtempSync(path.join(os.tmpdir(), "xorv-cred-"));
+    const jobDir = fs.mkdtempSync(path.join(os.tmpdir(), "kazuo-cred-"));
     try {
       expect(seatbeltProfile(jobDir, "/Users/x")).toContain(
         `(deny file-read* (subpath "/Users/x/Library/Keychains"))`,

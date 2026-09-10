@@ -20,7 +20,7 @@ import { useState, type ReactNode } from "react";
  * blows that apart — the result panel would become the loudest thing in the
  * app. So highlighting here is **tonal**: one hue family for anything the
  * language treats as special, and weight plus brightness carrying the rest.
- * Code still reads as structured; the page still reads as Xorv.
+ * Code still reads as structured; the page still reads as Kazuo.
  *
  * Overrides are per-element rather than a global stylesheet, because the
  * surrounding UI already owns `p`, `a`, `pre` and friends, and a markdown

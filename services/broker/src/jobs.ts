@@ -17,7 +17,7 @@ import {
   type JobRequest,
   type JobStatus,
   newId,
-} from "@xorv/protocol";
+} from "@kazuo/protocol";
 
 export interface Quote {
   id: string;
@@ -49,6 +49,10 @@ export interface Quote {
    * and the facilitator rejects a signature that is otherwise perfectly valid.
    */
   domain: { name: string; version: string };
+  /** The matched provider was human-backed (World AgentKit) when quoted. */
+  providerHumanBacked?: boolean;
+  /** The buyer presented a valid AgentKit proof resolving to a human. */
+  buyerHumanBacked?: boolean;
   createdAt: number;
   expiresAt: number;
   /** Set once the quote has been paid, so a replayed payment can't buy twice. */
@@ -135,6 +139,8 @@ export class JobStore {
       providerAddress: quote.providerAddress,
       capabilityId: quote.capabilityId,
       priceUsdMicros: quote.priceUsdMicros,
+      providerHumanBacked: quote.providerHumanBacked ?? false,
+      buyerHumanBacked: quote.buyerHumanBacked ?? false,
       events: [],
     };
     this.jobs.set(job.id, job);

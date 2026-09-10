@@ -2,7 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 /**
- * The Xorv mark, monochrome.
+ * The Kazuo mark, monochrome.
  *
  * Two beams crossing but stopping short of centre, so a diamond of negative
  * space opens where they would meet — supply and demand routed through a hub
@@ -52,20 +52,18 @@ export function Mark({ className }: { className?: string }) {
 /**
  * The header lockup — wordmark only.
  *
- * The mark is an X, and the wordmark starts with an X. Set side by side they
- * read as a stutter rather than a lockup: two X-shapes competing at the same
- * size, the eye resolving neither. The word alone is unambiguous, and the mark
- * still does its job everywhere it stands on its own — favicon, the closing
- * frame of the film, anywhere there is no text beside it to fight.
+ * The word alone is unambiguous in a header, and the mark still does its job
+ * everywhere it stands on its own — favicon, the closing frame of the film,
+ * anywhere there is no text beside it.
  */
 export function Logo({ className }: { className?: string }) {
   return (
     <Link
       href="/"
       className={cn("group flex items-center text-fg", className)}
-      aria-label="Xorv, home"
+      aria-label="Kazuo, home"
     >
-      <span className="text-[15px] font-semibold tracking-[-0.02em]">Xorv</span>
+      <span className="text-[15px] font-semibold tracking-[-0.02em]">Kazuo</span>
     </Link>
   );
 }

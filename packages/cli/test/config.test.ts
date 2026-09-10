@@ -12,17 +12,17 @@ import path from "node:path";
 let home: string;
 
 beforeEach(() => {
-  home = fs.mkdtempSync(path.join(os.tmpdir(), "xorv-home-"));
-  process.env.XORV_HOME = home;
-  // The module reads XORV_HOME at import time, so each test gets a fresh copy.
+  home = fs.mkdtempSync(path.join(os.tmpdir(), "kazuo-home-"));
+  process.env.KAZUO_HOME = home;
+  // The module reads KAZUO_HOME at import time, so each test gets a fresh copy.
   vi.resetModules();
 });
 
 afterEach(() => {
   fs.rmSync(home, { recursive: true, force: true });
-  delete process.env.XORV_HOME;
-  delete process.env.XORV_PRIVATE_KEY;
-  delete process.env.XORV_BROKER_URL;
+  delete process.env.KAZUO_HOME;
+  delete process.env.KAZUO_PRIVATE_KEY;
+  delete process.env.KAZUO_BROKER_URL;
 });
 
 import { vi } from "vitest";
@@ -58,9 +58,9 @@ describe("config round trip", () => {
     expect(mod.loadConfig()).toBeNull();
   });
 
-  it("requireConfig points the operator at `xorv init`", async () => {
+  it("requireConfig points the operator at `kazuo init`", async () => {
     const mod = await loadModule();
-    expect(() => mod.requireConfig()).toThrow(/xorv init/);
+    expect(() => mod.requireConfig()).toThrow(/kazuo init/);
   });
 
   it("writes the config 0600 and the home directory 0700", async () => {
@@ -122,9 +122,9 @@ describe("config round trip", () => {
 });
 
 describe("environment overrides", () => {
-  it("prefers XORV_PRIVATE_KEY over the file, for secret managers", async () => {
+  it("prefers KAZUO_PRIVATE_KEY over the file, for secret managers", async () => {
     const mod = await loadModule();
-    process.env.XORV_PRIVATE_KEY = "from-env";
+    process.env.KAZUO_PRIVATE_KEY = "from-env";
     const config = { privateKey: "from-file" } as never;
     expect(mod.resolvePrivateKey(config)).toBe("from-env");
   });
@@ -134,9 +134,9 @@ describe("environment overrides", () => {
     expect(() => mod.resolvePrivateKey({ privateKey: "" } as never)).toThrow(/no payout key/);
   });
 
-  it("prefers XORV_BROKER_URL and strips trailing slashes", async () => {
+  it("prefers KAZUO_BROKER_URL and strips trailing slashes", async () => {
     const mod = await loadModule();
-    process.env.XORV_BROKER_URL = "https://broker.example.com///";
+    process.env.KAZUO_BROKER_URL = "https://broker.example.com///";
     expect(mod.resolveBrokerUrl({ brokerUrl: "http://ignored" } as never)).toBe(
       "https://broker.example.com",
     );

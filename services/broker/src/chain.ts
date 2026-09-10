@@ -31,9 +31,26 @@ import {
   type LogMessageKind,
   type LogProviderRegistered,
   type Provider,
-} from "@xorv/protocol";
+} from "@kazuo/protocol";
 import type { PublicClient, WalletClient } from "viem";
 import type { BrokerConfig } from "./config.js";
+
+/**
+ * How long after a write background readers keep waiting. A write is several
+ * RPC calls (gas price, nonce, send, receipt polls) and the rate limit counts
+ * the burst for a few seconds after it ends.
+ */
+const WRITE_COOLDOWN_MS = 5_000;
+
+/** Longest a single write can hold background readers off: RPC retries included. */
+const MAX_WRITE_MS = 120_000;
+
+/** viem's short message plus the RPC's own reason, without the request dump. */
+export function summarizeError(err: Error): string {
+  const e = err as Error & { shortMessage?: string; details?: string };
+  const head = e.shortMessage ?? err.message.split("\n")[0] ?? err.message;
+  return e.details && !head.includes(e.details) ? `${head} (${e.details})` : head;
+}
 
 export interface PublishResult {
   contract: string;
@@ -58,6 +75,14 @@ export interface ChainLike {
   describeLog(): { address: string; url: string } | null;
   counts(): { registry: number; heartbeat: number; receipts: number };
   lastPublishError(): string | null;
+  /**
+   * True while the broker is writing to the chain, or just finished. Background
+   * readers (the log index) check it and wait, so they never spend the RPC's
+   * rate budget out from under a settlement or an audit entry.
+   */
+  writing?(): boolean;
+  /** Mark a write the chain class doesn't make itself (a facilitator settle). */
+  noteWrite?(phase: "start" | "end"): void;
   publishRegistration(provider: Provider): Promise<PublishResult | null>;
   publishHeartbeat(data: LogHeartbeat): Promise<PublishResult | null>;
   publishReceipt(data: LogJobReceipt): Promise<PublishResult | null>;
@@ -73,6 +98,9 @@ export class Chain implements ChainLike {
   /** Publish failures, kept for /api/network so a misconfig is visible. */
   private lastError: string | null = null;
   private published = { registry: 0, heartbeat: 0, receipts: 0 };
+  private inFlight = 0;
+  private lastStartAt = 0;
+  private lastWriteAt = 0;
 
   constructor(config: BrokerConfig) {
     this.network = config.network;
@@ -97,6 +125,24 @@ export class Chain implements ChainLike {
     return this.lastError;
   }
 
+  writing(): boolean {
+    const now = Date.now();
+    // A write whose end was never reported (a hook that didn't fire) stops
+    // counting after a while, so it can't pause background readers for good.
+    const active = this.inFlight > 0 && now - this.lastStartAt < MAX_WRITE_MS;
+    return active || now - this.lastWriteAt < WRITE_COOLDOWN_MS;
+  }
+
+  noteWrite(phase: "start" | "end"): void {
+    if (phase === "start") {
+      this.inFlight += 1;
+      this.lastStartAt = Date.now();
+    } else {
+      this.inFlight = Math.max(0, this.inFlight - 1);
+      this.lastWriteAt = Date.now();
+    }
+  }
+
   private async publish(
     kind: LogMessageKind,
     subject: string,
@@ -104,6 +150,7 @@ export class Chain implements ChainLike {
     counter: keyof typeof this.published,
   ): Promise<PublishResult | null> {
     const contract = this.contract;
+    this.noteWrite("start");
     const result = await appendEntrySafe(
       { wallet: this.walletClient, public: this.publicClient },
       contract,
@@ -111,10 +158,12 @@ export class Chain implements ChainLike {
       subject,
       envelope(kind, data),
       (err) => {
-        this.lastError = `${kind}: ${err.message}`;
+        // /api/network is public: the one-line reason, not viem's full dump of
+        // calldata and request arguments. The log keeps the whole stack.
+        this.lastError = `${kind}: ${summarizeError(err)}`;
         console.error(`[broker] audit ${kind} publish failed:`, err.stack ?? err.message);
       },
-    );
+    ).finally(() => this.noteWrite("end"));
     if (!result || !contract) return null;
     this.published[counter] += 1;
     return {

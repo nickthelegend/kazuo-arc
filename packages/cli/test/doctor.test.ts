@@ -67,7 +67,7 @@ describe("configChecks", () => {
   it("fails an unconfigured node and says what to run", () => {
     const [check] = configChecks(null);
     expect(check.status).toBe("fail");
-    expect(check.fix).toBe("xorv init");
+    expect(check.fix).toBe("kazuo init");
   });
 
   it("fails a node with nothing to sell", () => {

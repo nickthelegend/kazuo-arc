@@ -1,7 +1,7 @@
 /**
  * M1 — prove a real x402 payment settles on Arc testnet.
  *
- * Deliberately standalone. It imports nothing from `@xorv/*`, so it can be run
+ * Deliberately standalone. It imports nothing from `@kazuo/*`, so it can be run
  * and trusted before a single line of the port exists, and it stays afterwards
  * as the reference the protocol layer is written against.
  *
@@ -51,14 +51,14 @@ const env = Object.fromEntries(
 ) as Record<string, string>;
 
 /** Circle FiatTokenV2 — the ERC-20 face of Arc's native USDC. */
-const USDC = env.XORV_USDC_ADDRESS as `0x${string}`;
+const USDC = env.KAZUO_USDC_ADDRESS as `0x${string}`;
 const NETWORK = "eip155:5042002";
 /** 1000 units = $0.001 at 6 decimals. Small on purpose: this runs for real. */
 const AMOUNT = "1000";
 
-const payer = privateKeyToAccount(env.XORV_DEMO_PAYER_KEY as `0x${string}`);
-const facilitatorAccount = privateKeyToAccount(env.XORV_OPERATOR_KEY as `0x${string}`);
-const provider = env.XORV_DEMO_PROVIDER_ADDRESS as `0x${string}`;
+const payer = privateKeyToAccount(env.KAZUO_DEMO_PAYER_KEY as `0x${string}`);
+const facilitatorAccount = privateKeyToAccount(env.KAZUO_OPERATOR_KEY as `0x${string}`);
+const provider = env.KAZUO_DEMO_PROVIDER_ADDRESS as `0x${string}`;
 
 const publicClient = createPublicClient({ chain: arcTestnet, transport: http() });
 const facilitatorWallet = createWalletClient({
@@ -158,7 +158,7 @@ async function main() {
   // it selects from `accepts` using the schemes the client has registered.
   const payload = await client.createPaymentPayload({
     x402Version: 2,
-    resource: { url: "https://xorv.dev/m1", method: "POST" } as never,
+    resource: { url: "https://kazuo.dev/m1", method: "POST" } as never,
     accepts: [requirements],
   });
   line("scheme", requirements.scheme);

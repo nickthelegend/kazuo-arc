@@ -5,7 +5,7 @@ import { motion } from "motion/react";
 import { EASE, useEntrance } from "@/lib/motion";
 import { Button, LiveDot, Pill } from "@/components/ui/kit";
 import { NodePanel } from "@/components/ui/node-panel";
-import { APP_URL, REPO_URL } from "@/lib/links";
+import { APP_URL, ARC_URL, PRIVY_URL, REPO_URL, WORLD_AGENTKIT_URL } from "@/lib/links";
 
 /**
  * The hero, and the page's one authored motion moment.
@@ -56,7 +56,7 @@ export function Hero() {
           {...rise(0.16)}
           className="measure mx-auto mt-7 text-[16.5px] leading-relaxed text-fg-2"
         >
-          Xorv turns that idle quota into income. One command, and the Claude, Codex or Grok plan
+          Kazuo turns that idle quota into income. One command, and the Claude, Codex or Grok plan
           you already pay for starts taking jobs from the network — settling per job, in USDC,
           straight to your wallet.
         </motion.p>
@@ -68,8 +68,26 @@ export function Hero() {
           </Button>
         </motion.div>
 
+        {/* What each sponsor actually does here, in one line. Not logos: a row of
+            marks would say "we have partners" without saying what for. */}
         <motion.p {...rise(0.32)} className="mono mt-7 text-[12.5px] text-fg-4">
-          npm i -g @xorv/cli
+          settles on{" "}
+          <a href={ARC_URL} target="_blank" rel="noopener noreferrer" className="text-fg-3 hover:text-fg">
+            Arc
+          </a>{" "}
+          · human-backed nodes via{" "}
+          <a
+            href={WORLD_AGENTKIT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-fg-3 hover:text-fg"
+          >
+            World AgentKit
+          </a>{" "}
+          · email wallets via{" "}
+          <a href={PRIVY_URL} target="_blank" rel="noopener noreferrer" className="text-fg-3 hover:text-fg">
+            Privy
+          </a>
         </motion.p>
       </div>
 
@@ -81,7 +99,7 @@ export function Hero() {
 /**
  * The product, framed.
  *
- * Ripar puts a browser-chromed dashboard on a warm panel here. Xorv's product
+ * Ripar puts a browser-chromed dashboard on a warm panel here. Kazuo's product
  * is a terminal, so that is what goes in the frame — and it types itself out
  * once, which is the closest thing to a demo a static page can offer.
  */

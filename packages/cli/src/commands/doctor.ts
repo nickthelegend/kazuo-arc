@@ -1,5 +1,5 @@
 /**
- * `xorv doctor` — every reason this node might not earn, in one screen.
+ * `kazuo doctor` — every reason this node might not earn, in one screen.
  *
  * Ordered by what actually blocks money: config, then containment, then the
  * payout account, then the broker, then the agent CLIs. Each failed check says
@@ -29,7 +29,7 @@ import {
   explorerAddress,
   networkLabel,
   type AdapterKind,
-} from "@xorv/protocol";
+} from "@kazuo/protocol";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -82,12 +82,12 @@ const fail = (name: string, detail: string, fix?: string): Check => ({
 // ---------------------------------------------------------------------------
 
 export function configChecks(config: NodeConfig | null): Check[] {
-  if (!config) return [fail("config", "this node is not configured", "xorv init")];
+  if (!config) return [fail("config", "this node is not configured", "kazuo init")];
 
   const checks: Check[] = [ok("config", configPath())];
 
   if (config.capabilities.length === 0) {
-    checks.push(fail("capabilities", "nothing to sell — no capabilities configured", "xorv init"));
+    checks.push(fail("capabilities", "nothing to sell — no capabilities configured", "kazuo init"));
   } else {
     checks.push(
       ok(
@@ -103,14 +103,14 @@ export function configChecks(config: NodeConfig | null): Check[] {
         warn(
           "pricing",
           `${freebies.map((c) => c.displayName).join(", ")} priced under $0.001 — likely below cost`,
-          "xorv price",
+          "kazuo price",
         ),
       );
     }
   }
 
   if (!config.address) {
-    checks.push(fail("payout", "no payout account — jobs cannot be paid for", "xorv init"));
+    checks.push(fail("payout", "no payout account — jobs cannot be paid for", "kazuo init"));
   }
 
   return checks;
@@ -128,7 +128,7 @@ export function sandboxChecks(tier: SandboxTier, withheld: number, safe: boolean
 
   checks.push(
     safe
-      ? warn("mode", "XORV_SAFE_MODE is on — tools disabled, text generation only")
+      ? warn("mode", "KAZUO_SAFE_MODE is on — tools disabled, text generation only")
       : ok("mode", "full agent mode — prompts come from strangers, see SECURITY.md"),
   );
 
@@ -137,7 +137,7 @@ export function sandboxChecks(tier: SandboxTier, withheld: number, safe: boolean
     name: "sandbox",
     status: weak ? "warn" : "ok",
     detail: describeSandbox(tier),
-    fix: weak ? "XORV_SANDBOX=container xorv start" : undefined,
+    fix: weak ? "KAZUO_SANDBOX=container kazuo start" : undefined,
   });
 
   checks.push(
@@ -169,7 +169,7 @@ export interface BalanceLike {
  *
  * What replaced it is a check that could not exist on Hedera. Arc reports the
  * same balance twice, at 6 and 18 decimals, and if the two disagree then
- * `XORV_STABLECOIN` is pointing at some other token — every figure this CLI
+ * `KAZUO_STABLECOIN` is pointing at some other token — every figure this CLI
  * prints is wrong, and the operator has no other way to find out.
  */
 export function payoutChecks(network: string, address: string, balances: BalanceLike): Check[] {
@@ -202,7 +202,7 @@ export function payoutChecks(network: string, address: string, balances: Balance
         "usdc",
         "the ERC-20 and native balances disagree, so the configured token is not Arc's native USDC — " +
           "every amount this node reports is wrong",
-        "unset XORV_STABLECOIN, or point it at the real FiatTokenV2",
+        "unset KAZUO_STABLECOIN, or point it at the real FiatTokenV2",
       ),
     );
   }
@@ -291,9 +291,9 @@ export function probeAuth(kind: AdapterKind, home = os.homedir()): AuthProbe {
         ? { authed: true, hint: "" }
         : { authed: null, hint: "set XAI_API_KEY if jobs fail" };
     case "openai-compatible":
-      return process.env.XORV_OPENAI_BASE_URL
+      return process.env.KAZUO_OPENAI_BASE_URL
         ? { authed: true, hint: "" }
-        : { authed: false, hint: "set XORV_OPENAI_BASE_URL and XORV_OPENAI_MODEL" };
+        : { authed: false, hint: "set KAZUO_OPENAI_BASE_URL and KAZUO_OPENAI_MODEL" };
     default:
       return { authed: true, hint: "" };
   }
@@ -322,7 +322,7 @@ export function adapterChecks(states: AdapterState[]): Check[] {
       continue;
     }
     if (!s.selling) {
-      checks.push(warn(s.kind, `${s.label} installed but not being sold`, "xorv init"));
+      checks.push(warn(s.kind, `${s.label} installed but not being sold`, "kazuo init"));
       continue;
     }
     if (s.auth.authed === false) {
@@ -335,7 +335,7 @@ export function adapterChecks(states: AdapterState[]): Check[] {
   }
 
   if (states.every((s) => !s.installed)) {
-    checks.push(fail("agents", "no agent CLI installed — this node cannot run any job", "xorv init"));
+    checks.push(fail("agents", "no agent CLI installed — this node cannot run any job", "kazuo init"));
   }
 
   return checks;
@@ -384,8 +384,8 @@ export function fixNode(): { fixed: string[]; unfixable: string[] } {
   }
 
   const config = loadConfig();
-  if (config && !config.address) unfixable.push("no payout account — run `xorv init`");
-  if (config && config.capabilities.length === 0) unfixable.push("no capabilities — run `xorv init`");
+  if (config && !config.address) unfixable.push("no payout account — run `kazuo init`");
+  if (config && config.capabilities.length === 0) unfixable.push("no capabilities — run `kazuo init`");
 
   return { fixed, unfixable };
 }

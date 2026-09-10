@@ -1,9 +1,9 @@
 /**
  * Containing a job.
  *
- * A Xorv provider executes prompts written by strangers, on their own machine,
+ * A Kazuo provider executes prompts written by strangers, on their own machine,
  * as their own user. Until this module existed the only containment was a fresh
- * working directory, which stops nothing: `cat ~/.xorv/config.json` reads the
+ * working directory, which stops nothing: `cat ~/.kazuo/config.json` reads the
  * provider's **payout private key**, and `cat ~/.aws/credentials` reads rather
  * more than that. A marketplace that pays people cannot ship with a key-theft
  * hole in the thing that earns the money.
@@ -18,7 +18,7 @@
  *   seatbelt  — macOS. Denies *reads* of every credential path we can name and
  *               *writes* anywhere outside the job directory.
  *   bwrap     — Linux. A read-only bind of the filesystem with a private /home.
- *   container — opt-in, the only real boundary. `XORV_SANDBOX=container`.
+ *   container — opt-in, the only real boundary. `KAZUO_SANDBOX=container`.
  *
  * ## What this still does not do
  *
@@ -29,7 +29,7 @@
  * it cannot write outside its job directory.
  *
  * Closing that last gap needs a container, which is why `container` exists and
- * why `xorv doctor` names the active tier rather than saying "sandboxed".
+ * why `kazuo doctor` names the active tier rather than saying "sandboxed".
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
@@ -108,7 +108,7 @@ const ENV_ALLOW = new Set([
  * variables have to survive. They are the operator's deliberate choice to
  * expose, unlike everything else in the shell.
  */
-const ENV_ALLOW_PREFIX = ["XORV_OPENAI_"];
+const ENV_ALLOW_PREFIX = ["KAZUO_OPENAI_"];
 
 export function sandboxEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   const clean: NodeJS.ProcessEnv = {};
@@ -141,12 +141,12 @@ export function withheldEnvKeys(): string[] {
 /**
  * Everything worth stealing that a job has no reason to touch.
  *
- * `~/.xorv` is first for a reason: it holds the payout key, and a job reading
+ * `~/.kazuo` is first for a reason: it holds the payout key, and a job reading
  * it can take every future payment the provider earns.
  */
 export function secretPaths(home = os.homedir()): string[] {
   return [
-    path.join(home, ".xorv"),
+    path.join(home, ".kazuo"),
     path.join(home, ".ssh"),
     path.join(home, ".aws"),
     path.join(home, ".gnupg"),
@@ -205,28 +205,28 @@ let cachedTier: SandboxTier | null = null;
 /**
  * The strongest tier this machine can actually deliver.
  *
- * `XORV_SANDBOX` forces one. Forcing a tier the host can't provide is an error
+ * `KAZUO_SANDBOX` forces one. Forcing a tier the host can't provide is an error
  * rather than a silent downgrade — an operator who asked for a container and
  * quietly got environment scrubbing has been misled about their own exposure.
  */
 export function detectSandbox(): SandboxTier {
   if (cachedTier) return cachedTier;
 
-  const forced = process.env.XORV_SANDBOX?.trim() as SandboxTier | undefined;
+  const forced = process.env.KAZUO_SANDBOX?.trim() as SandboxTier | undefined;
   if (forced) {
     if (!(forced in TIER_RANK)) {
       throw new Error(
-        `XORV_SANDBOX="${forced}" is not a tier (none, env, limits, seatbelt, bwrap, container)`,
+        `KAZUO_SANDBOX="${forced}" is not a tier (none, env, limits, seatbelt, bwrap, container)`,
       );
     }
     if (forced === "container" && !has("docker") && !has("podman")) {
-      throw new Error("XORV_SANDBOX=container but neither docker nor podman is installed");
+      throw new Error("KAZUO_SANDBOX=container but neither docker nor podman is installed");
     }
     if (forced === "seatbelt" && process.platform !== "darwin") {
-      throw new Error("XORV_SANDBOX=seatbelt only works on macOS");
+      throw new Error("KAZUO_SANDBOX=seatbelt only works on macOS");
     }
     if (forced === "bwrap" && !has("bwrap")) {
-      throw new Error("XORV_SANDBOX=bwrap but bubblewrap is not installed");
+      throw new Error("KAZUO_SANDBOX=bwrap but bubblewrap is not installed");
     }
     cachedTier = forced;
     return forced;
@@ -413,12 +413,12 @@ export function wrapCommand(
 
   if (tier === "container") {
     const runtime = has("docker") ? "docker" : "podman";
-    const image = process.env.XORV_SANDBOX_IMAGE?.trim() || "node:24-slim";
+    const image = process.env.KAZUO_SANDBOX_IMAGE?.trim() || "node:24-slim";
     return {
       cmd: runtime,
       args: [
         "run", "--rm", "-i",
-        "--network", process.env.XORV_SANDBOX_NETWORK?.trim() || "bridge",
+        "--network", process.env.KAZUO_SANDBOX_NETWORK?.trim() || "bridge",
         "--memory", "2g",
         "--pids-limit", String(limits.processes),
         "--cpus", "2",

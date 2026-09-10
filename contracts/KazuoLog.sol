@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 /**
- * XorvLog — the public audit trail for the Xorv network.
+ * KazuoLog — the public audit trail for the Kazuo network.
  *
  * On Hedera this was three Consensus Service topics: registrations, heartbeats,
  * receipts. Arc has no HCS, so the same guarantee is rebuilt from the one
@@ -33,7 +33,7 @@ pragma solidity ^0.8.24;
  *    itself. The record is publicly verifiable without the work ever being
  *    public.
  */
-contract XorvLog {
+contract KazuoLog {
     /// Registration of a provider node joining the network.
     uint8 public constant KIND_REGISTRATION = 1;
     /// Liveness ping from a node that is online and taking work.

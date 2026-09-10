@@ -14,14 +14,14 @@ import path from "node:path";
 import { MemoryPersistence, openPersistence, type Persistence } from "../src/store.js";
 import { JobStore } from "../src/jobs.js";
 import { Registry } from "../src/registry.js";
-import type { RegisterRequest } from "@xorv/protocol";
+import type { RegisterRequest } from "@kazuo/protocol";
 
 let dir: string;
 let file: string;
 let open: Persistence[] = [];
 
 beforeEach(() => {
-  dir = fs.mkdtempSync(path.join(os.tmpdir(), "xorv-db-"));
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), "kazuo-db-"));
   file = path.join(dir, "test.db");
   open = [];
 });

@@ -1,5 +1,5 @@
 /**
- * Node configuration, stored under `~/.xorv/`.
+ * Node configuration, stored under `~/.kazuo/`.
  *
  * The payout key lives here in plaintext, with the file mode locked to 0600 and
  * the directory to 0700. That is a deliberate, stated trade-off rather than an
@@ -7,14 +7,14 @@
  * present, so a passphrase would either be typed once and held in memory anyway
  * or written next to the key. What actually protects an operator is that the
  * account is theirs alone, holds only earnings, and can be rotated with
- * `xorv wallet new`. `XORV_PRIVATE_KEY` overrides the file for anyone running
+ * `kazuo wallet new`. `KAZUO_PRIVATE_KEY` overrides the file for anyone running
  * under a real secret manager.
  */
 
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { ARC_TESTNET_CAIP2, type AdapterKind, type Capability } from "@xorv/protocol";
+import { ARC_TESTNET_CAIP2, type AdapterKind, type Capability } from "@kazuo/protocol";
 
 export interface NodeConfig {
   /** Stable identity across restarts, so the broker re-uses the provider slot. */
@@ -24,24 +24,24 @@ export interface NodeConfig {
   brokerUrl: string;
   /** The Arc address earnings are paid to. Derived from the key, never typed. */
   address: string;
-  /** Empty when the key is supplied via XORV_PRIVATE_KEY instead. */
+  /** Empty when the key is supplied via KAZUO_PRIVATE_KEY instead. */
   privateKey: string;
   capabilities: Capability[];
   region?: string | null;
   tunnel: { enabled: boolean; hostname?: string | null };
   /** Working directory jobs run in; kept away from the operator's real projects. */
   sandboxDir: string;
-  /** Set after a successful registration, for `xorv status` without re-registering. */
+  /** Set after a successful registration, for `kazuo status` without re-registering. */
   providerId?: string | null;
   token?: string | null;
 }
 
-export const XORV_HOME = process.env.XORV_HOME
-  ? path.resolve(process.env.XORV_HOME)
-  : path.join(os.homedir(), ".xorv");
+export const KAZUO_HOME = process.env.KAZUO_HOME
+  ? path.resolve(process.env.KAZUO_HOME)
+  : path.join(os.homedir(), ".kazuo");
 
-const CONFIG_PATH = path.join(XORV_HOME, "config.json");
-const EARNINGS_PATH = path.join(XORV_HOME, "earnings.jsonl");
+const CONFIG_PATH = path.join(KAZUO_HOME, "config.json");
+const EARNINGS_PATH = path.join(KAZUO_HOME, "earnings.jsonl");
 
 export function configPath(): string {
   return CONFIG_PATH;
@@ -52,10 +52,10 @@ export function earningsPath(): string {
 }
 
 export function ensureHome(): void {
-  fs.mkdirSync(XORV_HOME, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(KAZUO_HOME, { recursive: true, mode: 0o700 });
   // A pre-existing directory keeps its old mode, so tighten it explicitly.
   try {
-    fs.chmodSync(XORV_HOME, 0o700);
+    fs.chmodSync(KAZUO_HOME, 0o700);
   } catch {
     /* best effort — Windows and some mounts don't support it */
   }
@@ -82,7 +82,7 @@ export function loadConfig(): NodeConfig | null {
 export function requireConfig(): NodeConfig {
   const config = loadConfig();
   if (!config) {
-    throw new Error("this machine isn't set up yet — run `xorv init` first");
+    throw new Error("this machine isn't set up yet — run `kazuo init` first");
   }
   return config;
 }
@@ -105,7 +105,7 @@ export function saveConfig(config: NodeConfig): void {
 function withDefaults(config: Partial<NodeConfig>): NodeConfig {
   return {
     nodeId: config.nodeId ?? "",
-    label: config.label ?? "xorv-node",
+    label: config.label ?? "kazuo-node",
     network: config.network ?? ARC_TESTNET_CAIP2,
     brokerUrl: config.brokerUrl ?? "http://localhost:8402",
     address: config.address ?? "",
@@ -113,7 +113,7 @@ function withDefaults(config: Partial<NodeConfig>): NodeConfig {
     capabilities: config.capabilities ?? [],
     region: config.region ?? null,
     tunnel: config.tunnel ?? { enabled: false, hostname: null },
-    sandboxDir: config.sandboxDir ?? path.join(XORV_HOME, "jobs"),
+    sandboxDir: config.sandboxDir ?? path.join(KAZUO_HOME, "jobs"),
     providerId: config.providerId ?? null,
     token: config.token ?? null,
   };
@@ -121,11 +121,11 @@ function withDefaults(config: Partial<NodeConfig>): NodeConfig {
 
 /** The signing key, preferring the environment over the file. */
 export function resolvePrivateKey(config: NodeConfig): string {
-  const fromEnv = process.env.XORV_PRIVATE_KEY?.trim();
+  const fromEnv = process.env.KAZUO_PRIVATE_KEY?.trim();
   if (fromEnv) return fromEnv;
   if (!config.privateKey) {
     throw new Error(
-      "no payout key configured — run `xorv init`, or set XORV_PRIVATE_KEY in the environment",
+      "no payout key configured — run `kazuo init`, or set KAZUO_PRIVATE_KEY in the environment",
     );
   }
   return config.privateKey;
@@ -133,11 +133,11 @@ export function resolvePrivateKey(config: NodeConfig): string {
 
 /** The broker URL, preferring the environment so one config can target many. */
 export function resolveBrokerUrl(config: NodeConfig): string {
-  return (process.env.XORV_BROKER_URL?.trim() || config.brokerUrl).replace(/\/+$/, "");
+  return (process.env.KAZUO_BROKER_URL?.trim() || config.brokerUrl).replace(/\/+$/, "");
 }
 
 // ---------------------------------------------------------------------------
-// Earnings ledger — append-only, local, so `xorv earnings` works offline
+// Earnings ledger — append-only, local, so `kazuo earnings` works offline
 // ---------------------------------------------------------------------------
 
 export interface EarningRow {
@@ -186,7 +186,7 @@ export function readEarnings(limit = 500): EarningRow[] {
  * bug in the default, not a decision for the market.
  *
  * Agentic coding jobs are not micropayments; simple generation is. The spread
- * below reflects that, and `xorv test` warns when a configured price is under
+ * below reflects that, and `kazuo test` warns when a configured price is under
  * the cost the CLI reports.
  */
 export function defaultCapability(adapter: AdapterKind): Capability {

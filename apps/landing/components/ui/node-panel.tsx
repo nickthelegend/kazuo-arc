@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 /**
  * A provider node, mid-session.
  *
- * This is a transcript of a real `xorv start` run, replayed line by line the
+ * This is a transcript of a real `kazuo start` run, replayed line by line the
  * first time it scrolls into view. Static markup would be honest but inert; a
  * looping animation would be a screensaver. Playing once, on arrival, is the
  * closest a page gets to showing you the thing working — and then it stops and
@@ -28,7 +28,7 @@ const LINES: Line[] = [
   {
     render: () => (
       <>
-        <span className="text-fg-4">$</span> <span className="text-fg">xorv start</span>
+        <span className="text-fg-4">$</span> <span className="text-fg">kazuo start</span>
       </>
     ),
     after: 420,
@@ -161,7 +161,7 @@ export function NodePanel({ animate = true }: { animate?: boolean }) {
           <Dot />
           <Dot />
         </span>
-        <span className="mono ml-2 text-[11px] text-fg-4">xorv — provider node</span>
+        <span className="mono ml-2 text-[11px] text-fg-4">kazuo — provider node</span>
         <span className="ml-auto rounded-full border border-[var(--line)] px-2 py-0.5 text-[10px] text-fg-4">
           example session
         </span>

@@ -9,16 +9,16 @@ const inter = Inter({
   weight: ["300", "400", "500", "600", "700", "800"],
 });
 
-const SITE = "https://xorv.network";
-const TITLE = "Xorv — rent out your idle AI subscription, get paid in USDC";
+const SITE = "https://kazuo.network";
+const TITLE = "Kazuo — rent out your idle AI subscription, get paid in USDC";
 const DESCRIPTION =
-  "Xorv is a decentralized AI capacity network. Share the Claude, Codex or Grok quota you already pay for, run jobs from anyone on the network, and get paid per job in USDC over x402 on Arc.";
+  "Kazuo is a decentralized AI capacity network. Share the Claude, Codex or Grok quota you already pay for, run jobs from anyone on the network, and get paid per job in USDC over x402 on Arc.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
-  title: { default: TITLE, template: "%s · Xorv" },
+  title: { default: TITLE, template: "%s · Kazuo" },
   description: DESCRIPTION,
-  applicationName: "Xorv",
+  applicationName: "Kazuo",
   keywords: [
     "x402",
     "Arc",
@@ -31,14 +31,14 @@ export const metadata: Metadata = {
     "machine-to-machine payments",
     "decentralized compute",
   ],
-  authors: [{ name: "Xorv", url: REPO_URL }],
-  creator: "Xorv",
-  publisher: "Xorv",
+  authors: [{ name: "Kazuo", url: REPO_URL }],
+  creator: "Kazuo",
+  publisher: "Kazuo",
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     url: SITE,
-    siteName: "Xorv",
+    siteName: "Kazuo",
     title: TITLE,
     description: DESCRIPTION,
     locale: "en_US",
@@ -51,8 +51,8 @@ export const metadata: Metadata = {
   },
   category: "technology",
   icons: {
-    icon: [{ url: "/brand/xorv-mark.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/brand/xorv-mark.svg" }],
+    icon: [{ url: "/brand/kazuo-mark.svg", type: "image/svg+xml" }],
+    apple: [{ url: "/brand/kazuo-mark.svg" }],
   },
 };
 
@@ -68,20 +68,20 @@ const jsonLd = {
     {
       "@type": "Organization",
       "@id": `${SITE}/#organization`,
-      name: "Xorv",
+      name: "Kazuo",
       url: SITE,
-      logo: `${SITE}/brand/xorv-logo.svg`,
+      logo: `${SITE}/brand/kazuo-logo.svg`,
       description: DESCRIPTION,
       sameAs: [REPO_URL],
     },
     {
       "@type": "SoftwareApplication",
-      name: "Xorv CLI",
+      name: "Kazuo CLI",
       applicationCategory: "DeveloperApplication",
       operatingSystem: "macOS, Linux, Windows",
       url: SITE,
       description:
-        "Command-line provider node for the Xorv network. Share idle AI subscription capacity and get paid per job in USDC over x402 on Arc.",
+        "Command-line provider node for the Kazuo network. Share idle AI subscription capacity and get paid per job in USDC over x402 on Arc.",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
       publisher: { "@id": `${SITE}/#organization` },
     },

@@ -6,13 +6,13 @@ services:
     environment:
       # Claim Arc testnet USDC at https://faucet.circle.com (Arc Testnet).
       # Only a key: the operator's address is derived from it.
-      XORV_OPERATOR_KEY: ${XORV_OPERATOR_KEY:?set this in .env}
-      XORV_NETWORK: ${XORV_NETWORK:-eip155:5042002}
-      XORV_RPC_URL: ${XORV_RPC_URL:-}
-      # The XorvLog contract. Deploy with `pnpm deploy:log`. Blank is allowed —
+      KAZUO_OPERATOR_KEY: ${KAZUO_OPERATOR_KEY:?set this in .env}
+      KAZUO_NETWORK: ${KAZUO_NETWORK:-eip155:5042002}
+      KAZUO_RPC_URL: ${KAZUO_RPC_URL:-}
+      # The KazuoLog contract. Deploy with `pnpm deploy:log`. Blank is allowed —
       # the network runs, it just records nothing publicly.
-      XORV_LOG_ADDRESS: ${XORV_LOG_ADDRESS:-}
-      XORV_LOG_FROM_BLOCK: ${XORV_LOG_FROM_BLOCK:-}
+      KAZUO_LOG_ADDRESS: ${KAZUO_LOG_ADDRESS:-}
+      KAZUO_LOG_FROM_BLOCK: ${KAZUO_LOG_FROM_BLOCK:-}
       # How this broker is reachable from OUTSIDE the container. It is used for
       # receipt links and quote URLs, and the default is genuinely wrong here: a
       # container publishing 8402 to some other host port, or sitting behind a
@@ -22,14 +22,14 @@ services:
       # URL from the address they actually reached the broker on, because
       # getting this wrong used to leave a node reporting `online` while every
       # dispatched job silently died.
-      XORV_BROKER_URL: ${XORV_BROKER_URL:-http://localhost:8402}
-      XORV_CORS_ORIGINS: ${XORV_CORS_ORIGINS:-http://localhost:3000,http://localhost:3002}
+      KAZUO_BROKER_URL: ${KAZUO_BROKER_URL:-http://localhost:8402}
+      KAZUO_CORS_ORIGINS: ${KAZUO_CORS_ORIGINS:-http://localhost:3000,http://localhost:3002}
       # Behind a reverse proxy, set this so rate limiting sees real client IPs.
-      XORV_TRUST_PROXY: ${XORV_TRUST_PROXY:-0}
+      KAZUO_TRUST_PROXY: ${KAZUO_TRUST_PROXY:-0}
     volumes:
       # Jobs and lifetime earnings. Without this they go with the container.
-      - xorv-data:/data
+      - kazuo-data:/data
     restart: unless-stopped
 
 volumes:
-  xorv-data:
+  kazuo-data:

@@ -1,5 +1,5 @@
 /**
- * @xorv/protocol — everything the CLI, the broker and the web apps must agree
+ * @kazuo/protocol — everything the CLI, the broker and the web apps must agree
  * on: the domain model, money math, Arc plumbing and the x402 wiring.
  */
 

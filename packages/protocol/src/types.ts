@@ -1,5 +1,5 @@
 /**
- * The Xorv domain model.
+ * The Kazuo domain model.
  *
  * These shapes cross process boundaries — CLI ⇄ broker ⇄ browser — so they are
  * plain JSON-safe data with no class instances and no bigints. Money is carried
@@ -17,7 +17,7 @@ export type AdapterKind =
   | "openai-compatible"
   | "echo";
 
-/** Every adapter Xorv knows how to drive, in the order the wizard offers them. */
+/** Every adapter Kazuo knows how to drive, in the order the wizard offers them. */
 export const ADAPTER_KINDS: AdapterKind[] = [
   "claude-code",
   "codex",
@@ -63,13 +63,23 @@ export interface Provider {
   /** Epoch ms of the last accepted heartbeat. */
   lastHeartbeatAt: number;
   registeredAt: number;
-  /** xorv CLI version, for compatibility triage. */
+  /** kazuo CLI version, for compatibility triage. */
   version: string;
   /** Free-form region hint the operator set, e.g. "eu-west". */
   region?: string | null;
   stats: ProviderStats;
   /** Transaction hash of the on-chain registration entry, when published. */
   registryTxHash?: string | null;
+  /**
+   * True when the node proved, with World AgentKit, that its payout address is
+   * registered in AgentBook to a real human.
+   *
+   * The anonymous human id itself never leaves the broker — the boolean is
+   * the whole public claim. It matters for a market sorted on reputation: a
+   * bot farm can spin up a thousand nodes, but one person cannot back a
+   * thousand human-backed nodes.
+   */
+  humanBacked?: boolean;
 }
 
 export interface ProviderStats {
@@ -113,6 +123,8 @@ export interface JobRequest {
   title?: string | null;
   /** Hard deadline in epoch ms; the broker won't assign past it. */
   deadlineAt?: number | null;
+  /** Only match providers whose operator is a verified human (World AgentKit). */
+  humanBackedOnly?: boolean;
 }
 
 /** A single streamed step from the provider while the job runs. */
@@ -165,6 +177,10 @@ export interface Job {
   events: JobEvent[];
   /** Transaction hash of the on-chain receipt entry, once published. */
   receiptTxHash?: string | null;
+  /** The provider that ran it was human-backed at quote time. */
+  providerHumanBacked?: boolean;
+  /** The buyer (often an agent) proved a human behind it with World AgentKit. */
+  buyerHumanBacked?: boolean;
 }
 
 // ---------------------------------------------------------------------------

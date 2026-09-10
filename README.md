@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="brand/xorv-logo.svg" alt="Xorv" width="260" />
+<img src="brand/kazuo-logo.svg" alt="Kazuo" width="260" />
 
 **A decentralized AI capacity network.**
 Rent out the Claude / Codex / Grok subscription you already pay for, and get paid **per job in USDC over [x402](https://x402.org) on [Arc](https://www.circle.com/arc)**.
@@ -13,7 +13,9 @@ Rent out the Claude / Codex / Grok subscription you already pay for, and get pai
 
 <div align="center">
 
-**[`npm i -g @xorv/cli`](https://www.npmjs.com/package/@xorv/cli)** — the Hedera release. The Arc port in this repo is not published yet.
+**Live:** [kazuo-arc.vercel.app](https://kazuo-arc.vercel.app) · job board [kazuo-arc-app.vercel.app](https://kazuo-arc-app.vercel.app) · broker `broker-production-03b2.up.railway.app`
+
+`@kazuo/cli`, `@kazuo/mcp` and `@kazuo/protocol` are not on npm yet — build from this repo.
 
 </div>
 
@@ -56,14 +58,17 @@ Then the live proof, all on Arc testnet and all openly readable:
 | ✅ x402 payments settling on Arc | Many, on-chain, links above |
 | ✅ Buyer pays **zero gas** | Asserted, not assumed — `pnpm m1` fails if it isn't 0 wei |
 | ✅ A real model job, paid per job | Codex: prompt in, working code out |
-| ✅ On-chain audit trail | `XorvLog` — registrations, liveness, receipts as indexed events |
+| ✅ On-chain audit trail | `KazuoLog` — registrations, liveness, receipts as indexed events |
 | ✅ Browser wallet paying directly | EIP-712 typed data; any EVM wallet, no relay, no project id |
 | ✅ MCP: an agent buying capacity | Verified over stdio |
 | ✅ Survives a broker restart | SQLite + MongoDB |
 | ✅ OS-level job sandbox | Seatbelt / bubblewrap / container — a hostile prompt cannot read the payout key |
-| ⚠️ Claude Code, paid | Its OAuth token had expired on this host; the paid attempt failed *after* settlement. `xorv doctor` names it exactly. Codex was used for the proof instead |
-| ⚠️ Three of five adapters under the sandbox | Codex and OpenCode can't start under seatbelt, Grok returns empty. `xorv test` catches all three before a node goes live. The real-model proof above ran with `XORV_SANDBOX=none` |
-| ⚠️ Public deployment | Proven locally against live Arc testnet; not deployed yet |
+| ⚠️ Claude Code, paid | Its OAuth token had expired on this host; the paid attempt failed *after* settlement. `kazuo doctor` names it exactly. Codex was used for the proof instead |
+| ⚠️ Three of five adapters under the sandbox | Codex and OpenCode can't start under seatbelt, Grok returns empty. `kazuo test` catches all three before a node goes live. The real-model proof above ran with `KAZUO_SANDBOX=none` |
+| ✅ Landing + job board deployed | [kazuo-arc.vercel.app](https://kazuo-arc.vercel.app), [kazuo-arc-app.vercel.app](https://kazuo-arc-app.vercel.app) — built and typechecked on Vercel |
+| ⚠️ Broker on Railway | The image builds and starts on Railway; it needs its operator key set before it serves |
+| ⚠️ World AgentKit | Built: broker verifies SIWE proofs and resolves addresses in AgentBook; human-backed nodes win ties, one human backs ≤ 3 nodes. Not yet proven: no address is registered in AgentBook — that step needs a person in World App |
+| ⚠️ Privy | Built and deployed (Privy bundled in the live job board): email sign-in creates an embedded wallet on Arc that pays with the same EIP-712 path, plus Send USDC. Not yet proven with an on-chain payment |
 
 Every one of those caveats is expanded, with the failing output, in
 [SUBMISSION.md](SUBMISSION.md).
@@ -72,16 +77,16 @@ Every one of those caveats is expanded, with the failing output, in
 
 ---
 
-## `/xorv` — buy compute from inside Claude Code
+## `/kazuo` — buy compute from inside Claude Code
 
 ```bash
-xorv skills
+kazuo skills
 ```
 
-That installs Xorv as a slash command. Then, in any project:
+That installs Kazuo as a slash command. Then, in any project:
 
 ```
-/xorv Write a Postgres query that finds duplicate rows by email, keeping the newest
+/kazuo Write a Postgres query that finds duplicate rows by email, keeping the newest
 ```
 
 Claude Code hands the task to a *different* machine — someone else's Claude or
@@ -89,10 +94,34 @@ Codex subscription — pays for it in USDC over x402, and returns the answer wit
 the settlement transaction beside it.
 
 An agent paying another agent for compute, per request. No account, no API key,
-no invoice. It shells out to `xorv run --json`, so the price ceiling, the quote,
+no invoice. It shells out to `kazuo run --json`, so the price ceiling, the quote,
 and the receipt are the same ones the CLI already enforces.
 
 Add `--global` to install it for every project.
+
+---
+
+## Sponsor integrations — ETHOnline 2026
+
+**Arc (Circle).** Every job settles as a USDC transfer on Arc testnet over x402: the buyer — a person in the
+browser, the CLI, or an agent over MCP — signs an EIP-3009 authorization, the broker's facilitator relays it,
+and the money goes straight to the provider. USDC is the gas token, so a buyer needs nothing but the USDC
+they spend. Receipts land in the `KazuoLog` contract on Arc.
+
+**World — AgentKit.** A capacity market sorted on reputation is easy to farm with bots. Provider nodes sign a
+broker-issued SIWE challenge with their payout key (`GET /api/agentkit/challenge`); the broker verifies it with
+`@worldcoin/agentkit` and resolves the address in **AgentBook** on World Chain. Human-backed nodes win price
+ties ahead of track record, buyers can ask for human-backed providers only (`kazuo run --human-backed-only`,
+MCP `human_backed_only`), and one human can back at most three live nodes. Buying agents prove themselves the
+same way, and every job records whether a human stood behind each side. `kazuo agentkit status` reads
+AgentBook for your address; `kazuo agentkit register` starts World App verification. Feedback for the World
+team is in [FEEDBACK-WORLD.md](FEEDBACK-WORLD.md).
+
+**Privy.** The job board signs people in with Privy. An email address is enough: Privy creates an embedded
+wallet on Arc, and that wallet pays for a job immediately — a job payment is an EIP-712 signature, not a
+transaction, so there is no gas, no extension and no network to add. The wallet popover also sends USDC.
+Existing wallets connect through the same modal. (The Hedera version had to remove Privy, because Hedera's
+x402 scheme needs a native protobuf signature; on Arc it came back.)
 
 ---
 
@@ -101,18 +130,18 @@ Add `--global` to install it for every project.
 Millions of people pay ~$20–200/month for an AI subscription and use a fraction of it. Meanwhile
 anyone who wants a one-off coding task done has to buy their own plan or an API key.
 
-Xorv connects the two. You run one command, your machine joins the network, and jobs from strangers
+Kazuo connects the two. You run one command, your machine joins the network, and jobs from strangers
 run on the quota you were already paying for. Each job settles as a **real on-chain transfer,
 directly from the buyer to you** — no invoices, no platform float, no payout schedule.
 
 ```bash
-npm i -g @xorv/cli
-xorv init
-xorv start
+npm i -g @kazuo/cli
+kazuo init
+kazuo start
 ```
 
-> Published as `@xorv/cli` rather than `xorv` — npm rejects the bare name as too
-> close to existing packages. The binary is still `xorv`.
+> Published as `@kazuo/cli` rather than `kazuo` — npm rejects the bare name as too
+> close to existing packages. The binary is still `kazuo`.
 
 ---
 
@@ -160,7 +189,7 @@ address* as `payTo`. Funds move buyer → provider in one transfer. Protocol fee
     │                          ├──── job.dispatch ─────────►│
     │  ◄═══ SSE: live events ══╪◄═══ tool calls, edits ═════┤
     │  ◄─── result             │◄──── answer ───────────────┤
-    │                          ├──── receipt ─────────────► XorvLog
+    │                          ├──── receipt ─────────────► KazuoLog
 ```
 
 Payment settles **before** the job runs. That isn't laziness: a signed authorization is only
@@ -174,17 +203,17 @@ success rate, which is what the matcher sorts on.
 ## Repo layout
 
 ```
-xorv/
+kazuo/
 ├── packages/
-│   ├── cli/          @xorv/cli — the provider node; the binary is `xorv`
-│   ├── mcp/          @xorv/mcp — Xorv as an MCP server, so agents can buy capacity
-│   └── protocol/     @xorv/protocol — shared types, money math, Arc + x402 wiring
+│   ├── cli/          @kazuo/cli — the provider node; the binary is `kazuo`
+│   ├── mcp/          @kazuo/mcp — Kazuo as an MCP server, so agents can buy capacity
+│   └── protocol/     @kazuo/protocol — shared types, money math, Arc + x402 wiring
 ├── services/
-│   └── broker/       @xorv/broker — registry, matching, x402 gating, self-hosted
+│   └── broker/       @kazuo/broker — registry, matching, x402 gating, self-hosted
 │                     facilitator, on-chain audit trail, SQLite, metrics
 ├── apps/
-│   ├── app/          xorv-app — the job board (Next.js)
-│   └── landing/      xorv-landing — marketing site (Next.js + GSAP)
+│   ├── app/          kazuo-app — the job board (Next.js)
+│   └── landing/      kazuo-landing — marketing site (Next.js + GSAP)
 └── brand/            logo + mark
 ```
 
@@ -197,8 +226,8 @@ Needs Node ≥ 20.11 and pnpm. Claim Arc **testnet** USDC at
 separate gas token to acquire; USDC is the gas.
 
 ```bash
-git clone https://github.com/nickthelegend/xorv.git
-cd xorv && pnpm install
+git clone https://github.com/nickthelegend/kazuo-arc.git
+cd kazuo-arc && pnpm install
 cp .env.example .env          # paste your operator id + key
 pnpm deploy:log                   # deploys the audit contract
 pnpm setup                        # checks the config, reports what's funded
@@ -209,14 +238,14 @@ Then, in three terminals:
 
 ```bash
 pnpm broker      # coordinator + facilitator on :8402
-xorv start       # your provider node
+kazuo start       # your provider node
 pnpm app         # job board on :3002
 ```
 
 Post a job from the terminal, end to end:
 
 ```bash
-xorv run "Explain what a Merkle tree is, briefly." --max 0.02
+kazuo run "Explain what a Merkle tree is, briefly." --max 0.02
 ```
 
 <details>
@@ -246,24 +275,24 @@ The provider node. Full docs in [`packages/cli/README.md`](packages/cli/README.m
 
 | Command | What it does |
 |---|---|
-| `xorv init` | Interactive setup — probes your agent CLIs, generates or imports a payout account |
-| `xorv start` | Go live: register, hold the control channel, run jobs, live earnings dashboard |
-| `xorv run "…"` | The buyer side — post a job and pay for it over x402 |
-| `xorv test` | Run a real job through each adapter **locally and free** — proves the node will actually earn |
-| `xorv doctor` | Every reason this node might not be earning, each with the fix |
-| `xorv earnings` | What this machine has made, with sparklines and on-chain balance |
-| `xorv jobs` | Jobs this node has run |
-| `xorv price` | Show or change what this node charges |
-| `xorv status` | Who's live on the network, and what they charge |
-| `xorv pause` / `resume` | Stop taking new jobs without going offline |
-| `xorv cancel <job>` | Stop a running job |
-| `xorv wallet` | The payout address, what it holds, key rotation |
-| `xorv logs` / `config` | Local job log; current configuration (key redacted) |
-| `xorv completion` | Shell completions for bash, zsh, fish |
+| `kazuo init` | Interactive setup — probes your agent CLIs, generates or imports a payout account |
+| `kazuo start` | Go live: register, hold the control channel, run jobs, live earnings dashboard |
+| `kazuo run "…"` | The buyer side — post a job and pay for it over x402 |
+| `kazuo test` | Run a real job through each adapter **locally and free** — proves the node will actually earn |
+| `kazuo doctor` | Every reason this node might not be earning, each with the fix |
+| `kazuo earnings` | What this machine has made, with sparklines and on-chain balance |
+| `kazuo jobs` | Jobs this node has run |
+| `kazuo price` | Show or change what this node charges |
+| `kazuo status` | Who's live on the network, and what they charge |
+| `kazuo pause` / `resume` | Stop taking new jobs without going offline |
+| `kazuo cancel <job>` | Stop a running job |
+| `kazuo wallet` | The payout address, what it holds, key rotation |
+| `kazuo logs` / `config` | Local job log; current configuration (key redacted) |
+| `kazuo completion` | Shell completions for bash, zsh, fish |
 
 ### Adapters
 
-An adapter drives a CLI you already have installed and signed in. Xorv never asks for an API key,
+An adapter drives a CLI you already have installed and signed in. Kazuo never asks for an API key,
 because it never calls an API on your behalf.
 
 `claude-code` · `codex` · `grok` · `opencode` · `openai-compatible` (Ollama, LM Studio, vLLM,
@@ -278,17 +307,17 @@ This is the part x402 was actually invented for. An agent that needs work done
 finds capacity, pays for it, and gets the result — no human, no account, no card.
 
 ```bash
-# @xorv/mcp is not published to npm yet — point at the built file in your clone:
-claude mcp add xorv -- node /absolute/path/to/xorv/packages/mcp/dist/index.js
+# @kazuo/mcp is not published to npm yet — point at the built file in your clone:
+claude mcp add kazuo -- node /absolute/path/to/kazuo/packages/mcp/dist/index.js
 ```
 
 ```bash
-XORV_PAYER_KEY=0x...       # the key the agent spends from; its address is derived
-XORV_MAX_USD=0.05          # hard ceiling per call, enforced client-side too
+KAZUO_PAYER_KEY=0x...       # the key the agent spends from; its address is derived
+KAZUO_MAX_USD=0.05          # hard ceiling per call, enforced client-side too
 ```
 
-Five tools: `xorv_list_providers`, `xorv_network_status`, `xorv_quote`,
-`xorv_run_job`, `xorv_get_job`. Only `run_job` spends, and it refuses anything
+Five tools: `kazuo_list_providers`, `kazuo_network_status`, `kazuo_quote`,
+`kazuo_run_job`, `kazuo_get_job`. Only `run_job` spends, and it refuses anything
 over the ceiling — a model that can spend without a bound is a model that can
 empty an account through a loop it didn't mean to write.
 
@@ -331,16 +360,14 @@ docker compose up -d
 ```
 
 Persists to a volume, health-checks itself, and runs as a non-root user. Set
-`XORV_TRUST_PROXY=1` behind a reverse proxy so rate limiting sees real client
+`KAZUO_TRUST_PROXY=1` behind a reverse proxy so rate limiting sees real client
 IPs. `/metrics` speaks Prometheus.
 
-> The image was built and run under the Hedera version of this project, where
-> doing so found a real bug (the broker advertised its control-channel URL from
-> its own `publicUrl`, which is wrong behind any port map or tunnel — and failed
-> silently, because HTTP heartbeats kept working while every dispatched job
-> died). That fix is carried over here. The image has **not** been rebuilt since
-> the Arc port; the compose file's environment has been updated but not
-> exercised.
+> Deployed on Railway from this Dockerfile (Node 24 for `node:sqlite`, a Railway
+> volume at `/data`, `RAILWAY_RUN_UID=0` so the non-root image can write it).
+> Doing so found one incompatibility: Railway rejects a Dockerfile `VOLUME`
+> instruction, so the volume is attached to the service and compose mounts its
+> own. The broker listens on `KAZUO_BROKER_PORT`, falling back to `PORT`.
 
 ---
 
@@ -377,12 +404,12 @@ Measured costs, from those exact transactions:
 
 ## Security — read this before running a node
 
-A Xorv provider runs prompts written by people they have never met, on their own machine, against
+A Kazuo provider runs prompts written by people they have never met, on their own machine, against
 their own paid account. That is the product, and it is also the risk.
 
-**What Xorv does:** every job is spawned through a sandbox that applies the strongest containment the
+**What Kazuo does:** every job is spawned through a sandbox that applies the strongest containment the
 host provides — macOS seatbelt, Linux bubblewrap, or an opt-in container. On macOS and Linux a job
-cannot read `~/.xorv` (**your payout private key**), `~/.ssh`, `~/.aws`, `~/.config/gh`, `~/.npmrc`,
+cannot read `~/.kazuo` (**your payout private key**), `~/.ssh`, `~/.aws`, `~/.config/gh`, `~/.npmrc`,
 the keychain, or your browser profile, and cannot write outside its own job directory. On every host
 the environment is an allowlist — a job never sees `AWS_SECRET_ACCESS_KEY` or `GITHUB_TOKEN` — and
 CPU, file size and process count are capped.
@@ -391,18 +418,18 @@ Claude Code authenticates from the keychain, so the node reads its token once at
 sandbox, and injects only that token into the job. The keychain itself stays denied; otherwise any
 prompt could run `security find-internet-password -w` and take your GitHub token.
 
-`xorv doctor` names the active tier. Take it seriously if it says `env` or `limits` — those hosts
+`kazuo doctor` names the active tier. Take it seriously if it says `env` or `limits` — those hosts
 have no filesystem boundary.
 
-**What Xorv does not do:** hide the agent session being rented. The agent's own token is in the job's
+**What Kazuo does not do:** hide the agent session being rented. The agent's own token is in the job's
 environment because the agent needs it to run.
 
-**For full isolation on any host:** `XORV_SANDBOX=container xorv start`. Or `XORV_SAFE_MODE=1`, which
+**For full isolation on any host:** `KAZUO_SANDBOX=container kazuo start`. Or `KAZUO_SAFE_MODE=1`, which
 disables tools entirely and leaves a pure text-generation service — worth less per job, but it cannot
 touch a disk.
 
 **On terms of service:** most consumer AI subscriptions are licensed to an individual and reselling
-that capacity may breach them. Xorv is infrastructure and doesn't decide this for you — run it
+that capacity may breach them. Kazuo is infrastructure and doesn't decide this for you — run it
 against quota you're entitled to share, a plan that permits it, or your own local models via the
 OpenAI-compatible adapter.
 
@@ -418,7 +445,7 @@ A few decisions that aren't obvious:
   Cloudflare tunnel is supported and useful (public status page, second delivery path) but earnings
   never depend on it.
 - **The broker's state is deliberately in memory.** Membership *is* liveness — a provider is only
-  real while heartbeats keep arriving. The durable half goes to the `XorvLog` contract, where it's
+  real while heartbeats keep arriving. The durable half goes to the `KazuoLog` contract, where it's
   public and append-only rather than trapped in our database — but every entry costs gas, so the
   on-chain liveness proof is sampled hourly rather than written every beat. At the cadence inherited
   from Hedera it would have cost $0.25/day per idle provider, which is more than a hundred settled
@@ -454,5 +481,5 @@ A few decisions that aren't obvious:
 
 MIT — see [LICENSE](LICENSE).
 
-Built for the [Arc hackathon](https://www.encodeclub.com/) — Agentic Economy track.
+Built for **ETHOnline 2026** — Arc, World (AgentKit) and Privy tracks.
 Part of the [Loompad](https://loompad.tech) ecosystem.

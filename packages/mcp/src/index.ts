@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Xorv as an MCP server.
+ * Kazuo as an MCP server.
  *
  * This is the part of the story x402 was actually invented for: an agent that
  * needs work done finds capacity, pays for it, and gets the result — without a
@@ -14,16 +14,16 @@
  *
  * Point any MCP client at it:
  *
- *   claude mcp add xorv -- npx -y @xorv/mcp
+ *   claude mcp add kazuo -- npx -y @kazuo/mcp
  *
  * Configuration is environment-only, because an MCP server is launched by
  * another program and has no terminal to prompt at:
  *
- *   XORV_BROKER_URL   broker to buy from (default http://localhost:8402)
- *   XORV_PAYER_KEY    the private key that pays for jobs (the address is
+ *   KAZUO_BROKER_URL   broker to buy from (default http://localhost:8402)
+ *   KAZUO_PAYER_KEY    the private key that pays for jobs (the address is
  *                     derived from it — there is nothing else to configure)
- *   XORV_NETWORK      default eip155:5042002 (Arc testnet)
- *   XORV_MAX_USD      hard ceiling per job, default 0.05 — see below
+ *   KAZUO_NETWORK      default eip155:5042002 (Arc testnet)
+ *   KAZUO_MAX_USD      hard ceiling per job, default 0.05 — see below
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -33,11 +33,46 @@ import { x402Client, x402HTTPClient } from "@x402/core/client";
 import { wrapFetchWithPayment } from "@x402/fetch";
 import { registerExactEvmScheme } from "@x402/evm/exact/client";
 import { toClientEvmSigner } from "@x402/evm";
-import { accountFor, formatUsd, explorerTx, parseUsd, readClient } from "@xorv/protocol";
+import { accountFor, formatUsd, explorerTx, parseUsd, readClient } from "@kazuo/protocol";
+import { createAgentkitClient, type AgentkitExtension } from "@worldcoin/agentkit";
 
-const BROKER_URL = (process.env.XORV_BROKER_URL ?? "http://localhost:8402").replace(/\/+$/, "");
-const NETWORK = process.env.XORV_NETWORK ?? "eip155:5042002";
-const PAYER_KEY = process.env.XORV_PAYER_KEY?.trim();
+/**
+ * A World AgentKit proof for a quote, signed by the payer key.
+ *
+ * An agent buying compute is exactly what AgentKit exists to label: if the
+ * payer address is registered in AgentBook to a human, the broker records the
+ * job as bought by a human-backed agent. Never fatal — no key, no challenge,
+ * or an unregistered address all just mean no label.
+ */
+async function agentkitQuoteHeaders(): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (!PAYER_KEY || process.env.KAZUO_AGENTKIT === "0") return headers;
+  try {
+    const res = await fetch(`${BROKER_URL}/api/agentkit/challenge?for=quote`, {
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return headers;
+    const { agentkit } = (await res.json()) as { agentkit?: AgentkitExtension };
+    if (!agentkit) return headers;
+    const account = accountFor(PAYER_KEY);
+    const client = createAgentkitClient({
+      signer: {
+        address: account.address,
+        chainId: "eip155:480",
+        type: "eip191",
+        signMessage: (message) => account.signMessage({ message }),
+      },
+    });
+    headers.agentkit = await client.createHeader(agentkit);
+  } catch {
+    /* no label, same job */
+  }
+  return headers;
+}
+
+const BROKER_URL = (process.env.KAZUO_BROKER_URL ?? "http://localhost:8402").replace(/\/+$/, "");
+const NETWORK = process.env.KAZUO_NETWORK ?? "eip155:5042002";
+const PAYER_KEY = process.env.KAZUO_PAYER_KEY?.trim();
 
 /**
  * A hard spending ceiling per job.
@@ -47,7 +82,7 @@ const PAYER_KEY = process.env.XORV_PAYER_KEY?.trim();
  * write. The tool schema lets the caller ask for less than this; nothing lets
  * it ask for more.
  */
-const MAX_USD_MICROS = parseUsd(process.env.XORV_MAX_USD ?? "0.05");
+const MAX_USD_MICROS = parseUsd(process.env.KAZUO_MAX_USD ?? "0.05");
 
 interface QuoteResponse {
   quoteId: string;
@@ -62,6 +97,7 @@ interface QuoteResponse {
     adapter: string;
     model: string | null;
     stats: { jobsCompleted: number; jobsFailed: number };
+    humanBacked?: boolean;
   };
   accepts: Array<{ asset: string; amount: string }>;
   error?: string;
@@ -97,7 +133,7 @@ async function getJson<T>(path: string): Promise<T> {
 function payingClient() {
   if (!PAYER_KEY) {
     throw new Error(
-      "No payer configured. Set XORV_PAYER_KEY in this MCP server's environment to let it buy jobs.",
+      "No payer configured. Set KAZUO_PAYER_KEY in this MCP server's environment to let it buy jobs.",
     );
   }
   const payer = accountFor(PAYER_KEY);
@@ -124,15 +160,15 @@ function payingClient() {
   return { paidFetch: wrapFetchWithPayment(fetch, client), httpClient: new x402HTTPClient(client) };
 }
 
-const server = new McpServer({ name: "xorv", version: "0.1.0" });
+const server = new McpServer({ name: "kazuo", version: "0.1.0" });
 
 // ---------------------------------------------------------------------------
 // Read-only tools — no key needed
 // ---------------------------------------------------------------------------
 
 server.tool(
-  "xorv_list_providers",
-  "List the AI providers currently live on the Xorv network, what models they run, and what they charge per job. Use this before buying to see what capacity is available.",
+  "kazuo_list_providers",
+  "List the AI providers currently live on the Kazuo network, what models they run, and what they charge per job. Use this before buying to see what capacity is available.",
   {},
   async () => {
     try {
@@ -150,7 +186,7 @@ server.tool(
       const live = providers.filter((p) => p.status !== "offline");
       if (live.length === 0) {
         return text(
-          "No providers are online right now. Anyone can start one with `npm i -g @xorv/cli && xorv init && xorv start`.",
+          "No providers are online right now. Anyone can start one with `npm i -g @kazuo/cli && kazuo init && kazuo start`.",
         );
       }
 
@@ -162,14 +198,14 @@ server.tool(
       });
       return text(`${live.length} provider(s) live on ${NETWORK}:\n${lines.join("\n")}`);
     } catch (err) {
-      return fail(`Could not reach the Xorv broker at ${BROKER_URL}: ${String(err)}`);
+      return fail(`Could not reach the Kazuo broker at ${BROKER_URL}: ${String(err)}`);
     }
   },
 );
 
 server.tool(
-  "xorv_network_status",
-  "Show the Xorv network's overall state: how many providers are live, how many jobs have settled, the facilitator, and the on-chain audit log carrying the public record.",
+  "kazuo_network_status",
+  "Show the Kazuo network's overall state: how many providers are live, how many jobs have settled, the facilitator, and the on-chain audit log carrying the public record.",
   {},
   async () => {
     try {
@@ -199,14 +235,14 @@ server.tool(
         ].join("\n"),
       );
     } catch (err) {
-      return fail(`Could not reach the Xorv broker at ${BROKER_URL}: ${String(err)}`);
+      return fail(`Could not reach the Kazuo broker at ${BROKER_URL}: ${String(err)}`);
     }
   },
 );
 
 server.tool(
-  "xorv_quote",
-  "Get a price for a job WITHOUT paying for it. Returns which provider would run it and what it would cost. Use this to check the price before calling xorv_run_job.",
+  "kazuo_quote",
+  "Get a price for a job WITHOUT paying for it. Returns which provider would run it and what it would cost. Use this to check the price before calling kazuo_run_job.",
   {
     prompt: z.string().min(1).describe("The job to price."),
     adapter: z
@@ -214,14 +250,23 @@ server.tool(
       .optional()
       .describe("Require a specific adapter: claude-code, codex, grok, opencode, openai-compatible."),
     max_usd: z.number().positive().optional().describe("Most you'd pay, in US dollars."),
+    human_backed_only: z
+      .boolean()
+      .optional()
+      .describe("Only quote providers whose operator proved they are a real human with World ID (AgentKit)."),
   },
-  async ({ prompt, adapter, max_usd }) => {
+  async ({ prompt, adapter, max_usd, human_backed_only }) => {
     const ceiling = Math.min(max_usd ? parseUsd(max_usd) : MAX_USD_MICROS, MAX_USD_MICROS);
     try {
       const res = await fetch(`${BROKER_URL}/api/quotes`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, adapter: adapter ?? null, maxPriceUsdMicros: ceiling }),
+        headers: await agentkitQuoteHeaders(),
+        body: JSON.stringify({
+          prompt,
+          adapter: adapter ?? null,
+          maxPriceUsdMicros: ceiling,
+          humanBackedOnly: Boolean(human_backed_only),
+        }),
         signal: AbortSignal.timeout(20_000),
       });
       const quote = (await res.json()) as QuoteResponse;
@@ -233,6 +278,7 @@ server.tool(
           `Price: ${quote.priceLabel}`,
           `Provider: ${quote.provider.label} running ${quote.provider.capability}${quote.provider.model ? ` (${quote.provider.model})` : ""}`,
           `Track record: ${quote.provider.stats.jobsCompleted} completed, ${quote.provider.stats.jobsFailed} failed`,
+          `Human-backed provider (World ID): ${quote.provider.humanBacked ? "yes" : "no"}`,
           `Payment goes directly to ${quote.provider.address} — the broker never holds it.`,
           `Payable in: USDC (${quote.accepts[0]?.amount ?? "?"} units). You need no gas — the facilitator relays and pays the fee.`,
         ].join("\n"),
@@ -248,8 +294,8 @@ server.tool(
 // ---------------------------------------------------------------------------
 
 server.tool(
-  "xorv_run_job",
-  `Run an AI job on the Xorv network and PAY FOR IT with a real on-chain transfer. This spends money — at most ${formatUsd(MAX_USD_MICROS)} per call. The job runs on someone else's machine using their AI subscription, and they are paid directly. Returns the result plus an ArcScan link proving the payment.`,
+  "kazuo_run_job",
+  `Run an AI job on the Kazuo network and PAY FOR IT with a real on-chain transfer. This spends money — at most ${formatUsd(MAX_USD_MICROS)} per call. The job runs on someone else's machine using their AI subscription, and they are paid directly. Returns the result plus an ArcScan link proving the payment.`,
   {
     prompt: z.string().min(1).describe("The job to run."),
     adapter: z
@@ -261,10 +307,14 @@ server.tool(
       .positive()
       .optional()
       .describe(`Most to pay in US dollars. Capped at ${formatUsd(MAX_USD_MICROS)} regardless.`),
+    human_backed_only: z
+      .boolean()
+      .optional()
+      .describe("Only use providers whose operator proved they are a real human with World ID (AgentKit)."),
     // No `pay_with`: there is one asset on Arc, and offering a choice the
     // network cannot honour is worse than not offering one.
   },
-  async ({ prompt, adapter, max_usd }) => {
+  async ({ prompt, adapter, max_usd, human_backed_only }) => {
     const ceiling = Math.min(max_usd ? parseUsd(max_usd) : MAX_USD_MICROS, MAX_USD_MICROS);
 
     let paidFetch: typeof fetch;
@@ -281,8 +331,13 @@ server.tool(
       // 1. Quote — so the price is pinned and we can refuse it before paying.
       const quoteRes = await fetch(`${BROKER_URL}/api/quotes`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, adapter: adapter ?? null, maxPriceUsdMicros: ceiling }),
+        headers: await agentkitQuoteHeaders(),
+        body: JSON.stringify({
+          prompt,
+          adapter: adapter ?? null,
+          maxPriceUsdMicros: ceiling,
+          humanBackedOnly: Boolean(human_backed_only),
+        }),
         signal: AbortSignal.timeout(20_000),
       });
       const quote = (await quoteRes.json()) as QuoteResponse;
@@ -332,8 +387,8 @@ server.tool(
 );
 
 server.tool(
-  "xorv_get_job",
-  "Look up a Xorv job by id — its status, result, and the on-chain payment record.",
+  "kazuo_get_job",
+  "Look up a Kazuo job by id — its status, result, and the on-chain payment record.",
   { job_id: z.string().describe("The job id, e.g. job_TwzS96BhAx81.") },
   async ({ job_id }) => {
     try {
@@ -392,4 +447,4 @@ const transport = new StdioServerTransport();
 await server.connect(transport);
 // stderr, never stdout: stdout is the JSON-RPC channel and anything else on it
 // corrupts the protocol.
-console.error(`[xorv-mcp] ready — broker ${BROKER_URL}, network ${NETWORK}, cap ${formatUsd(MAX_USD_MICROS)}/job`);
+console.error(`[kazuo-mcp] ready — broker ${BROKER_URL}, network ${NETWORK}, cap ${formatUsd(MAX_USD_MICROS)}/job`);

@@ -6,7 +6,7 @@ import { Section, SectionHeading } from "@/components/ui/kit";
 /**
  * The objection, answered before it's raised.
  *
- * Anyone who understands what Xorv is asks the same question within about ten
+ * Anyone who understands what Kazuo is asks the same question within about ten
  * seconds: *you want me to run strangers' prompts on my laptop?* A marketing
  * paragraph about "enterprise-grade security" is the worst possible answer —
  * it sounds like every project that has none.
@@ -22,7 +22,7 @@ import { Section, SectionHeading } from "@/components/ui/kit";
 
 /** Real output. Left exactly as the terminal produced it. */
 const TRANSCRIPT = [
-  { cmd: "cat ~/.xorv/config.json", err: "Operation not permitted", note: "the payout private key" },
+  { cmd: "cat ~/.kazuo/config.json", err: "Operation not permitted", note: "the payout private key" },
   { cmd: "ls ~/.ssh", err: "Operation not permitted" },
   { cmd: "cat ~/.aws/credentials", err: "Operation not permitted" },
   { cmd: "security find-internet-password -w", err: "SecKeychainSearchCopyNext" },
@@ -30,7 +30,7 @@ const TRANSCRIPT = [
 ];
 
 const DENIED = [
-  ["~/.xorv", "your payout private key"],
+  ["~/.kazuo", "your payout private key"],
   ["~/.ssh", "git and server access"],
   ["~/.aws · ~/.kube · ~/.azure", "cloud credentials"],
   ["~/.config/gh · ~/.npmrc", "publish tokens"],
@@ -148,11 +148,11 @@ export function Security() {
             A job can read the agent session it runs on. The agent&rsquo;s own token has to be in
             its environment for the agent to work — that is the capacity you are renting out, and
             no profile closes it while the product still functions.{" "}
-            <span className="mono text-fg">XORV_SANDBOX=container</span> closes it too.
+            <span className="mono text-fg">KAZUO_SANDBOX=container</span> closes it too.
           </p>
           <p className="mt-3 text-[13.5px] leading-relaxed text-fg-2">
             On a host with neither seatbelt nor bubblewrap there is no filesystem boundary at all.{" "}
-            <span className="mono text-fg">xorv doctor</span> names the tier you actually have
+            <span className="mono text-fg">kazuo doctor</span> names the tier you actually have
             rather than printing the word &ldquo;sandboxed&rdquo; and letting you assume the rest.
           </p>
         </div>

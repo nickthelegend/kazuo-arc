@@ -4,7 +4,7 @@
  * A real HTTP server, the real Hono app, the real x402 resource server and the
  * real WebSocket hub. Only two things are stubbed, and only because they are
  * the parts that touch the chain: the facilitator (which would broadcast the
- * authorization) and the audit writer (which would append to XorvLog).
+ * authorization) and the audit writer (which would append to KazuoLog).
  * Everything between a buyer's first request and a published receipt is the
  * production code path.
  *
@@ -304,7 +304,7 @@ afterEach(async () => {
 });
 
 describe("registration", () => {
-  it("registers a node, hands back a token, and publishes to HCS", async () => {
+  it("registers a node, hands back a token, and publishes to the audit log", async () => {
     const provider = await connectProvider(h);
     expect(provider.providerId).toMatch(/^prv_/);
     expect(h.chain.counts().registry).toBe(1);
@@ -518,7 +518,7 @@ describe("what a browser can read", () => {
 
     const res = await fetch(`${h.base}/api/jobs/${body.quoteId}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Origin: "https://xorv-app.vercel.app" },
+      headers: { "Content-Type": "application/json", Origin: "https://kazuo-app.vercel.app" },
       body: "{}",
     });
 
@@ -550,7 +550,7 @@ describe("what a browser can read", () => {
     const res = await fetch(`${h.base}/api/jobs/qte_whatever`, {
       method: "OPTIONS",
       headers: {
-        Origin: "https://xorv-app.vercel.app",
+        Origin: "https://kazuo-app.vercel.app",
         "Access-Control-Request-Method": "POST",
         "Access-Control-Request-Headers":
           "content-type,x-payment,payment-signature,access-control-expose-headers",

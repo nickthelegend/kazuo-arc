@@ -1,5 +1,5 @@
 /**
- * `xorv start` — go live.
+ * `kazuo start` — go live.
  *
  * Brings up the node, registers, opens the control channel, optionally raises a
  * Cloudflare tunnel, and then hands the terminal over to a live dashboard that
@@ -12,7 +12,7 @@ import {
   formatUsd,
   explorerAddress,
   networkLabel,
-} from "@xorv/protocol";
+} from "@kazuo/protocol";
 import { requireConfig, resolveBrokerUrl } from "../config.js";
 import { ProviderNode, type RunningJob } from "../node.js";
 import { startLocalServer } from "../local-server.js";
@@ -38,6 +38,10 @@ export async function startCommand(opts: StartOptions): Promise<void> {
   node.on("log", ({ level, text }) => {
     logLines.push({ level, text, at: Date.now() });
     if (logLines.length > 200) logLines.shift();
+    // Off a terminal nothing repaints, so each entry is printed once, as it happens.
+    if (!process.stdout.isTTY) {
+      console.log(`${new Date().toISOString()} ${level} ${ui.stripAnsi(text)}`);
+    }
   });
 
   // -- preflight ------------------------------------------------------------
@@ -52,7 +56,7 @@ export async function startCommand(opts: StartOptions): Promise<void> {
       ui.bad(`  ${capability.displayName} — the underlying CLI isn't available`);
     }
     ui.blank();
-    ui.info(`run ${ui.c.accent("xorv doctor")} for the specifics, or ${ui.c.accent("xorv init")} to re-pick`);
+    ui.info(`run ${ui.c.accent("kazuo doctor")} for the specifics, or ${ui.c.accent("kazuo init")} to re-pick`);
     process.exitCode = 1;
     return;
   }
@@ -106,7 +110,7 @@ export async function startCommand(opts: StartOptions): Promise<void> {
   } catch (err) {
     reg.fail(`registration failed: ${err instanceof Error ? err.message : String(err)}`);
     ui.blank();
-    ui.info(`is the broker running? ${ui.c.accent("pnpm broker")} in the xorv repo`);
+    ui.info(`is the broker running? ${ui.c.accent("pnpm broker")} in the kazuo repo`);
     local.close();
     stopTunnel?.();
     process.exitCode = 1;
@@ -119,17 +123,27 @@ export async function startCommand(opts: StartOptions): Promise<void> {
 
   ui.blank();
   const region = ui.liveRegion();
+  const interactive = Boolean(process.stdout.isTTY);
   const paint = (): void => region.render(dashboard(node, logLines, endpoint));
 
-  const ticker = setInterval(paint, 1_000);
-  ticker.unref?.();
-  node.on("state", paint);
-  node.on("jobStarted", paint);
-  node.on("jobFinished", paint);
-  paint();
+  // A terminal gets a dashboard repainted in place. Anything else — a service
+  // manager, a log file, `kazuo start > node.log` — has no screen to repaint:
+  // the old fallback reprinted the footer line every second, thousands of
+  // identical lines an hour burying the real events. There the dashboard is
+  // printed once and log entries stream as they happen (above).
+  const ticker = interactive ? setInterval(paint, 1_000) : null;
+  ticker?.unref?.();
+  if (interactive) {
+    node.on("state", paint);
+    node.on("jobStarted", paint);
+    node.on("jobFinished", paint);
+    paint();
+  } else {
+    for (const line of dashboard(node, logLines, endpoint)) console.log(ui.stripAnsi(line));
+  }
 
   const shutdown = (): void => {
-    clearInterval(ticker);
+    if (ticker) clearInterval(ticker);
     region.done();
     ui.blank();
     ui.info("shutting down…");
@@ -172,7 +186,11 @@ function dashboard(
 
   // Status strip
   const dot = node.stats.connected ? ui.glyph.live() : ui.glyph.idle();
-  const state = node.stats.connected ? ui.c.ok("LIVE") : ui.c.warn("RECONNECTING");
+  const state = node.stats.connected
+    ? ui.c.ok("LIVE")
+    : node.stats.reconnects > 0
+      ? ui.c.warn("RECONNECTING")
+      : ui.c.muted("CONNECTING");
   const beat = node.stats.lastHeartbeatAt
     ? ui.c.muted(`beat ${formatAgo(node.stats.lastHeartbeatAt)}`)
     : ui.c.muted("no beat yet");

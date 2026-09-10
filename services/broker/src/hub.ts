@@ -16,7 +16,7 @@
 import { WebSocketServer, type WebSocket } from "ws";
 import type { IncomingMessage } from "node:http";
 import type { Server } from "node:http";
-import type { DispatchedJob, JobEvent } from "@xorv/protocol";
+import type { DispatchedJob, JobEvent } from "@kazuo/protocol";
 import type { Registry } from "./registry.js";
 
 /** Broker → node. */
@@ -97,8 +97,11 @@ export class Hub {
       this.handle(providerId, message);
     });
 
-    ws.on("close", () => {
+    ws.on("close", (code, reason) => {
       if (this.sockets.get(providerId) === ws) {
+        console.log(
+          `[broker] control channel ${providerId} closed (code ${code}${reason.length > 0 ? `: ${reason.toString()}` : ""})`,
+        );
         this.sockets.delete(providerId);
         this.handlers.onDisconnect(providerId);
       }

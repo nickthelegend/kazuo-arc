@@ -1,6 +1,6 @@
 # Architecture
 
-How Xorv is put together, and why the awkward parts are the way they are.
+How Kazuo is put together, and why the awkward parts are the way they are.
 
 ---
 
@@ -8,7 +8,7 @@ How Xorv is put together, and why the awkward parts are the way they are.
 
 ```
   buyer                        broker                       provider node
-  (app / CLI / MCP)         (this repo)                   (xorv CLI, anywhere)
+  (app / CLI / MCP)         (this repo)                   (kazuo CLI, anywhere)
         │                         │                                │
         │  1. POST /api/quotes    │                                │
         ├────────────────────────►│  match on price × liveness     │
@@ -26,11 +26,60 @@ How Xorv is put together, and why the awkward parts are the way they are.
         │                         ├─── job.dispatch (WebSocket) ──►│
         │  ◄═══ SSE events ═══════╪◄══ tool calls, edits ══════════┤
         │  ◄── result             │◄── answer ─────────────────────┤
-        │                         ├─── receipt ──────────────────► XorvLog
+        │                         ├─── receipt ──────────────────► KazuoLog
 ```
 
 Four processes, three of which are optional. The broker is the only thing that
 has to be running for the network to exist.
+
+### Architecture diagram
+
+```mermaid
+flowchart LR
+  subgraph Buyers
+    APP["Job board (Next.js, Vercel)<br/>Privy sign-in → embedded wallet"]
+    CLI["kazuo run (CLI)"]
+    MCP["@kazuo/mcp<br/>an agent with a wallet"]
+  end
+
+  subgraph Broker["Broker (Hono, Railway)"]
+    Q["POST /api/quotes<br/>matcher: price → human-backed → track record"]
+    PAY["POST /api/jobs/:quote<br/>x402 resource server"]
+    FAC["self-hosted facilitator<br/>(operator pays gas)"]
+    AK["AgentKit gate<br/>SIWE challenge + verify"]
+    DB[("SQLite on a volume")]
+    HUB["WebSocket hub"]
+  end
+
+  subgraph Providers
+    NODE["kazuo start<br/>Claude Code / Codex / Grok / …<br/>sandboxed per job"]
+  end
+
+  subgraph Arc["Arc testnet (USDC is gas)"]
+    USDC["USDC FiatTokenV2<br/>transferWithAuthorization"]
+    LOG["KazuoLog<br/>registrations · liveness · receipts"]
+  end
+
+  subgraph World["World Chain"]
+    BOOK["AgentBook<br/>address → anonymous human id"]
+  end
+
+  APP -- "EIP-712 signature (no gas)" --> PAY
+  CLI --> Q
+  MCP --> Q
+  APP --> Q
+  CLI -- "agentkit header" --> AK
+  MCP -- "agentkit header" --> AK
+  NODE -- "register + agentkit header" --> AK
+  AK -- "lookupHuman" --> BOOK
+  Q --> PAY
+  PAY --> FAC
+  FAC -- "relay authorization" --> USDC
+  USDC -- "buyer → provider, directly" --> NODE
+  HUB <-- "job.dispatch / events / result" --> NODE
+  PAY --> DB
+  Broker -- "receipt (sha-256 of result)" --> LOG
+```
 
 ---
 
@@ -39,9 +88,9 @@ has to be running for the network to exist.
 | Package | What it is |
 |---|---|
 | `packages/protocol` | The shared vocabulary: domain types, money math, Arc plumbing, x402 wiring. Depended on by everything. No I/O beyond an RPC endpoint. |
-| `packages/cli` | `xorv` — the provider node, and the buyer-side `xorv run`. Published to npm. |
-| `packages/mcp` | `@xorv/mcp` — Xorv as an MCP server, so an agent can buy capacity. |
-| `services/broker` | Registry, matcher, x402 resource server, self-hosted facilitator, HCS writer, SQLite. |
+| `packages/cli` | `kazuo` — the provider node, and the buyer-side `kazuo run`. Published to npm. |
+| `packages/mcp` | `@kazuo/mcp` — Kazuo as an MCP server, so an agent can buy capacity. |
+| `services/broker` | Registry, matcher, x402 resource server, self-hosted facilitator, KazuoLog audit writer, SQLite. |
 | `apps/app` | The job board. |
 | `apps/landing` | Marketing. |
 
@@ -88,7 +137,7 @@ An EIP-3009 authorization carries `validAfter` / `validBefore`, and x402
 advertises a 300-second window. A five-minute coding job would outlive its own
 payment, and the provider would be unpaid for work already done.
 
-So Xorv settles up front. The other risk — a provider that takes the money and
+So Kazuo settles up front. The other risk — a provider that takes the money and
 fails — is covered at the network level rather than per-transaction: a failed
 job is **reassigned to another provider at no extra charge**, and the failure
 counts against the original provider's success rate, which is what the matcher
@@ -111,7 +160,7 @@ The registry is in memory on purpose: a provider is only real while heartbeats
 keep arriving. Membership has nothing worth surviving a restart.
 
 What *does* survive goes to SQLite (jobs, payments, lifetime earnings) and to
-the `XorvLog` contract (registrations, sampled heartbeats, receipts). The second
+the `KazuoLog` contract (registrations, sampled heartbeats, receipts). The second
 one is the point: you do not have to trust the broker's database, because the
 record is public and append-only, readable from any RPC without credentials.
 
@@ -169,8 +218,8 @@ the logs.
 back → an on-chain registration entry. Node opens `wss://…/ws/provider?token=…`.
 
 **Heartbeat.** Every 15s. Offline after 45s (three missed beats), reaped after
-10 minutes. One beat in twenty is published to HCS — every beat would be several
-thousand transactions a day per node, which is noise rather than evidence.
+10 minutes. One beat per provider per hour is appended to KazuoLog — every entry costs gas
+($0.00088), and every beat would cost an idle provider $0.25/day against a 0% fee.
 
 **Quote.** Matcher walks live providers × capabilities, filters on adapter and
 price ceiling and availability and free concurrency, sorts by price, then
@@ -178,10 +227,10 @@ success rate, then load.
 
 **Payment.** `@x402/hono` middleware wraps `POST /api/jobs/:quoteId`. Verify and
 settle go to the facilitator, which is in-process by default
-(`XORV_FACILITATOR=self`) or a hosted URL.
+(`KAZUO_FACILITATOR=self`) or a hosted URL.
 
 **Dispatch.** `job.dispatch` down the socket. Provider runs the adapter in a
-fresh directory under `~/.xorv/jobs/`, streams `job.event`, returns
+fresh directory under `~/.kazuo/jobs/`, streams `job.event`, returns
 `job.result`. HTTP fallbacks exist for both, because the work is already paid
 for and a dropped socket must not be why a buyer never gets an answer.
 

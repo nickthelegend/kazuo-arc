@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 /**
- * The Xorv mark, monochrome.
+ * The Kazuo mark, monochrome.
  *
  * Rendered in `currentColor`. On a surface built from black, white and one
  * hairline, a two-stop gradient in the corner would be the only decorative

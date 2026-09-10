@@ -55,7 +55,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           {/* Wordmark only: the mark is an X and the word starts with one, so
               together they read as two competing X-shapes rather than a lockup. */}
           <Link href="/" className="group flex items-center text-fg">
-            <span className="text-[14.5px] font-semibold tracking-[-0.02em]">Xorv</span>
+            <span className="text-[14.5px] font-semibold tracking-[-0.02em]">Kazuo</span>
           </Link>
         </div>
 
@@ -107,7 +107,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </span>
           <div className="ml-auto flex items-center gap-3">
             <Link
-              href="https://github.com/nickthelegend/xorv"
+              href="https://github.com/nickthelegend/kazuo-arc"
               target="_blank"
               rel="noopener noreferrer"
               className="hidden text-[13px] text-fg-3 transition-colors hover:text-fg sm:block"
@@ -162,7 +162,7 @@ function NetworkFoot() {
           {down ? "broker offline" : info ? `${info.stats.providersLive} provider(s) live` : "connecting…"}
         </span>
       </div>
-      <p className="mono mt-1.5 text-[11px] text-fg-4">{info?.network ?? "hedera:testnet"}</p>
+      <p className="mono mt-1.5 text-[11px] text-fg-4">{info?.network ?? "eip155:5042002"}</p>
     </div>
   );
 }

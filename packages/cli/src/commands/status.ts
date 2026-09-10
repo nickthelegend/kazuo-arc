@@ -1,12 +1,12 @@
 /**
- * `xorv status` — what the network looks like from here.
+ * `kazuo status` — what the network looks like from here.
  *
  * Reads the broker rather than local state, so it answers the question an
  * operator actually has ("is my node visible to buyers, and who am I competing
  * with?") rather than the one their own process could answer alone.
  */
 
-import { formatAgo, formatUsd, networkLabel } from "@xorv/protocol";
+import { formatAgo, formatUsd, networkLabel } from "@kazuo/protocol";
 import { loadConfig, resolveBrokerUrl } from "../config.js";
 import * as ui from "../ui.js";
 
@@ -121,7 +121,7 @@ export async function statusCommand(opts: { broker?: string; json?: boolean }): 
 
   ui.heading(`providers (${providers.length})`);
   if (providers.length === 0) {
-    ui.muted("  nobody is online. Start one with `xorv start`.");
+    ui.muted("  nobody is online. Start one with `kazuo start`.");
     ui.blank();
     return;
   }

@@ -1,4 +1,4 @@
-# Xorv broker.
+# Kazuo broker.
 #
 # Node 24 rather than 20: the persistence layer uses node:sqlite, which lands in
 # 22.5. Running the broker without it is supported but means losing every job on
@@ -12,11 +12,11 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
 COPY packages/protocol/package.json packages/protocol/
 COPY services/broker/package.json services/broker/
-RUN pnpm install --frozen-lockfile --filter @xorv/protocol... --filter @xorv/broker...
+RUN pnpm install --frozen-lockfile --filter @kazuo/protocol... --filter @kazuo/broker...
 
 COPY packages/protocol packages/protocol
 COPY services/broker services/broker
-RUN pnpm --filter @xorv/protocol build && pnpm --filter @xorv/broker build
+RUN pnpm --filter @kazuo/protocol build && pnpm --filter @kazuo/broker build
 
 # --- runtime ---------------------------------------------------------------
 FROM node:24-slim
@@ -30,10 +30,11 @@ COPY --from=build /app/packages/protocol packages/protocol
 COPY --from=build /app/services/broker services/broker
 COPY --from=build /app/node_modules node_modules
 
-# Jobs and earnings live here; mount a volume or they go with the container.
+# Jobs and earnings live here; mount a volume at /data or they go with the
+# container. No `VOLUME` instruction: Railway rejects it (its volumes are
+# attached to the service instead), and docker-compose mounts one explicitly.
 RUN mkdir -p /data && chown -R node:node /data /app
-ENV XORV_DB=/data/xorv.db
-VOLUME ["/data"]
+ENV KAZUO_DB=/data/kazuo.db
 
 USER node
 EXPOSE 8402

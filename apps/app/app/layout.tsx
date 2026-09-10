@@ -11,10 +11,10 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Xorv", template: "%s · Xorv" },
+  title: { default: "Kazuo", template: "%s · Kazuo" },
   description:
-    "Post an AI job, pay per job in USDC over x402 on Hedera, and watch it run on a live provider node.",
-  icons: { icon: [{ url: "/brand/xorv-mark.svg", type: "image/svg+xml" }] },
+    "Post an AI job, pay per job in USDC over x402 on Arc, and watch it run on a live provider node.",
+  icons: { icon: [{ url: "/brand/kazuo-mark.svg", type: "image/svg+xml" }] },
 };
 
 export const viewport: Viewport = { themeColor: "#000000", colorScheme: "dark" };

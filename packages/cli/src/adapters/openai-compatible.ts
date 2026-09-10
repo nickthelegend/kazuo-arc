@@ -1,7 +1,7 @@
 /**
  * OpenAI-compatible endpoint adapter.
  *
- * The escape hatch that makes Xorv's supply side open-ended: anything speaking
+ * The escape hatch that makes Kazuo's supply side open-ended: anything speaking
  * `POST /v1/chat/completions` can be sold on the network — Ollama, LM Studio,
  * vLLM, OpenRouter, together.ai, a company's internal gateway. That covers
  * local GPUs and hosted quota alike without needing a bespoke adapter each.
@@ -9,12 +9,12 @@
  * Configured entirely from the environment, because the base URL and key belong
  * to the operator and should never end up in a config file that gets shared:
  *
- *   XORV_OPENAI_BASE_URL   default http://localhost:11434/v1  (Ollama)
- *   XORV_OPENAI_API_KEY    optional; sent as a bearer token when set
- *   XORV_OPENAI_MODEL      default model when the capability pins none
+ *   KAZUO_OPENAI_BASE_URL   default http://localhost:11434/v1  (Ollama)
+ *   KAZUO_OPENAI_API_KEY    optional; sent as a bearer token when set
+ *   KAZUO_OPENAI_MODEL      default model when the capability pins none
  */
 
-import type { AdapterKind } from "@xorv/protocol";
+import type { AdapterKind } from "@kazuo/protocol";
 import { clampResult, type JobAdapter, type RunInput } from "./base.js";
 
 interface ChatChoice {
@@ -32,18 +32,18 @@ interface ChatResponse {
 export class OpenAiCompatibleAdapter implements JobAdapter {
   readonly kind: AdapterKind = "openai-compatible";
   readonly installHint =
-    "set XORV_OPENAI_BASE_URL (e.g. http://localhost:11434/v1 for Ollama) and XORV_OPENAI_MODEL";
+    "set KAZUO_OPENAI_BASE_URL (e.g. http://localhost:11434/v1 for Ollama) and KAZUO_OPENAI_MODEL";
 
   private get baseUrl(): string {
-    return (process.env.XORV_OPENAI_BASE_URL || "http://localhost:11434/v1").replace(/\/+$/, "");
+    return (process.env.KAZUO_OPENAI_BASE_URL || "http://localhost:11434/v1").replace(/\/+$/, "");
   }
 
   private get apiKey(): string | null {
-    return process.env.XORV_OPENAI_API_KEY?.trim() || null;
+    return process.env.KAZUO_OPENAI_API_KEY?.trim() || null;
   }
 
   private get defaultModel(): string {
-    return process.env.XORV_OPENAI_MODEL?.trim() || "llama3.1";
+    return process.env.KAZUO_OPENAI_MODEL?.trim() || "llama3.1";
   }
 
   private headers(): Record<string, string> {

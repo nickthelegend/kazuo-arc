@@ -3,7 +3,7 @@
  *
  * Everything here drives a fake EIP-1193 provider, which is exactly what a real
  * wallet exposes — `request({method, params})` plus two events. That is the
- * whole interface Xorv uses, so a fake is not an approximation of the extension;
+ * whole interface Kazuo uses, so a fake is not an approximation of the extension;
  * it is the same contract.
  *
  * The chain handling is what earns the most attention. An EIP-712 domain
@@ -15,10 +15,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ARC_CHAIN } from "../lib/chains";
+import { decodeFunctionData, erc20Abi } from "viem";
+import { ARC_CHAIN, USDC_ADDRESS } from "../lib/chains";
 import {
   connectWallet,
   restoreWallet,
+  sendUsdc,
+  sessionForProvider,
   shortAddress,
   switchToArc,
   walletAvailable,
@@ -61,6 +64,8 @@ function fakeProvider(opts: FakeOpts = {}) {
           return null;
         case "eth_signTypedData_v4":
           return "0xsignature";
+        case "eth_sendTransaction":
+          return "0xtxhash";
         default:
           throw new Error(`unexpected method ${method}`);
       }
@@ -252,5 +257,59 @@ describe("shortAddress", () => {
 
   it("leaves something already short alone rather than mangling it", () => {
     expect(shortAddress("0x1234")).toBe("0x1234");
+  });
+});
+
+/**
+ * The Privy path hands the app a provider that is *not* `window.ethereum` —
+ * an embedded wallet's EIP-1193 surface. These pin that the same payment and
+ * transfer code runs over it unchanged.
+ */
+describe("provider-agnostic sessions (Privy embedded wallets)", () => {
+  afterEach(() => {
+    delete (globalThis as { window?: unknown }).window;
+  });
+
+  it("signs typed data through the provider it was given, not window.ethereum", async () => {
+    const embedded = fakeProvider();
+    delete (globalThis as { window?: unknown }).window; // no injected wallet at all
+    const session = sessionForProvider(embedded, ADDRESS, ARC_CHAIN.id);
+    expect(session.address).toBe(CHECKSUMMED);
+    const sig = await session.signTypedData({ domain: {}, types: {}, primaryType: "X", message: {} });
+    expect(sig).toBe("0xsignature");
+    const call = embedded.calls.find((c) => c.method === "eth_signTypedData_v4");
+    expect((call?.params as unknown[])[0]).toBe(CHECKSUMMED);
+  });
+
+  it("sends USDC as an ERC-20 transfer to the token contract, on Arc", async () => {
+    const p = fakeProvider();
+    const hash = await sendUsdc(p, ADDRESS, "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B", "0.25");
+    expect(hash).toBe("0xtxhash");
+    const tx = (p.calls.find((c) => c.method === "eth_sendTransaction")?.params as Array<{
+      from: string;
+      to: string;
+      data: `0x${string}`;
+    }>)[0]!;
+    expect(tx.to).toBe(USDC_ADDRESS);
+    expect(tx.from).toBe(CHECKSUMMED);
+    const decoded = decodeFunctionData({ abi: erc20Abi, data: tx.data });
+    expect(decoded.functionName).toBe("transfer");
+    // 0.25 USDC at 6 decimals — never the 18-decimal gas view.
+    expect(decoded.args).toEqual(["0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B", 250_000n]);
+  });
+
+  it("gets onto Arc before sending", async () => {
+    const p = fakeProvider({ chainId: "0x1" });
+    await sendUsdc(p, ADDRESS, "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B", "1");
+    const order = methods(p);
+    expect(order.indexOf("wallet_switchEthereumChain")).toBeLessThan(order.indexOf("eth_sendTransaction"));
+  });
+
+  it("refuses a zero amount before touching the wallet", async () => {
+    const p = fakeProvider();
+    await expect(
+      sendUsdc(p, ADDRESS, "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B", "0"),
+    ).rejects.toThrow(/above zero/);
+    expect(methods(p)).not.toContain("eth_sendTransaction");
   });
 });

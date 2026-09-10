@@ -29,6 +29,94 @@ export const ARC_TESTNET_CHAIN_ID = 5042002;
 export const ARC_MAINNET_CHAIN_ID = 5042;
 
 /**
+ * World Chain — the second settlement network.
+ *
+ * Also an ordinary EVM chain with a genuine Circle FiatTokenV2 (`name=USDC`,
+ * `version=2`, read on chain rather than assumed), so the same stock x402
+ * `exact` scheme settles there with no extra code. The one real difference is
+ * gas: World Chain meters it in ETH, so the *facilitator* needs ETH there —
+ * the buyer still needs none, because they only ever sign typed data.
+ *
+ * It is also where AgentBook lives: human-backed agent resolution always reads
+ * the canonical World Chain deployment, whichever network the job settles on.
+ */
+export const WORLDCHAIN_SEPOLIA_CAIP2 = "eip155:4801";
+export const WORLDCHAIN_MAINNET_CAIP2 = "eip155:480";
+export const WORLDCHAIN_SEPOLIA_CHAIN_ID = 4801;
+export const WORLDCHAIN_MAINNET_CHAIN_ID = 480;
+
+/** Per-network facts. Anything not listed falls back to Arc testnet. */
+export interface NetworkInfo {
+  caip2: string;
+  chainId: number;
+  name: string;
+  label: string;
+  rpcUrl: string;
+  usdc: string;
+  explorer: string;
+  /** Symbol of the token gas is metered in — USDC on Arc, ETH on World Chain. */
+  gasToken: string;
+  testnet: boolean;
+}
+
+export const NETWORKS: Record<string, NetworkInfo> = {
+  "eip155:5042002": {
+    caip2: "eip155:5042002",
+    chainId: 5042002,
+    name: "Arc Testnet",
+    label: "testnet",
+    rpcUrl: "https://rpc.testnet.arc.network",
+    usdc: "0x3600000000000000000000000000000000000000",
+    explorer: "https://testnet.arcscan.app",
+    gasToken: "USDC",
+    testnet: true,
+  },
+  "eip155:5042": {
+    caip2: "eip155:5042",
+    chainId: 5042,
+    name: "Arc",
+    label: "mainnet",
+    rpcUrl: "https://rpc.arc.network",
+    usdc: "0x3600000000000000000000000000000000000000",
+    explorer: "https://arcscan.app",
+    gasToken: "USDC",
+    testnet: false,
+  },
+  "eip155:4801": {
+    caip2: "eip155:4801",
+    chainId: 4801,
+    name: "World Chain Sepolia",
+    label: "world-sepolia",
+    rpcUrl: "https://worldchain-sepolia.g.alchemy.com/public",
+    usdc: "0x66145f38cBAC35Ca6F1Dfb4914dF98F1614aeA88",
+    explorer: "https://sepolia.worldscan.org",
+    gasToken: "ETH",
+    testnet: true,
+  },
+  "eip155:480": {
+    caip2: "eip155:480",
+    chainId: 480,
+    name: "World Chain",
+    label: "world",
+    rpcUrl: "https://worldchain-mainnet.g.alchemy.com/public",
+    usdc: "0x79A02482A880bCe3F13E09da970dC34dB4cD24D1",
+    explorer: "https://worldscan.org",
+    gasToken: "ETH",
+    testnet: false,
+  },
+};
+
+/** Facts for a CAIP-2 network, defaulting to Arc testnet for anything unknown. */
+export function networkInfo(network: string): NetworkInfo {
+  return NETWORKS[network] ?? NETWORKS["eip155:5042002"]!;
+}
+
+/** True for the two World Chain networks. */
+export function isWorldChain(network: string): boolean {
+  return network === WORLDCHAIN_SEPOLIA_CAIP2 || network === WORLDCHAIN_MAINNET_CAIP2;
+}
+
+/**
  * The ERC-20 face of native USDC — a real Circle FiatTokenV2 at a fixed
  * address, identical on both Arc networks.
  *
@@ -36,7 +124,7 @@ export const ARC_MAINNET_CHAIN_ID = 5042;
  * implements EIP-3009 `transferWithAuthorization`, so a buyer signs an
  * authorization offline and a facilitator relays it. That is the Arc equivalent
  * of Hedera's fee-payer model, reached by a completely different mechanism, and
- * it is why the stock x402 `exact` scheme needs no Xorv-specific code.
+ * it is why the stock x402 `exact` scheme needs no Kazuo-specific code.
  */
 export const ARC_USDC_ADDRESS = "0x3600000000000000000000000000000000000000";
 
@@ -54,18 +142,16 @@ export const NATIVE_DECIMALS = 18;
 
 /** Public RPC per CAIP-2 network. */
 export function rpcUrl(network: string): string {
-  const override = process.env.XORV_RPC_URL?.trim();
+  const override = process.env.KAZUO_RPC_URL?.trim();
   if (override) return override;
-  return network === ARC_MAINNET_CAIP2
-    ? "https://rpc.arc.network"
-    : "https://rpc.testnet.arc.network";
+  return networkInfo(network).rpcUrl;
 }
 
-/** The x402 protocol version Xorv speaks. */
+/** The x402 protocol version Kazuo speaks. */
 export const X402_VERSION = 2;
 
-/** The only payment scheme Xorv uses; `exact` means "pay exactly this amount". */
-export const XORV_SCHEME = "exact";
+/** The only payment scheme Kazuo uses; `exact` means "pay exactly this amount". */
+export const KAZUO_SCHEME = "exact";
 
 /**
  * How often a provider node reports in.
@@ -99,7 +185,7 @@ export const JOB_TIMEOUT_MS = 10 * 60_000;
 export const LOG_SCHEMA_VERSION = 1;
 
 /**
- * The `kind` discriminator on a `XorvLog` entry.
+ * The `kind` discriminator on a `KazuoLog` entry.
  *
  * Mirrors the contract's `KIND_` constants exactly. They are indexed on the
  * event, so a reader pulls one stream — say, every receipt — without scanning
@@ -114,7 +200,7 @@ export const LOG_KIND = {
 /**
  * The stablecoin this network prices in.
  *
- * Overridable with `XORV_STABLECOIN`. A marketplace that hardcodes one token
+ * Overridable with `KAZUO_STABLECOIN`. A marketplace that hardcodes one token
  * address can never be pointed at a different issuer or a test token, and the
  * override is what lets the settlement path be exercised without a faucet.
  *
@@ -122,21 +208,20 @@ export const LOG_KIND = {
  * without re-importing the module.
  */
 export function usdcAddress(network: string): string {
-  const override = process.env.XORV_STABLECOIN?.trim();
+  const override = process.env.KAZUO_STABLECOIN?.trim();
   if (override && /^0x[0-9a-fA-F]{40}$/.test(override)) return override;
-  void network; // same address on both Arc networks; kept for signature parity
-  return ARC_USDC_ADDRESS;
+  return networkInfo(network).usdc;
 }
 
-/** The deployed `XorvLog` address, or null when the audit trail is unconfigured. */
+/** The deployed `KazuoLog` address, or null when the audit trail is unconfigured. */
 export function logAddress(): string | null {
-  const raw = process.env.XORV_LOG_ADDRESS?.trim();
+  const raw = process.env.KAZUO_LOG_ADDRESS?.trim();
   return raw && /^0x[0-9a-fA-F]{40}$/.test(raw) ? raw : null;
 }
 
 /** Human label for a network, for CLI and UI chrome. */
 export function networkLabel(network: string): string {
-  return network === ARC_MAINNET_CAIP2 ? "mainnet" : "testnet";
+  return networkInfo(network).label;
 }
 
 /** EVM chain id for a CAIP-2 network. */
@@ -145,9 +230,9 @@ export function chainIdFor(network: string): number {
   return Number.isFinite(parsed) ? parsed : ARC_TESTNET_CHAIN_ID;
 }
 
-/** ArcScan base URL for a network. */
+/** Block explorer base URL for a network — ArcScan on Arc, WorldScan on World Chain. */
 export function explorerBase(network: string): string {
-  return network === ARC_MAINNET_CAIP2 ? "https://arcscan.app" : "https://testnet.arcscan.app";
+  return networkInfo(network).explorer;
 }
 
 /** ArcScan link for a transaction hash. */

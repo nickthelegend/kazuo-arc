@@ -9,7 +9,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  XORV_HOME,
+  KAZUO_HOME,
   loadConfig,
   readEarnings,
   requireConfig,
@@ -18,20 +18,20 @@ import {
 } from "../config.js";
 import { createAdapter, detectAvailable } from "../adapters/index.js";
 import { makeJobDir, removeJobDir } from "../adapters/base.js";
-import { formatDuration, formatUsd, parseUsd } from "@xorv/protocol";
+import { formatDuration, formatUsd, parseUsd } from "@kazuo/protocol";
 import * as ui from "../ui.js";
 
 /**
  * The pause flag.
  *
- * A file rather than a signal or a socket: `xorv pause` has to work from a
- * different terminal than the one running `xorv start`, possibly a different
+ * A file rather than a signal or a socket: `kazuo pause` has to work from a
+ * different terminal than the one running `kazuo start`, possibly a different
  * session, and the running node checks it on each heartbeat. One path, no IPC,
  * and it survives a node restart — which is what you want from "stop taking
  * work" when you're heading into a meeting.
  */
 export function pauseFlagPath(): string {
-  return path.join(XORV_HOME, "paused");
+  return path.join(KAZUO_HOME, "paused");
 }
 
 export function isPaused(): boolean {
@@ -40,11 +40,11 @@ export function isPaused(): boolean {
 
 export async function pauseCommand(): Promise<void> {
   requireConfig();
-  fs.mkdirSync(XORV_HOME, { recursive: true, mode: 0o700 });
+  fs.mkdirSync(KAZUO_HOME, { recursive: true, mode: 0o700 });
   fs.writeFileSync(pauseFlagPath(), new Date().toISOString(), { mode: 0o600 });
   ui.blank();
   ui.ok("paused — this node will finish jobs in flight and take no new ones");
-  ui.muted(`  resume with ${ui.c.accent("xorv resume")}`);
+  ui.muted(`  resume with ${ui.c.accent("kazuo resume")}`);
   ui.blank();
 }
 
@@ -61,7 +61,7 @@ export async function resumeCommand(): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// xorv jobs
+// kazuo jobs
 // ---------------------------------------------------------------------------
 
 interface BrokerJob {
@@ -98,8 +98,8 @@ export async function jobsCommand(opts: { json?: boolean; limit?: string; all?: 
   if (jobs.length === 0) {
     ui.muted(
       config.providerId
-        ? "  nothing yet — leave `xorv start` running and jobs will land here"
-        : "  this node hasn't registered yet — run `xorv start` first",
+        ? "  nothing yet — leave `kazuo start` running and jobs will land here"
+        : "  this node hasn't registered yet — run `kazuo start` first",
     );
     ui.blank();
     return;
@@ -139,7 +139,7 @@ export async function jobsCommand(opts: { json?: boolean; limit?: string; all?: 
 }
 
 // ---------------------------------------------------------------------------
-// xorv price
+// kazuo price
 // ---------------------------------------------------------------------------
 
 export async function priceCommand(
@@ -168,8 +168,8 @@ export async function priceCommand(
       ),
     );
     ui.blank();
-    ui.muted(`  change one with ${ui.c.accent("xorv price <capability> <usd>")}`);
-    ui.muted(`  e.g. ${ui.c.accent("xorv price claude-code 0.02")}`);
+    ui.muted(`  change one with ${ui.c.accent("kazuo price <capability> <usd>")}`);
+    ui.muted(`  e.g. ${ui.c.accent("kazuo price claude-code 0.02")}`);
     ui.blank();
     return;
   }
@@ -183,7 +183,7 @@ export async function priceCommand(
     );
   }
   if (!amount) {
-    throw new Error(`give a price, e.g. \`xorv price ${capabilityId} 0.02\``);
+    throw new Error(`give a price, e.g. \`kazuo price ${capabilityId} 0.02\``);
   }
 
   const previous = capability.priceUsdMicros;
@@ -195,12 +195,12 @@ export async function priceCommand(
   ui.ok(
     `${capability.displayName}: ${ui.c.muted(formatUsd(previous))} → ${ui.c.money(formatUsd(capability.priceUsdMicros))}`,
   );
-  ui.muted("  restart `xorv start` for the network to see the new price");
+  ui.muted("  restart `kazuo start` for the network to see the new price");
   ui.blank();
 }
 
 // ---------------------------------------------------------------------------
-// xorv test
+// kazuo test
 // ---------------------------------------------------------------------------
 
 /**
@@ -275,7 +275,7 @@ export async function testCommand(opts: { prompt?: string; adapter?: string }): 
               `${formatUsd(costMicros)} — losing ${formatUsd(-margin)} per job`,
           );
           ui.muted(
-            `  raise it: xorv price ${capability.id} ${(costMicros * 1.4 / 1_000_000).toFixed(2)}`,
+            `  raise it: kazuo price ${capability.id} ${(costMicros * 1.4 / 1_000_000).toFixed(2)}`,
           );
         } else {
           ui.muted(
@@ -301,7 +301,7 @@ export async function testCommand(opts: { prompt?: string; adapter?: string }): 
         [
           `${ui.glyph.ok()} ${ui.c.bold("every capability works, and every price covers its cost")}`,
           "",
-          `  This node will earn. ${ui.c.accent("xorv start")} to go live.`,
+          `  This node will earn. ${ui.c.accent("kazuo start")} to go live.`,
         ],
         { title: "healthy" },
       ),
@@ -313,7 +313,7 @@ export async function testCommand(opts: { prompt?: string; adapter?: string }): 
           `${ui.glyph.warn()} ${ui.c.bold(`${belowCost} capability(s) priced below cost`)}`,
           "",
           "  Everything runs, but you would lose money on every job you win.",
-          `  Raise the prices above, or run ${ui.c.accent("xorv price")} to see them all.`,
+          `  Raise the prices above, or run ${ui.c.accent("kazuo price")} to see them all.`,
         ],
         { title: "check your pricing", color: ui.BRAND.amber },
       ),
@@ -337,7 +337,7 @@ export async function testCommand(opts: { prompt?: string; adapter?: string }): 
 }
 
 // ---------------------------------------------------------------------------
-// xorv logs
+// kazuo logs
 // ---------------------------------------------------------------------------
 
 export async function logsCommand(opts: { json?: boolean; limit?: string }): Promise<void> {
@@ -363,12 +363,12 @@ export async function logsCommand(opts: { json?: boolean; limit?: string }): Pro
     );
   }
   ui.blank();
-  ui.muted(`  ${rows.length} entries · this file is local; the ledger of record is on Hedera`);
+  ui.muted(`  ${rows.length} entries · this file is local; the ledger of record is the KazuoLog contract on Arc`);
   ui.blank();
 }
 
 // ---------------------------------------------------------------------------
-// xorv config
+// kazuo config
 // ---------------------------------------------------------------------------
 
 export async function configCommand(opts: { json?: boolean; path?: boolean }): Promise<void> {
@@ -380,7 +380,7 @@ export async function configCommand(opts: { json?: boolean; path?: boolean }): P
     return;
   }
   if (!config) {
-    throw new Error("this machine isn't set up yet — run `xorv init` first");
+    throw new Error("this machine isn't set up yet — run `kazuo init` first");
   }
   if (opts.json) {
     // The private key never goes to stdout — this output gets pasted into
@@ -418,7 +418,7 @@ export async function configCommand(opts: { json?: boolean; path?: boolean }): P
 }
 
 // ---------------------------------------------------------------------------
-// xorv completion
+// kazuo completion
 // ---------------------------------------------------------------------------
 
 const COMMANDS = [
@@ -443,9 +443,9 @@ export async function completionCommand(shell: string | undefined): Promise<void
   const target = (shell ?? process.env.SHELL?.split("/").pop() ?? "bash").toLowerCase();
 
   if (target.includes("zsh")) {
-    console.log(`#compdef xorv
-# Add to your shell:  xorv completion zsh > "\${fpath[1]}/_xorv"
-_xorv() {
+    console.log(`#compdef kazuo
+# Add to your shell:  kazuo completion zsh > "\${fpath[1]}/_kazuo"
+_kazuo() {
   local -a commands
   commands=(${COMMANDS.map((c) => `'${c}'`).join(" ")})
   _arguments '1: :->cmd' '*: :->args'
@@ -453,28 +453,28 @@ _xorv() {
     cmd) _describe 'command' commands ;;
   esac
 }
-_xorv "$@"`);
+_kazuo "$@"`);
     return;
   }
 
   if (target.includes("fish")) {
-    console.log(`# Add to your shell:  xorv completion fish > ~/.config/fish/completions/xorv.fish
-${COMMANDS.map((c) => `complete -c xorv -n __fish_use_subcommand -a ${c}`).join("\n")}`);
+    console.log(`# Add to your shell:  kazuo completion fish > ~/.config/fish/completions/kazuo.fish
+${COMMANDS.map((c) => `complete -c kazuo -n __fish_use_subcommand -a ${c}`).join("\n")}`);
     return;
   }
 
-  console.log(`# Add to your shell:  xorv completion bash >> ~/.bashrc
-_xorv_completions() {
+  console.log(`# Add to your shell:  kazuo completion bash >> ~/.bashrc
+_kazuo_completions() {
   local cur="\${COMP_WORDS[COMP_CWORD]}"
   if [ "$COMP_CWORD" -eq 1 ]; then
     COMPREPLY=( $(compgen -W "${COMMANDS.join(" ")}" -- "$cur") )
   fi
 }
-complete -F _xorv_completions xorv`);
+complete -F _kazuo_completions kazuo`);
 }
 
 // ---------------------------------------------------------------------------
-// xorv cancel
+// kazuo cancel
 // ---------------------------------------------------------------------------
 
 export async function cancelCommand(jobId: string, opts: { broker?: string }): Promise<void> {

@@ -92,7 +92,7 @@ export function Adapters() {
 
       <Reveal delay={0.1}>
         <p className="measure mx-auto mt-10 text-center text-[13.5px] leading-relaxed text-fg-3">
-          Grok&rsquo;s headless mode reports no tool steps, so Xorv claims none. Inferring edits by
+          Grok&rsquo;s headless mode reports no tool steps, so Kazuo claims none. Inferring edits by
           diffing the directory would put guesses in the job log wearing the same clothes as facts.
         </p>
       </Reveal>

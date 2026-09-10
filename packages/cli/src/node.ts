@@ -18,11 +18,12 @@ import {
   type DispatchedJob,
   type JobEvent,
   type RegisterRequest,
-} from "@xorv/protocol";
+} from "@kazuo/protocol";
 import { createAdapter } from "./adapters/index.js";
 import { makeJobDir, removeJobDir, type JobAdapter } from "./adapters/base.js";
-import { appendEarning, resolveBrokerUrl, type NodeConfig } from "./config.js";
+import { appendEarning, resolveBrokerUrl, resolvePrivateKey, type NodeConfig } from "./config.js";
 import { isPaused } from "./commands/manage.js";
+import { agentkitProof } from "./agentkit.js";
 
 export interface RegisterResult {
   providerId: string;
@@ -67,6 +68,8 @@ export class ProviderNode extends EventEmitter<ProviderNodeEvents> {
   readonly config: NodeConfig;
   private brokerUrl: string;
   private ws: WebSocket | null = null;
+  /** The control-channel URL most recently issued by the broker. */
+  private wsUrl: string | null = null;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private reconnectTimer: NodeJS.Timeout | null = null;
   private backoffMs = 1_000;
@@ -91,7 +94,7 @@ export class ProviderNode extends EventEmitter<ProviderNodeEvents> {
   publicUrl: string | null = null;
   private wasPaused = false;
 
-  /** True while `xorv pause` is in effect. */
+  /** True while `kazuo pause` is in effect. */
   get paused(): boolean {
     return this.wasPaused;
   }
@@ -121,9 +124,22 @@ export class ProviderNode extends EventEmitter<ProviderNodeEvents> {
       nodeId: this.config.nodeId,
     };
 
+    // World AgentKit: sign the broker's challenge with the payout key, so a node
+    // whose address is registered in AgentBook is labelled human-backed.
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const key = (() => {
+      try {
+        return resolvePrivateKey(this.config);
+      } catch {
+        return null;
+      }
+    })();
+    const proof = key ? await agentkitProof(this.brokerUrl, "register", key) : null;
+    if (proof) headers.agentkit = proof;
+
     const res = await fetch(`${this.brokerUrl}/api/providers/register`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(30_000),
     });
@@ -134,7 +150,7 @@ export class ProviderNode extends EventEmitter<ProviderNodeEvents> {
     }
 
     const result = (await res.json()) as {
-      provider: { id: string };
+      provider: { id: string; humanBacked?: boolean };
       token: string;
       wsUrl: string;
       registry: RegisterResult["registry"];
@@ -167,10 +183,20 @@ export class ProviderNode extends EventEmitter<ProviderNodeEvents> {
 
   private connect(wsUrl: string): void {
     if (this.stopped) return;
+    this.wsUrl = wsUrl;
     const ws = new WebSocket(wsUrl);
     this.ws = ws;
+    // A socket that has since been replaced must not touch shared state. Its
+    // `close` arrives asynchronously — after a re-registration has already
+    // opened the new channel — and used to mark the node disconnected and
+    // schedule a reconnect with the old, now-rejected token, forever.
+    const current = (): boolean => this.ws === ws;
 
     ws.on("open", () => {
+      if (!current()) {
+        ws.close();
+        return;
+      }
       this.stats.connected = true;
       this.backoffMs = 1_000;
       this.log("ok", "control channel open");
@@ -193,7 +219,8 @@ export class ProviderNode extends EventEmitter<ProviderNodeEvents> {
       }
     });
 
-    ws.on("close", () => {
+    ws.on("close", (code, reason) => {
+      if (!current()) return;
       this.stats.connected = false;
       this.emit("state");
       if (this.stopped) return;
@@ -201,8 +228,13 @@ export class ProviderNode extends EventEmitter<ProviderNodeEvents> {
       // Exponential backoff, capped — a broker that's down for a while
       // shouldn't be hammered, and a node left running overnight should still
       // rejoin promptly when it comes back.
-      this.log("warn", `control channel lost — retrying in ${Math.round(this.backoffMs / 1000)}s`);
-      this.reconnectTimer = setTimeout(() => this.connect(wsUrl), this.backoffMs);
+      // The close code says who ended it (1006 = dropped without a close frame,
+      // 4000 = superseded, 1001 = broker shutdown), which a bare "lost" hid.
+      const why = `code ${code}${reason.length > 0 ? `: ${reason.toString()}` : ""}`;
+      this.log("warn", `control channel lost (${why}) — retrying in ${Math.round(this.backoffMs / 1000)}s`);
+      // The latest URL, not this socket's: a re-registration may have issued a
+      // new token since this socket was opened.
+      this.reconnectTimer = setTimeout(() => this.connect(this.wsUrl ?? wsUrl), this.backoffMs);
       this.reconnectTimer.unref?.();
       this.backoffMs = Math.min(this.backoffMs * 2, 30_000);
     });
@@ -210,6 +242,24 @@ export class ProviderNode extends EventEmitter<ProviderNodeEvents> {
     ws.on("error", (err) => {
       this.stats.lastError = err instanceof Error ? err.message : String(err);
     });
+  }
+
+  /**
+   * Replace the control channel after re-registering — new token, new URL.
+   *
+   * Cancels any reconnect still aimed at the old URL, and detaches the old
+   * socket before closing it so its late `close` event is ignored.
+   */
+  switchControlChannel(wsUrl: string): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    const old = this.ws;
+    this.ws = null;
+    old?.close();
+    this.backoffMs = 1_000;
+    this.connect(wsUrl);
   }
 
   private async heartbeat(): Promise<void> {
@@ -254,10 +304,7 @@ export class ProviderNode extends EventEmitter<ProviderNodeEvents> {
         this.log("warn", "broker no longer recognises this node — re-registering");
         const endpoint = this.publicUrl ?? "local";
         const result = await this.register(endpoint).catch(() => null);
-        if (result) {
-          this.ws?.close();
-          this.connect(result.wsUrl);
-        }
+        if (result) this.switchControlChannel(result.wsUrl);
       }
     } catch (err) {
       this.stats.lastError = err instanceof Error ? err.message : String(err);

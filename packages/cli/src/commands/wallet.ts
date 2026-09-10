@@ -1,9 +1,9 @@
 /**
- * `xorv wallet` — the payout account.
+ * `kazuo wallet` — the payout account.
  *
  * ## The command that no longer exists
  *
- * On Hedera this file had a second command, `xorv wallet associate`, and a long
+ * On Hedera this file had a second command, `kazuo wallet associate`, and a long
  * comment about why: an account must opt in to a token before it can receive
  * it, or the transfer dies at consensus with `TOKEN_NOT_ASSOCIATED_TO_ACCOUNT`.
  * Worse, opting in cost HBAR — so a new provider had to acquire the gas token
@@ -28,7 +28,7 @@ import {
   formatUsdc,
   networkLabel,
   usdcAddress,
-} from "@xorv/protocol";
+} from "@kazuo/protocol";
 import { loadConfig, requireConfig, saveConfig } from "../config.js";
 import * as ui from "../ui.js";
 
@@ -54,7 +54,7 @@ export async function walletShow(): Promise<void> {
             `${ui.c.muted(formatNative(balances.nativeWei))} ${
               balances.viewsAgree
                 ? ui.c.muted("(18dp view of the same balance)")
-                : ui.c.bad("(MISMATCH — XORV_STABLECOIN is not Arc's USDC)")
+                : ui.c.bad("(MISMATCH — KAZUO_STABLECOIN is not Arc's USDC)")
             }`,
           ],
           ["token", ui.c.muted(`${token}  ${explorerToken(config.network, token)}`)],

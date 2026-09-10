@@ -1,5 +1,5 @@
 /**
- * XorvLog — the public audit trail.
+ * KazuoLog — the public audit trail.
  *
  * Three append-only streams carry the facts a marketplace has to be honest
  * about: who joined, who was actually alive, and what each job paid. The broker
@@ -19,15 +19,23 @@
  * not swallowed silently.
  */
 
-import { getAddress, keccak256, toHex, type Address, type PublicClient, type WalletClient } from "viem";
+import {
+  getAddress,
+  keccak256,
+  parseEventLogs,
+  toHex,
+  type Address,
+  type PublicClient,
+  type WalletClient,
+} from "viem";
 import { LOG_KIND, LOG_SCHEMA_VERSION, logAddress, rpcUrl } from "./constants.js";
 import { readClient } from "./chain.js";
 import type { LogEnvelope, LogMessageKind } from "./types.js";
-import { XORV_LOG_ABI } from "./xorv-log.abi.js";
+import { KAZUO_LOG_ABI } from "./kazuo-log.abi.js";
 
-export { XORV_LOG_ABI };
+export { KAZUO_LOG_ABI };
 
-/** Wrap a payload in the versioned envelope every Xorv log entry uses. */
+/** Wrap a payload in the versioned envelope every Kazuo log entry uses. */
 export function envelope<T>(kind: LogMessageKind, data: T): LogEnvelope<T> {
   return { v: LOG_SCHEMA_VERSION, kind, at: Date.now(), data };
 }
@@ -91,7 +99,7 @@ export async function appendEntry(
 
   const hash = await clients.wallet.writeContract({
     address: getAddress(address),
-    abi: XORV_LOG_ABI,
+    abi: KAZUO_LOG_ABI,
     functionName: "append",
     args: [kindNumber(kind), subjectOf(subject), body],
     account,
@@ -159,7 +167,7 @@ const MAX_WINDOWS = 40;
 
 /** Where the deployed contract starts, so a scan knows when to stop walking. */
 export function logFromBlock(): bigint {
-  const raw = process.env.XORV_LOG_FROM_BLOCK?.trim();
+  const raw = process.env.KAZUO_LOG_FROM_BLOCK?.trim();
   const parsed = raw ? BigInt(raw) : 0n;
   return parsed > 0n ? parsed : 0n;
 }
@@ -202,7 +210,7 @@ export async function readLog(
 
     const events = await client.getContractEvents({
       address: getAddress(address) as Address,
-      abi: XORV_LOG_ABI,
+      abi: KAZUO_LOG_ABI,
       eventName: "Entry",
       args,
       fromBlock,
@@ -210,31 +218,8 @@ export async function readLog(
     });
 
     // Newest first, matching what a feed wants to render.
-    for (const e of [...events].reverse()) {
-      const a = e.args as {
-        kind?: number;
-        subject?: `0x${string}`;
-        author?: string;
-        seq?: bigint;
-        payload?: string;
-      };
-      let payload: unknown = null;
-      try {
-        payload = a.payload ? JSON.parse(a.payload) : null;
-      } catch {
-        // An entry someone else wrote in a shape we don't recognise. Surfaced
-        // as null rather than thrown, so one foreign entry can't break the feed.
-        payload = null;
-      }
-      collected.push({
-        kind: kindName(Number(a.kind ?? 0)),
-        subject: a.subject ?? "0x",
-        author: a.author ?? "",
-        sequence: Number(a.seq ?? 0n),
-        payload,
-        blockNumber: Number(e.blockNumber),
-        transactionHash: e.transactionHash,
-      });
+    for (const entry of decodeEntryEvents(events).reverse()) {
+      collected.push(entry);
       if (collected.length >= limit) break;
     }
 
@@ -245,6 +230,109 @@ export async function readLog(
   return collected;
 }
 
+/** The decoded shape of an `Entry` event as viem returns it. */
+interface EntryEvent {
+  args: unknown;
+  blockNumber: bigint | null;
+  transactionHash: string | null;
+}
+
+/**
+ * Turn raw `Entry` events into log entries, oldest first.
+ *
+ * Shared by every reader, so a receipt looks identical whether it came from a
+ * backwards scan, a forward index or a known transaction hash.
+ */
+export function decodeEntryEvents(events: readonly EntryEvent[]): LogEntry[] {
+  return events.map((e) => {
+    const a = e.args as {
+      kind?: number;
+      subject?: `0x${string}`;
+      author?: string;
+      seq?: bigint;
+      payload?: string;
+    };
+    let payload: unknown = null;
+    try {
+      payload = a.payload ? JSON.parse(a.payload) : null;
+    } catch {
+      // An entry someone else wrote in a shape we don't recognise. Surfaced
+      // as null rather than thrown, so one foreign entry can't break the feed.
+      payload = null;
+    }
+    return {
+      kind: kindName(Number(a.kind ?? 0)),
+      subject: a.subject ?? "0x",
+      author: a.author ?? "",
+      sequence: Number(a.seq ?? 0n),
+      payload,
+      blockNumber: Number(e.blockNumber ?? 0n),
+      transactionHash: e.transactionHash ?? "",
+    };
+  });
+}
+
+/**
+ * Every entry in one block window, oldest first.
+ *
+ * The primitive a forward index is built from: one `eth_getLogs` call, never
+ * wider than the RPC allows. Throws on RPC errors (including rate limits) so
+ * the caller can back off rather than record a gap as "empty".
+ */
+export async function readLogRange(
+  network: string,
+  opts: { address: string; fromBlock: bigint; toBlock: bigint },
+): Promise<LogEntry[]> {
+  if (opts.toBlock - opts.fromBlock + 1n > LOG_WINDOW_BLOCKS + 1n) {
+    throw new Error(`window of ${opts.toBlock - opts.fromBlock + 1n} blocks exceeds ${LOG_WINDOW_BLOCKS}`);
+  }
+  const events = await readClient(network).getContractEvents({
+    address: getAddress(opts.address) as Address,
+    abi: KAZUO_LOG_ABI,
+    eventName: "Entry",
+    fromBlock: opts.fromBlock,
+    toBlock: opts.toBlock,
+  });
+  return decodeEntryEvents(events);
+}
+
+/**
+ * The entries a set of known transactions emitted.
+ *
+ * One `eth_getTransactionReceipt` per hash, no block scanning — so entries the
+ * broker itself published are readable immediately, however far back they are.
+ * A transaction that emitted nothing from `address` contributes nothing.
+ */
+export async function readLogFromTransactions(
+  network: string,
+  address: string,
+  transactionHashes: readonly string[],
+): Promise<LogEntry[]> {
+  const client = readClient(network);
+  const target = getAddress(address).toLowerCase();
+  const out: LogEntry[] = [];
+  for (const hash of transactionHashes) {
+    let receipt;
+    try {
+      receipt = await client.getTransactionReceipt({ hash: hash as `0x${string}` });
+    } catch (err) {
+      // Arc's public RPC does not serve historical transaction lookups: a
+      // month-old receipt comes back as "not found" even though the block and
+      // its logs exist. That hash is skipped — a block-range reader can still
+      // recover the entry — while every other error (rate limits included)
+      // propagates so the caller can back off.
+      if ((err as { name?: string })?.name === "TransactionReceiptNotFoundError") continue;
+      throw err;
+    }
+    const ours = receipt.logs.filter((l) => l.address.toLowerCase() === target);
+    const decoded = parseEventLogs({ abi: KAZUO_LOG_ABI, eventName: "Entry", logs: ours });
+    out.push(...decodeEntryEvents(decoded));
+  }
+  return out;
+}
+
+export { LOG_WINDOW_BLOCKS };
+
 /** Total entries ever published, straight from the contract. */
 export async function logCount(network: string, address?: string): Promise<number> {
   const target = address ?? logAddress();
@@ -252,7 +340,7 @@ export async function logCount(network: string, address?: string): Promise<numbe
   const client = readClient(network);
   const count = await client.readContract({
     address: getAddress(target),
-    abi: XORV_LOG_ABI,
+    abi: KAZUO_LOG_ABI,
     functionName: "count",
   });
   return Number(count);
@@ -267,7 +355,7 @@ export async function logDeployed(network: string, address?: string): Promise<bo
   return Boolean(code && code !== "0x");
 }
 
-/** Which RPC a reader would use — surfaced by `xorv doctor`. */
+/** Which RPC a reader would use — surfaced by `kazuo doctor`. */
 export function logRpc(network: string): string {
   return rpcUrl(network);
 }

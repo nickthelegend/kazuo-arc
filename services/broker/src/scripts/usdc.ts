@@ -27,7 +27,7 @@ import {
   networkLabel,
   usdcAddress,
   usdcDomain,
-} from "@xorv/protocol";
+} from "@kazuo/protocol";
 import { loadConfig } from "../config.js";
 
 const config = loadConfig();
@@ -37,12 +37,12 @@ const USDC = usdcAddress(network);
 /** Every account the demo cares about, and what it actually needs. */
 const ACCOUNTS: Array<{ address: string | undefined; label: string; needs: string }> = [
   {
-    address: process.env.XORV_DEMO_PAYER_ADDRESS,
+    address: process.env.KAZUO_DEMO_PAYER_ADDRESS,
     label: "buyer",
     needs: "USDC to spend — needs no gas, it never broadcasts",
   },
   {
-    address: process.env.XORV_DEMO_PROVIDER_ADDRESS,
+    address: process.env.KAZUO_DEMO_PROVIDER_ADDRESS,
     label: "provider",
     needs: "nothing — it only receives",
   },

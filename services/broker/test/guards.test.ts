@@ -68,7 +68,7 @@ describe("rateLimit", () => {
 
 describe("clientIp", () => {
   it("ignores proxy headers unless explicitly told to trust them", () => {
-    delete process.env.XORV_TRUST_PROXY;
+    delete process.env.KAZUO_TRUST_PROXY;
     const c = {
       req: { header: (n: string) => (n === "x-forwarded-for" ? "1.2.3.4" : undefined) },
       env: undefined,
@@ -79,13 +79,13 @@ describe("clientIp", () => {
   });
 
   it("uses X-Forwarded-For when the operator opts in", () => {
-    process.env.XORV_TRUST_PROXY = "1";
+    process.env.KAZUO_TRUST_PROXY = "1";
     const c = {
       req: { header: (n: string) => (n === "x-forwarded-for" ? "1.2.3.4, 5.6.7.8" : undefined) },
       env: undefined,
     } as never;
     expect(clientIp(c)).toBe("1.2.3.4");
-    delete process.env.XORV_TRUST_PROXY;
+    delete process.env.KAZUO_TRUST_PROXY;
   });
 });
 
@@ -128,10 +128,11 @@ describe("requestLog", () => {
 
 describe("Metrics", () => {
   const chain: ChainLike = {
-    network: "hedera:testnet",
-    operatorId: "0.0.1",
-    settlementClient: null as never,
-    describeTopics: () => ({ registry: null, heartbeat: null, receipts: null }),
+    network: "eip155:5042002",
+    operatorAddress: "0xeEE4CA97A7Af69B42d9cafD3955735C1130eB51E",
+    publicClient: null as never,
+    walletClient: null as never,
+    describeLog: () => null,
     counts: () => ({ registry: 2, heartbeat: 7, receipts: 5 }),
     lastPublishError: () => null,
     publishRegistration: async () => null,
@@ -146,48 +147,48 @@ describe("Metrics", () => {
 
   it("emits valid exposition format with HELP and TYPE for every series", () => {
     const m = new Metrics();
-    m.inc("xorv_quotes_total");
+    m.inc("kazuo_quotes_total");
     const out = render(m);
     for (const line of out.trim().split("\n")) {
       expect(line).toMatch(/^(#|[a-z_]+(\{.*\})? -?[\d.]+$)/);
     }
-    expect(out).toContain("# TYPE xorv_uptime_seconds gauge");
-    expect(out).toContain("xorv_providers_connected 3");
+    expect(out).toContain("# TYPE kazuo_uptime_seconds gauge");
+    expect(out).toContain("kazuo_providers_connected 3");
   });
 
   it("counts and labels", () => {
     const m = new Metrics();
-    m.inc("xorv_errors_total", { path: "/api/quotes" });
-    m.inc("xorv_errors_total", { path: "/api/quotes" });
-    m.inc("xorv_errors_total", { path: "/other" });
+    m.inc("kazuo_errors_total", { path: "/api/quotes" });
+    m.inc("kazuo_errors_total", { path: "/api/quotes" });
+    m.inc("kazuo_errors_total", { path: "/other" });
     const out = render(m);
-    expect(out).toContain('xorv_errors_total{path="/api/quotes"} 2');
-    expect(out).toContain('xorv_errors_total{path="/other"} 1');
+    expect(out).toContain('kazuo_errors_total{path="/api/quotes"} 2');
+    expect(out).toContain('kazuo_errors_total{path="/other"} 1');
   });
 
   it("summarises durations as quantiles in seconds", () => {
     const m = new Metrics();
-    for (const ms of [100, 200, 300, 400, 500]) m.observe("xorv_job_duration", ms);
+    for (const ms of [100, 200, 300, 400, 500]) m.observe("kazuo_job_duration", ms);
     const out = render(m);
-    expect(out).toContain("# TYPE xorv_job_duration_seconds summary");
-    expect(out).toContain('xorv_job_duration_seconds{quantile="0.5"}');
-    expect(out).toContain("xorv_job_duration_seconds_count 5");
+    expect(out).toContain("# TYPE kazuo_job_duration_seconds summary");
+    expect(out).toContain('kazuo_job_duration_seconds{quantile="0.5"}');
+    expect(out).toContain("kazuo_job_duration_seconds_count 5");
   });
 
   it("escapes label values so a hostile path can't break the format", () => {
     const m = new Metrics();
-    m.inc("xorv_errors_total", { path: 'a"b\\c\nd' });
-    expect(render(m)).toContain('xorv_errors_total{path="a\\"b\\\\c\\nd"} 1');
+    m.inc("kazuo_errors_total", { path: 'a"b\\c\nd' });
+    expect(render(m)).toContain('kazuo_errors_total{path="a\\"b\\\\c\\nd"} 1');
   });
 
   it("bounds retained histogram samples", () => {
     const m = new Metrics();
-    for (let i = 0; i < 5_000; i += 1) m.observe("xorv_job_duration", i);
-    expect(render(m)).toContain("xorv_job_duration_seconds_count 1000");
+    for (let i = 0; i < 5_000; i += 1) m.observe("kazuo_job_duration", i);
+    expect(render(m)).toContain("kazuo_job_duration_seconds_count 1000");
   });
 
   it("reports audit-log entry counts per stream", () => {
     const out = render(new Metrics());
-    expect(out).toContain('xorv_audit_entries_total{stream="receipts"} 5');
+    expect(out).toContain('kazuo_audit_entries_total{stream="receipts"} 5');
   });
 });

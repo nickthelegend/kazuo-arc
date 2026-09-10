@@ -40,9 +40,9 @@ const env = Object.fromEntries(
 ) as Record<string, string>;
 
 const BROKER = (process.env.BROKER ?? "http://localhost:8402").replace(/\/+$/, "");
-const KEY = (process.env.XORV_DEMO_PAYER_KEY ?? env.XORV_DEMO_PAYER_KEY) as `0x${string}`;
+const KEY = (process.env.KAZUO_DEMO_PAYER_KEY ?? env.KAZUO_DEMO_PAYER_KEY) as `0x${string}`;
 if (!KEY) {
-  console.error("Set XORV_DEMO_PAYER_KEY (or put it in .env).");
+  console.error("Set KAZUO_DEMO_PAYER_KEY (or put it in .env).");
   process.exit(1);
 }
 

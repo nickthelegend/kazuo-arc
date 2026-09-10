@@ -1,6 +1,6 @@
 # Security
 
-Xorv runs untrusted prompts on volunteers' machines and moves real money. This
+Kazuo runs untrusted prompts on volunteers' machines and moves real money. This
 document says what is protected, what isn't, and where the line is — because a
 security page that only lists reassurances is worse than none.
 
@@ -15,14 +15,14 @@ something exploitable.
 
 ## The provider risk, stated plainly
 
-**A Xorv provider executes prompts written by strangers, on their own machine,
+**A Kazuo provider executes prompts written by strangers, on their own machine,
 against their own paid AI subscription.** That is the product, and it is the
 risk.
 
-### What Xorv does
+### What Kazuo does
 
 Every job is spawned through `packages/cli/src/sandbox.ts`, which applies the
-strongest containment the host can provide. `xorv doctor` names the active tier
+strongest containment the host can provide. `kazuo doctor` names the active tier
 rather than saying "sandboxed", so an operator can tell which one they have.
 
 | Tier | Where | What it enforces |
@@ -42,10 +42,10 @@ On every tier:
   bomb or a disk-filling loop hits a wall instead of the machine.
 - **A fresh directory per job**, deleted when the job ends, pass or fail. Job ids
   are sanitised before being used as path components.
-- **`XORV_SAFE_MODE=1`** disables tools entirely and leaves pure text generation.
+- **`KAZUO_SAFE_MODE=1`** disables tools entirely and leaves pure text generation.
 - **Timeouts kill the process group**, not just the direct child.
 
-Under `seatbelt` and `bwrap`, these are unreadable by a job: `~/.xorv` (**the
+Under `seatbelt` and `bwrap`, these are unreadable by a job: `~/.kazuo` (**the
 payout private key**), `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gh`,
 `~/.npmrc`, `~/.docker`, `~/.kube`, the macOS Keychain, and browser profiles.
 Writes outside the job directory fail.
@@ -63,7 +63,7 @@ and injects only that token into each job (`packages/cli/src/credentials.ts`).
 The job runs with the Keychain denied outright: the agent still authenticates,
 and `security` returns nothing to anyone who asks it for something else.
 
-### What Xorv does not do
+### What Kazuo does not do
 
 **A job can still read the agent session it is running.** The token is in the
 job's own environment, because the agent needs it. That is the capacity being
@@ -75,7 +75,7 @@ with neither, `doctor` reports `limits` or `env` and warns.
 For a real boundary on any host:
 
 ```bash
-XORV_SANDBOX=container xorv start
+KAZUO_SANDBOX=container kazuo start
 ```
 
 The threat model to hold in your head is "someone I have never met gets to run
@@ -84,7 +84,7 @@ code as me, for a tenth of a cent".
 ### Terms of service
 
 Most consumer AI subscriptions are licensed to an individual, and reselling that
-capacity may breach them. Xorv is infrastructure and does not decide this for
+capacity may breach them. Kazuo is infrastructure and does not decide this for
 you. Run it against quota you are entitled to share, a plan that permits it, or
 your own local models via the `openai-compatible` adapter.
 
@@ -94,14 +94,14 @@ your own local models via the `openai-compatible` adapter.
 
 | Key | Where it lives | Why |
 |---|---|---|
-| Provider payout key | `~/.xorv/config.json`, mode `0600`, directory `0700` | Hot key — it must sign with no human present. A passphrase would either be typed once and held in memory anyway, or written next to the key. |
-| Broker operator key | `.env` (gitignored) or the environment | Pays gas as facilitator and writes HCS. |
+| Provider payout key | `~/.kazuo/config.json`, mode `0600`, directory `0700` | Hot key — it must sign with no human present. A passphrase would either be typed once and held in memory anyway, or written next to the key. |
+| Broker operator key | `.env` (gitignored) or the environment | Pays gas as facilitator and writes the KazuoLog audit contract. |
 | App demo payer key | `.env.local`, server-side only | Never `NEXT_PUBLIC_`. It signs payments. |
 
-Override the provider key with `XORV_PRIVATE_KEY` to keep it in a real secret
-manager instead of on disk. Rotate with `xorv wallet new`.
+Override the provider key with `KAZUO_PRIVATE_KEY` to keep it in a real secret
+manager instead of on disk. Rotate with `kazuo wallet new`.
 
-**The CLI never prints a private key to stdout.** `xorv config --json` redacts
+**The CLI never prints a private key to stdout.** `kazuo config --json` redacts
 it, because that output gets pasted into issues and chat windows.
 
 ---
@@ -118,7 +118,7 @@ it, because that output gets pasted into issues and chat windows.
   account key** and preflights balance and token association before settling.
   Both fail closed.
 - **The MCP server carries a hard per-call spending ceiling**
-  (`XORV_MAX_USD`, default `$0.05`), enforced client-side as well as by the
+  (`KAZUO_MAX_USD`, default `$0.05`), enforced client-side as well as by the
   broker. A model that can spend without a bound is a model that can empty an
   account through a loop it did not mean to write.
 
@@ -140,7 +140,7 @@ The broker is designed to face the internet:
   five minutes and costs nothing, which is the obvious thing to abuse.
 - Body-size limits before parsing; prompts additionally capped at 20k chars.
 - Proxy headers (`X-Forwarded-For`) are trusted **only** when
-  `XORV_TRUST_PROXY=1`. Trusting them by default makes the limiter useless,
+  `KAZUO_TRUST_PROXY=1`. Trusting them by default makes the limiter useless,
   since anyone can set the header themselves.
 - Provider callbacks are authenticated by bearer token **and** checked against
   job ownership, so one provider cannot post results for another's job.

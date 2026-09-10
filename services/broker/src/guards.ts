@@ -29,7 +29,7 @@ interface Bucket {
  * Deliberately not a token bucket or a Redis-backed sliding window: this is one
  * process, the goal is to stop trivial abuse rather than to be exact at the
  * boundary, and a limiter that itself needs infrastructure is a limiter that
- * gets switched off. If Xorv ever runs more than one broker, this is the piece
+ * gets switched off. If Kazuo ever runs more than one broker, this is the piece
  * that moves to shared state — and the interface won't change.
  */
 export function rateLimit(options: RateLimitOptions) {
@@ -82,12 +82,12 @@ export function rateLimit(options: RateLimitOptions) {
 /**
  * Best-effort client address.
  *
- * Proxy headers are trusted only when `XORV_TRUST_PROXY` says to. Trusting
+ * Proxy headers are trusted only when `KAZUO_TRUST_PROXY` says to. Trusting
  * `X-Forwarded-For` by default would make the limiter useless the moment
  * anyone sets that header themselves — which is to say, immediately.
  */
 export function clientIp(c: Context): string {
-  if (process.env.XORV_TRUST_PROXY === "1") {
+  if (process.env.KAZUO_TRUST_PROXY === "1") {
     const forwarded = c.req.header("x-forwarded-for");
     if (forwarded) return forwarded.split(",")[0]!.trim();
     const real = c.req.header("x-real-ip");

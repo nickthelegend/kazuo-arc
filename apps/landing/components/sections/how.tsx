@@ -23,7 +23,7 @@ const STEPS = [
   {
     n: "03",
     title: "The buyer signs an authorization",
-    body: "Not a transaction — an EIP-3009 authorization, which is typed data. It is never broadcast and never enters a mempool. Xorv's facilitator relays it and pays the fee, so the buyer needs nothing but the stablecoin.",
+    body: "Not a transaction — an EIP-3009 authorization, which is typed data. It is never broadcast and never enters a mempool. Kazuo's facilitator relays it and pays the fee, so the buyer needs nothing but the stablecoin.",
   },
   {
     n: "04",
@@ -43,7 +43,7 @@ export function How() {
       <Reveal>
         <SectionHeading
           title="A job, a payment and a receipt — in one request"
-          sub="x402 turns HTTP 402 from a status code nobody used into a working payment rail. Xorv runs the whole loop on Arc, where the money and the gas are the same asset."
+          sub="x402 turns HTTP 402 from a status code nobody used into a working payment rail. Kazuo runs the whole loop on Arc, where the money and the gas are the same asset."
         />
       </Reveal>
 

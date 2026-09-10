@@ -1,11 +1,22 @@
 {
-  "name": "@xorv/mcp",
+  "name": "@kazuo/mcp",
   "version": "0.1.0",
-  "description": "MCP server for Xorv \u2014 lets any agent buy AI capacity from the network and pay for it over x402 on Arc.",
+  "description": "MCP server for Kazuo — lets any agent buy AI capacity from the network and pay for it over x402 on Arc.",
   "license": "MIT",
+  "author": "Nivesh Gajengi <niveshgajengi@gmail.com>",
+  "homepage": "https://github.com/nickthelegend/kazuo-arc#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nickthelegend/kazuo-arc.git",
+    "directory": "packages/mcp"
+  },
+  "bugs": "https://github.com/nickthelegend/kazuo-arc/issues",
   "type": "module",
+  "engines": {
+    "node": ">=20.11.0"
+  },
   "bin": {
-    "xorv-mcp": "./dist/index.js"
+    "kazuo-mcp": "./dist/index.js"
   },
   "main": "./dist/index.js",
   "files": [
@@ -21,7 +32,9 @@
     "arc",
     "usdc",
     "ai-agents",
-    "model-context-protocol"
+    "model-context-protocol",
+    "worldcoin",
+    "agentkit"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && chmod +x dist/index.js",
@@ -30,11 +43,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@kazuo/protocol": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "@worldcoin/agentkit": "^0.2.1",
     "@x402/core": "~2.21.0",
     "@x402/evm": "~2.21.0",
     "@x402/fetch": "~2.21.0",
-    "@xorv/protocol": "workspace:*",
     "viem": "^2.40.0",
     "zod": "^3.24.1"
   },

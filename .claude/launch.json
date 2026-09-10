@@ -4,14 +4,48 @@
     {
       "name": "landing",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "xorv-landing", "dev"],
+      "runtimeArgs": ["--filter", "kazuo-landing", "dev"],
       "port": 3000
     },
     {
       "name": "app",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "xorv-app", "dev"],
+      "runtimeArgs": ["--filter", "kazuo-app", "dev"],
       "port": 3002
+    },
+    {
+      "name": "tunnel",
+      "runtimeExecutable": "cloudflared",
+      "runtimeArgs": [
+        "tunnel",
+        "--no-autoupdate",
+        "--metrics",
+        "localhost:8412",
+        "--url",
+        "http://localhost:8402"
+      ],
+      "port": 8412
+    },
+    {
+      "name": "broker",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "KAZUO_BROKER_URL=https://surround-ports-prime-audience.trycloudflare.com",
+        "KAZUO_CORS_ORIGINS=",
+        "KAZUO_TRUST_PROXY=1",
+        "node",
+        "services/broker/dist/index.js"
+      ],
+      "port": 8402
+    },
+    {
+      "name": "provider",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": [
+        "-c",
+        "export KAZUO_HOME=\"$HOME/.kazuo-arc-demo/provider\" KAZUO_BROKER_URL=http://localhost:8402 KAZUO_SANDBOX=none; export KAZUO_PRIVATE_KEY=\"$(grep '^KAZUO_DEMO_PROVIDER_KEY=' .env | cut -d= -f2)\"; exec node packages/cli/dist/index.js start --port 8411"
+      ],
+      "port": 8411
     }
   ]
 }

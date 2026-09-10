@@ -5,7 +5,7 @@
 ```bash
 pnpm install
 cp .env.example .env          # claim Arc testnet USDC at faucet.circle.com
-pnpm --filter @xorv/broker setup   # creates the 3 HCS topics + demo accounts
+pnpm --filter @kazuo/broker setup   # checks the config and reports what is funded
 pnpm build
 pnpm test
 ```
@@ -14,7 +14,7 @@ Three terminals to run the whole thing:
 
 ```bash
 pnpm broker    # coordinator + facilitator on :8402
-xorv start     # a provider node
+kazuo start     # a provider node
 pnpm app       # job board on :3002
 ```
 

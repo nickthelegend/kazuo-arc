@@ -34,8 +34,8 @@ if (!to || !amount) {
   process.exit(1);
 }
 
-const from = privateKeyToAccount(env.XORV_DEMO_PAYER_KEY as `0x${string}`);
-const transport = http(env.XORV_RPC_URL);
+const from = privateKeyToAccount(env.KAZUO_DEMO_PAYER_KEY as `0x${string}`);
+const transport = http(env.KAZUO_RPC_URL);
 const publicClient = createPublicClient({ chain: arcTestnet, transport });
 const wallet = createWalletClient({ account: from, chain: arcTestnet, transport });
 
@@ -50,4 +50,4 @@ console.log("  tx", hash);
 const receipt = await publicClient.waitForTransactionReceipt({ hash });
 console.log("  status", receipt.status, "· block", receipt.blockNumber);
 console.log("  recipient now holds", formatEther(await publicClient.getBalance({ address: to as `0x${string}` })), "USDC");
-console.log(`  ${env.XORV_EXPLORER}/tx/${hash}`);
+console.log(`  ${env.KAZUO_EXPLORER}/tx/${hash}`);

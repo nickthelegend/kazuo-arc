@@ -10,7 +10,7 @@
  * banner line on stdout should not cost the provider a payment.
  */
 
-import type { AdapterKind } from "@xorv/protocol";
+import type { AdapterKind } from "@kazuo/protocol";
 import {
   clampResult,
   cliAvailable,
@@ -24,7 +24,7 @@ export class ClaudeCodeAdapter implements JobAdapter {
   readonly kind: AdapterKind = "claude-code";
   readonly installHint = "npm i -g @anthropic-ai/claude-code, then run `claude` once to sign in";
 
-  private readonly bin = process.env.XORV_CLAUDE_BIN || "claude";
+  private readonly bin = process.env.KAZUO_CLAUDE_BIN || "claude";
 
   async available(): Promise<boolean> {
     return cliAvailable(this.bin);

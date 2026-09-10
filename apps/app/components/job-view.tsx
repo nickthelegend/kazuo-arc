@@ -70,7 +70,7 @@ export function JobView({ jobId, initial }: { jobId: string; initial: Job | null
       if (next.events) setEvents(next.events);
       source.close();
       setStreaming(false);
-      // The HCS receipt is written a beat after settlement, so one delayed
+      // The on-chain receipt is written a beat after settlement, so one delayed
       // refetch turns "publishing…" into a real link without polling forever.
       setTimeout(() => {
         void api.job(jobId).then(setJob).catch(() => {});
@@ -97,7 +97,7 @@ export function JobView({ jobId, initial }: { jobId: string; initial: Job | null
         : 0;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
       <div className="min-w-0 space-y-6">
         <div>
           <div className="flex items-center justify-between gap-3">
@@ -192,6 +192,8 @@ export function JobView({ jobId, initial }: { jobId: string; initial: Job | null
             <Row label="events">
               <span className="tnum">{job.eventCount}</span>
             </Row>
+            <Row label="provider human-backed">{job.providerHumanBacked ? "yes — World ID" : "not proven"}</Row>
+            <Row label="buyer human-backed">{job.buyerHumanBacked ? "yes — World ID" : "not proven"}</Row>
           </div>
         </Panel>
 
@@ -247,7 +249,7 @@ export function JobView({ jobId, initial }: { jobId: string; initial: Job | null
             </>
           ) : (
             <p className="mt-2 text-[12.5px] leading-relaxed text-fg-3">
-              Settling on Hedera — this usually takes about three seconds.
+              Settling on Arc — this usually takes about a second.
             </p>
           )}
         </Panel>

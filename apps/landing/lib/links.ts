@@ -1,14 +1,16 @@
-export const REPO_URL = "https://github.com/nickthelegend/xorv";
+export const REPO_URL = "https://github.com/nickthelegend/kazuo-arc";
 /** Public broker the live-stats strip reads. Optional: the page works without it. */
 export const BROKER_URL = (
-  process.env.NEXT_PUBLIC_XORV_BROKER_URL ?? "http://localhost:8402"
+  process.env.NEXT_PUBLIC_KAZUO_BROKER_URL ?? "http://localhost:8402"
 ).replace(/\/+$/, "");
-export const APP_URL = process.env.NEXT_PUBLIC_XORV_APP_URL ?? "http://localhost:3002";
+export const APP_URL = process.env.NEXT_PUBLIC_KAZUO_APP_URL ?? "http://localhost:3002";
 export const LOOM_URL = "https://loompad.tech";
 export const X402_URL = "https://x402.org";
 export const ARC_URL = "https://www.circle.com/arc";
 export const CIRCLE_URL = "https://www.circle.com";
-export const NPM_URL = "https://www.npmjs.com/package/@xorv/cli";
+export const WORLD_AGENTKIT_URL = "https://docs.world.org/agents/agent-kit/integrate";
+export const PRIVY_URL = "https://www.privy.io";
+export const NPM_URL = "https://www.npmjs.com/package/@kazuo/cli";
 
 /**
  * The live testnet ids this site links to.

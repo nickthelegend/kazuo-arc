@@ -8,10 +8,10 @@
  */
 
 export const BROKER_URL = (
-  process.env.NEXT_PUBLIC_XORV_BROKER_URL ?? "http://localhost:8402"
+  process.env.NEXT_PUBLIC_KAZUO_BROKER_URL ?? "http://localhost:8402"
 ).replace(/\/+$/, "");
 
-export const NETWORK = process.env.NEXT_PUBLIC_XORV_NETWORK ?? "eip155:5042002";
+export const NETWORK = process.env.NEXT_PUBLIC_KAZUO_NETWORK ?? "eip155:5042002";
 
 export interface Capability {
   id: string;
@@ -43,6 +43,8 @@ export interface Provider {
     earnedUsdcMicros: number;
     avgDurationMs: number;
   };
+  /** Operator proved a real human is behind the payout address (World AgentKit). */
+  humanBacked?: boolean;
 }
 
 export interface PaymentRecord {
@@ -83,6 +85,10 @@ export interface Job {
   resultHash: string | null;
   error: string | null;
   receiptTxHash: string | null;
+  /** The provider was human-backed (World AgentKit) when the job was quoted. */
+  providerHumanBacked?: boolean;
+  /** The buyer — often an agent — proved a human behind it. */
+  buyerHumanBacked?: boolean;
   eventCount: number;
   events?: JobEvent[];
 }

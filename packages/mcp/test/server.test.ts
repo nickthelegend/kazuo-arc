@@ -13,11 +13,21 @@
 
 import { afterEach, describe, expect, it } from "vitest";
 import { spawn, type ChildProcess } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const entry = path.resolve(here, "../src/index.ts");
+// The workspace's own tsx, not `npx tsx`: npx re-resolves the package on every
+// spawn, and on a slow disk that alone outlasted the handshake budget — the
+// suite then failed on timing, not on the protocol it exists to check.
+const tsx = path.resolve(here, "../node_modules/.bin/tsx");
+// Prefer the built server — it is the artifact that ships, and it starts
+// without transpiling on every spawn. `pnpm build` runs before `pnpm test` in
+// CI; without a build the suite falls back to running the source through tsx.
+const built = path.resolve(here, "../dist/index.js");
+const [command, args] = fs.existsSync(built) ? [process.execPath, [built]] : [tsx, [entry]];
 
 interface Rpc {
   id?: number;
@@ -37,13 +47,13 @@ class Client {
   readonly garbage: string[] = [];
 
   constructor(env: Record<string, string> = {}) {
-    this.child = spawn("npx", ["tsx", entry], {
+    this.child = spawn(command, args, {
       env: {
         ...process.env,
         // Point at a port nothing is listening on, so "broker unreachable" is
         // deterministic rather than depending on a dev server being up.
-        XORV_BROKER_URL: "http://127.0.0.1:59999",
-        XORV_NETWORK: "eip155:5042002",
+        KAZUO_BROKER_URL: "http://127.0.0.1:59999",
+        KAZUO_NETWORK: "eip155:5042002",
         ...env,
       },
       stdio: ["pipe", "pipe", "pipe"],
@@ -120,13 +130,13 @@ describe("handshake", () => {
   it("keeps stdout clean — anything but JSON-RPC corrupts the channel", async () => {
     client = new Client();
     await client.handshake();
-    await client.call(2, "xorv_network_status");
+    await client.call(2, "kazuo_network_status");
     expect(client.garbage).toEqual([]);
   }, 40_000);
 });
 
 describe("tools", () => {
-  it("advertises the five Xorv tools with descriptions and schemas", async () => {
+  it("advertises the five Kazuo tools with descriptions and schemas", async () => {
     client = new Client();
     await client.handshake();
     client.send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
@@ -134,11 +144,11 @@ describe("tools", () => {
 
     const tools = reply.result?.tools ?? [];
     expect(tools.map((t) => t.name).sort()).toEqual([
-      "xorv_get_job",
-      "xorv_list_providers",
-      "xorv_network_status",
-      "xorv_quote",
-      "xorv_run_job",
+      "kazuo_get_job",
+      "kazuo_list_providers",
+      "kazuo_network_status",
+      "kazuo_quote",
+      "kazuo_run_job",
     ]);
     for (const tool of tools) {
       expect(tool.description?.length ?? 0).toBeGreaterThan(20);
@@ -151,7 +161,7 @@ describe("tools", () => {
     await client.handshake();
     client.send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
     const reply = await client.waitFor(2);
-    const runJob = reply.result?.tools?.find((t) => t.name === "xorv_run_job");
+    const runJob = reply.result?.tools?.find((t) => t.name === "kazuo_run_job");
     // A model deciding whether to call this needs to know from the description
     // alone that it costs money.
     expect(runJob?.description).toMatch(/pay|spend/i);
@@ -163,7 +173,7 @@ describe("behaviour without a broker", () => {
   it("reports the broker being unreachable as a tool error, not a crash", async () => {
     client = new Client();
     await client.handshake();
-    const reply = await client.call(2, "xorv_list_providers");
+    const reply = await client.call(2, "kazuo_list_providers");
     expect(reply.result?.isError).toBe(true);
     expect(reply.result?.content?.[0]?.text).toMatch(/could not reach/i);
   }, 40_000);
@@ -171,27 +181,27 @@ describe("behaviour without a broker", () => {
   it("still answers a second call after one fails", async () => {
     client = new Client();
     await client.handshake();
-    await client.call(2, "xorv_list_providers");
-    const second = await client.call(3, "xorv_network_status");
+    await client.call(2, "kazuo_list_providers");
+    const second = await client.call(3, "kazuo_network_status");
     expect(second.result?.content?.[0]?.text).toBeTruthy();
   }, 40_000);
 });
 
 describe("spending guards", () => {
   it("refuses to buy when no payer key is configured", async () => {
-    client = new Client({ XORV_PAYER_ID: "", XORV_PAYER_KEY: "" });
+    client = new Client({ KAZUO_PAYER_ID: "", KAZUO_PAYER_KEY: "" });
     await client.handshake();
-    const reply = await client.call(2, "xorv_run_job", { prompt: "hello" });
+    const reply = await client.call(2, "kazuo_run_job", { prompt: "hello" });
     expect(reply.result?.isError).toBe(true);
     expect(reply.result?.content?.[0]?.text).toMatch(/no payer configured/i);
   }, 40_000);
 
   it("advertises the configured ceiling in the tool description", async () => {
-    client = new Client({ XORV_MAX_USD: "0.02" });
+    client = new Client({ KAZUO_MAX_USD: "0.02" });
     await client.handshake();
     client.send({ jsonrpc: "2.0", id: 2, method: "tools/list" });
     const reply = await client.waitFor(2);
-    const runJob = reply.result?.tools?.find((t) => t.name === "xorv_run_job");
+    const runJob = reply.result?.tools?.find((t) => t.name === "kazuo_run_job");
     expect(runJob?.description).toContain("$0.0200");
   }, 40_000);
 });

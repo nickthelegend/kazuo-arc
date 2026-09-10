@@ -8,14 +8,14 @@
  * as the Grok adapter: report what the CLI actually tells us.
  */
 
-import type { AdapterKind } from "@xorv/protocol";
+import type { AdapterKind } from "@kazuo/protocol";
 import { clampResult, cliAvailable, runChild, type JobAdapter, type RunInput } from "./base.js";
 
 export class OpenCodeAdapter implements JobAdapter {
   readonly kind: AdapterKind = "opencode";
   readonly installHint = "npm i -g opencode-ai, then configure a provider";
 
-  private readonly bin = process.env.XORV_OPENCODE_BIN || "opencode";
+  private readonly bin = process.env.KAZUO_OPENCODE_BIN || "opencode";
 
   async available(): Promise<boolean> {
     return cliAvailable(this.bin);

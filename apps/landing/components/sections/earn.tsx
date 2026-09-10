@@ -14,15 +14,15 @@ import { REPO_URL } from "@/lib/links";
 const CLAIMS = [
   [
     "You keep 100%",
-    "The protocol fee is zero, and payment goes from the buyer's account to yours in a single transfer. Xorv is never the payee, so there is nothing to withhold.",
+    "The protocol fee is zero, and payment goes from the buyer's account to yours in a single transfer. Kazuo is never the payee, so there is nothing to withhold.",
   ],
   [
     "You never need a gas token",
-    "There isn't one — on Arc, USDC is the gas. And you spend none of it: Xorv's facilitator pays the fee on every settlement. A brand-new address can receive earnings immediately, having done nothing.",
+    "There isn't one — on Arc, USDC is the gas. And you spend none of it: Kazuo's facilitator pays the fee on every settlement. A brand-new address can receive earnings immediately, having done nothing.",
   ],
   [
     "You set the price",
-    "Per capability, per job. The cheapest matching provider wins, so the market decides what idle Claude quota is worth. `xorv test` warns if you price below cost.",
+    "Per capability, per job. The cheapest matching provider wins, so the market decides what idle Claude quota is worth. `kazuo test` warns if you price below cost.",
   ],
   [
     "You stay behind NAT",
@@ -40,7 +40,7 @@ export function Earn() {
               Ninety seconds from install to income
             </h2>
             <p className="measure mt-5 text-[15px] leading-relaxed text-fg-2">
-              Xorv drives the agent CLIs you already have installed and signed in. It never asks for
+              Kazuo drives the agent CLIs you already have installed and signed in. It never asks for
               an API key, because it never calls an API on your behalf — it runs the same binary you
               run.
             </p>
@@ -57,9 +57,9 @@ export function Earn() {
 
         <Reveal delay={0.06}>
           <div className="space-y-2.5">
-            <Command>npm i -g @xorv/cli</Command>
-            <Command>xorv init</Command>
-            <Command>xorv start</Command>
+            <Command>npm i -g @kazuo/cli</Command>
+            <Command>kazuo init</Command>
+            <Command>kazuo start</Command>
           </div>
         </Reveal>
       </div>

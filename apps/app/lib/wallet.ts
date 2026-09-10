@@ -40,11 +40,11 @@
  * larger than the file.
  */
 
-import { getAddress, type Address } from "viem";
-import { ARC_CHAIN } from "./chains";
+import { encodeFunctionData, erc20Abi, getAddress, parseUnits, type Address } from "viem";
+import { ARC_CHAIN, USDC_ADDRESS } from "./chains";
 
 /** The EIP-1193 subset actually used. */
-interface Eip1193Provider {
+export interface Eip1193Provider {
   request(args: { method: string; params?: unknown[] | object }): Promise<unknown>;
   on?(event: string, handler: (...args: unknown[]) => void): void;
   removeListener?(event: string, handler: (...args: unknown[]) => void): void;
@@ -82,7 +82,22 @@ function provider(): Eip1193Provider {
 }
 
 function sessionFor(address: string, chainId: number): WalletSession {
-  const p = provider();
+  return sessionForProvider(provider(), address, chainId);
+}
+
+/**
+ * A payment session over any EIP-1193 provider.
+ *
+ * The injected wallet and a Privy wallet — embedded or external — both hand
+ * back one of these, which is why the payment code never needs to know which
+ * kind of wallet it is talking to: an address and `eth_signTypedData_v4` is
+ * the whole contract.
+ */
+export function sessionForProvider(
+  p: Eip1193Provider,
+  address: string,
+  chainId: number,
+): WalletSession {
   const account = getAddress(address);
   return {
     address: account,
@@ -173,6 +188,40 @@ export async function restoreWallet(): Promise<WalletSession | null> {
 /** Ensure the connected wallet is on Arc, prompting if it is not. */
 export async function switchToArc(): Promise<void> {
   await ensureArc(provider());
+}
+
+/** The same, for a provider that did not come from `window.ethereum`. */
+export async function switchProviderToArc(p: Eip1193Provider): Promise<number> {
+  return ensureArc(p);
+}
+
+/**
+ * Send USDC — an ordinary ERC-20 transfer, broadcast by the wallet.
+ *
+ * Unlike a job payment this *is* a transaction, so the sender pays gas. On Arc
+ * the gas is USDC itself, so a wallet holding only USDC can still send it —
+ * there is no second asset to top up first.
+ */
+export async function sendUsdc(
+  p: Eip1193Provider,
+  from: string,
+  to: string,
+  amountUsdc: string,
+): Promise<`0x${string}`> {
+  const recipient = getAddress(to.trim());
+  const units = parseUnits(amountUsdc.trim(), 6);
+  if (units <= 0n) throw new Error("Amount must be above zero.");
+  await ensureArc(p);
+  const data = encodeFunctionData({
+    abi: erc20Abi,
+    functionName: "transfer",
+    args: [recipient, units],
+  });
+  const hash = await p.request({
+    method: "eth_sendTransaction",
+    params: [{ from: getAddress(from), to: USDC_ADDRESS, data }],
+  });
+  return hash as `0x${string}`;
 }
 
 /** Subscribe to account and chain changes. Returns an unsubscribe function. */

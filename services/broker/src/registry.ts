@@ -18,7 +18,7 @@ import {
   type ProviderStatus,
   type RegisterRequest,
   newId,
-} from "@xorv/protocol";
+} from "@kazuo/protocol";
 import { randomBytes } from "node:crypto";
 import { MemoryPersistence, type PersistedProviderStats, type Persistence } from "./store.js";
 
@@ -30,7 +30,21 @@ export interface ProviderRecord extends Provider {
   /** Per-capability availability from the last heartbeat. */
   available: Record<string, boolean>;
   uptimeSeconds: number;
+  /**
+   * AgentBook's anonymous human id for the payout address, when proven.
+   * Private to the broker — only `humanBacked` is ever published.
+   */
+  humanId?: string | null;
 }
+
+/**
+ * How many live, human-backed nodes one human may run.
+ *
+ * Not one: a person with a laptop and a desktop is not a sybil. But the point
+ * of the label is that it cannot be minted in bulk, so past this many the next
+ * node registers fine and simply isn't labelled.
+ */
+export const MAX_HUMAN_BACKED_NODES_PER_HUMAN = 3;
 
 /** What the matcher settled on. */
 export interface Match {
@@ -83,10 +97,18 @@ export class Registry {
    * the fleet view until the reaper caught it, and would reset the earnings
    * counters the operator is watching.
    */
-  register(req: RegisterRequest): ProviderRecord {
+  register(req: RegisterRequest, identity: { humanId?: string | null } = {}): ProviderRecord {
     const existingId = this.byNodeId.get(req.nodeId);
     const existing = existingId ? this.providers.get(existingId) : undefined;
     const now = Date.now();
+    const humanId = identity.humanId ?? null;
+    // Count the *other* live nodes this human already backs. A re-registering
+    // node is the same node, so it never counts against itself.
+    const backedElsewhere = humanId
+      ? this.live().filter((p) => p.humanId === humanId && p.nodeId !== req.nodeId && p.humanBacked)
+          .length
+      : 0;
+    const humanBacked = Boolean(humanId) && backedElsewhere < MAX_HUMAN_BACKED_NODES_PER_HUMAN;
 
     const record: ProviderRecord = {
       id: existing?.id ?? newId("prv"),
@@ -115,6 +137,8 @@ export class Registry {
       available: Object.fromEntries(req.capabilities.map((c) => [c.id, true])),
       uptimeSeconds: 0,
       registryTxHash: existing?.registryTxHash ?? null,
+      humanId,
+      humanBacked,
     };
 
     if (existing) this.byToken.delete(existing.token);
@@ -178,14 +202,21 @@ export class Registry {
    * is acceptable — competing on price is the point of a capacity market. Ties
    * break toward the node with the better track record, then the emptier one,
    * so a reliable provider is rewarded and load still spreads.
+   *
+   * A human-backed node wins a price tie before track record is consulted:
+   * a success score is exactly what a bot farm can manufacture, and a World ID
+   * behind the payout address is exactly what it cannot. Price still comes
+   * first — the label buys preference, not a premium.
    */
   match(opts: {
     adapter?: AdapterKind | null;
     maxPriceUsdMicros: number;
+    humanBackedOnly?: boolean;
   }): Match | null {
     const candidates: Match[] = [];
 
     for (const provider of this.live()) {
+      if (opts.humanBackedOnly && !provider.humanBacked) continue;
       for (const capability of provider.capabilities) {
         if (opts.adapter && capability.adapter !== opts.adapter) continue;
         if (capability.priceUsdMicros > opts.maxPriceUsdMicros) continue;
@@ -203,6 +234,9 @@ export class Registry {
       if (a.capability.priceUsdMicros !== b.capability.priceUsdMicros) {
         return a.capability.priceUsdMicros - b.capability.priceUsdMicros;
       }
+      if (Boolean(a.provider.humanBacked) !== Boolean(b.provider.humanBacked)) {
+        return a.provider.humanBacked ? -1 : 1;
+      }
       const aScore = successScore(a.provider);
       const bScore = successScore(b.provider);
       if (aScore !== bScore) return bScore - aScore;
@@ -210,6 +244,27 @@ export class Registry {
     });
 
     return candidates[0] ?? null;
+  }
+
+  /**
+   * A human just proved they run the node(s) paid at `address` (World ID).
+   *
+   * Applied to live records immediately, so the label appears without waiting
+   * for the node to re-register — and subject to the same per-human cap.
+   */
+  markHuman(address: string, humanId: string): number {
+    let marked = 0;
+    for (const provider of this.providers.values()) {
+      if (provider.address.toLowerCase() !== address.toLowerCase()) continue;
+      if (provider.humanBacked) continue;
+      const backedElsewhere = this.live().filter(
+        (p) => p.humanId === humanId && p.id !== provider.id && p.humanBacked,
+      ).length;
+      provider.humanId = humanId;
+      provider.humanBacked = backedElsewhere < MAX_HUMAN_BACKED_NODES_PER_HUMAN;
+      if (provider.humanBacked) marked += 1;
+    }
+    return marked;
   }
 
   /** Note that a job started on a provider. */

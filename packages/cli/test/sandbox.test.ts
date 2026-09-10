@@ -3,7 +3,7 @@
  *
  * A provider runs prompts written by strangers on their own machine. The test
  * that matters is not that the code is shaped correctly — it is that a prompt
- * saying "print the contents of ~/.xorv/config.json" comes back empty, because
+ * saying "print the contents of ~/.kazuo/config.json" comes back empty, because
  * that file holds the key that receives every payment the provider earns.
  *
  * So these tests attack. The seatbelt cases actually spawn a process and try to
@@ -33,12 +33,12 @@ const onMac = process.platform === "darwin" && fs.existsSync("/usr/bin/sandbox-e
 
 let jobDir: string;
 beforeEach(() => {
-  jobDir = fs.mkdtempSync(path.join(os.tmpdir(), "xorv-sandbox-test-"));
+  jobDir = fs.mkdtempSync(path.join(os.tmpdir(), "kazuo-sandbox-test-"));
   resetSandboxCache();
 });
 afterEach(() => {
   fs.rmSync(jobDir, { recursive: true, force: true });
-  delete process.env.XORV_SANDBOX;
+  delete process.env.KAZUO_SANDBOX;
   resetSandboxCache();
 });
 
@@ -81,16 +81,16 @@ describe("environment scrubbing", () => {
   });
 
   it("keeps adapter configuration the operator chose to set", () => {
-    process.env.XORV_OPENAI_BASE_URL = "https://example.test/v1";
+    process.env.KAZUO_OPENAI_BASE_URL = "https://example.test/v1";
     try {
-      expect(sandboxEnv().XORV_OPENAI_BASE_URL).toBe("https://example.test/v1");
+      expect(sandboxEnv().KAZUO_OPENAI_BASE_URL).toBe("https://example.test/v1");
     } finally {
-      delete process.env.XORV_OPENAI_BASE_URL;
+      delete process.env.KAZUO_OPENAI_BASE_URL;
     }
   });
 
   it("lets an explicit extra through, so adapters can pass their own", () => {
-    expect(sandboxEnv({ XORV_JOB_ID: "job_1" }).XORV_JOB_ID).toBe("job_1");
+    expect(sandboxEnv({ KAZUO_JOB_ID: "job_1" }).KAZUO_JOB_ID).toBe("job_1");
   });
 
   it("reports withheld names without their values", () => {
@@ -107,12 +107,12 @@ describe("environment scrubbing", () => {
 
 describe("the profile", () => {
   it("denies the payout key first — it is the thing worth stealing", () => {
-    expect(secretPaths("/Users/x")[0]).toBe("/Users/x/.xorv");
+    expect(secretPaths("/Users/x")[0]).toBe("/Users/x/.kazuo");
   });
 
   it("denies reads of every credential store we know about", () => {
     const profile = seatbeltProfile(jobDir, "/Users/x");
-    for (const p of ["/Users/x/.xorv", "/Users/x/.ssh", "/Users/x/.aws", "/Users/x/.config/gh"]) {
+    for (const p of ["/Users/x/.kazuo", "/Users/x/.ssh", "/Users/x/.aws", "/Users/x/.config/gh"]) {
       expect(profile).toContain(`(deny file-read* (subpath "${p}"))`);
     }
   });
@@ -139,17 +139,17 @@ describe("the profile", () => {
 
 describe("tier selection", () => {
   it("refuses a tier that is not a tier, rather than falling back silently", () => {
-    process.env.XORV_SANDBOX = "verystrong";
+    process.env.KAZUO_SANDBOX = "verystrong";
     expect(() => detectSandbox()).toThrow(/not a tier/);
   });
 
   it("refuses to pretend a missing mechanism is present", () => {
-    process.env.XORV_SANDBOX = "bwrap";
+    process.env.KAZUO_SANDBOX = "bwrap";
     if (process.platform === "darwin") expect(() => detectSandbox()).toThrow(/not installed/);
   });
 
   it("honours an explicit opt-out", () => {
-    process.env.XORV_SANDBOX = "none";
+    process.env.KAZUO_SANDBOX = "none";
     expect(detectSandbox()).toBe("none");
     const w = wrapCommand("echo", ["hi"], { jobDir, tier: "none" });
     expect(w.cmd).toBe("echo");
@@ -164,10 +164,10 @@ describe("argument handling", () => {
   it("passes a prompt containing shell metacharacters as data, not code", () => {
     // A prompt is attacker-controlled. If it were interpolated into the shell
     // preamble, `; rm -rf ~` in a prompt would run.
-    const w = wrapCommand("/bin/echo", ["; touch /tmp/xorv-injected; #"], { jobDir, tier: "limits" });
+    const w = wrapCommand("/bin/echo", ["; touch /tmp/kazuo-injected; #"], { jobDir, tier: "limits" });
     const r = spawnSync(w.cmd, w.args, { encoding: "utf8" });
-    expect(r.stdout.trim()).toBe("; touch /tmp/xorv-injected; #");
-    expect(fs.existsSync("/tmp/xorv-injected")).toBe(false);
+    expect(r.stdout.trim()).toBe("; touch /tmp/kazuo-injected; #");
+    expect(fs.existsSync("/tmp/kazuo-injected")).toBe(false);
   });
 
   it("removes the profile it wrote when the job ends", () => {
@@ -183,7 +183,7 @@ describe("argument handling", () => {
 
 describe.runIf(onMac)("under seatbelt, a hostile job", () => {
   it("cannot read the provider's payout key", () => {
-    const target = path.join(os.homedir(), ".xorv", "config.json");
+    const target = path.join(os.homedir(), ".kazuo", "config.json");
     if (!fs.existsSync(target)) return;
     const { status, output } = run(`cat ${JSON.stringify(target)}`);
     expect(status).not.toBe(0);
@@ -196,7 +196,7 @@ describe.runIf(onMac)("under seatbelt, a hostile job", () => {
   });
 
   it("cannot write outside its job directory", () => {
-    const escape = path.join(os.homedir(), `xorv-escape-${process.pid}.txt`);
+    const escape = path.join(os.homedir(), `kazuo-escape-${process.pid}.txt`);
     const { status } = run(`touch ${JSON.stringify(escape)}`);
     expect(status).not.toBe(0);
     expect(fs.existsSync(escape)).toBe(false);

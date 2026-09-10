@@ -1,7 +1,7 @@
 /**
  * Cloudflare Tunnel integration.
  *
- * A Xorv node does **not** need a tunnel to earn: job delivery rides the
+ * A Kazuo node does **not** need a tunnel to earn: job delivery rides the
  * outbound control socket the node opens to the broker, which works from behind
  * NAT with no inbound ports (see hub.ts for why that shape was chosen). The
  * tunnel is an optional extra that gives the node a public URL, which buys two

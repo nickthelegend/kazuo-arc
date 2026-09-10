@@ -1,5 +1,5 @@
 /**
- * `xorv init` — the ninety-second path from "I have a Claude subscription" to
+ * `kazuo init` — the ninety-second path from "I have a Claude subscription" to
  * "my machine is earning".
  *
  * The wizard's job is to make the two genuinely hard parts painless: which of
@@ -23,10 +23,10 @@ import {
   formatUsdc,
   type AdapterKind,
   type Capability,
-} from "@xorv/protocol";
+} from "@kazuo/protocol";
 import { detectAvailable } from "../adapters/index.js";
 import {
-  XORV_HOME,
+  KAZUO_HOME,
   configExists,
   configPath,
   defaultCapability,
@@ -46,7 +46,7 @@ export async function initCommand(opts: { broker?: string; force?: boolean }): P
     const again = await ui.confirm("reconfigure it?", false);
     if (!again) {
       ui.blank();
-      ui.info(`run ${ui.c.accent("xorv start")} to go live, or ${ui.c.accent("xorv status")} to check in`);
+      ui.info(`run ${ui.c.accent("kazuo start")} to go live, or ${ui.c.accent("kazuo status")} to check in`);
       return;
     }
   }
@@ -58,7 +58,7 @@ export async function initCommand(opts: { broker?: string; force?: boolean }): P
   ui.heading("1 · identity");
   const label = await ui.ask(
     "what should this node be called?",
-    previous?.label ?? `${os.hostname().split(".")[0]}-xorv`,
+    previous?.label ?? `${os.hostname().split(".")[0]}-kazuo`,
   );
   const region = await ui.ask(
     "region hint (optional, shown in the job board)",
@@ -153,7 +153,7 @@ export async function initCommand(opts: { broker?: string; force?: boolean }): P
 
   const config: NodeConfig = {
     nodeId: previous?.nodeId || randomBytes(12).toString("hex"),
-    label: label.trim() || "xorv-node",
+    label: label.trim() || "kazuo-node",
     network,
     brokerUrl: brokerUrl.replace(/\/+$/, ""),
     address: wallet.address,
@@ -161,7 +161,7 @@ export async function initCommand(opts: { broker?: string; force?: boolean }): P
     capabilities,
     region: region.trim() || null,
     tunnel: previous?.tunnel ?? { enabled: false, hostname: null },
-    sandboxDir: previous?.sandboxDir ?? path.join(XORV_HOME, "jobs"),
+    sandboxDir: previous?.sandboxDir ?? path.join(KAZUO_HOME, "jobs"),
     providerId: previous?.providerId ?? null,
     token: previous?.token ?? null,
   };
@@ -184,7 +184,7 @@ export async function initCommand(opts: { broker?: string; force?: boolean }): P
           ["config", configPath()],
         ]),
         "",
-        `${ui.c.muted("next:")}  ${ui.c.accent("xorv start")}   ${ui.c.muted("— go live and start taking jobs")}`,
+        `${ui.c.muted("next:")}  ${ui.c.accent("kazuo start")}   ${ui.c.muted("— go live and start taking jobs")}`,
       ],
       { title: "ready" },
     ),
@@ -209,7 +209,7 @@ interface WalletChoice {
  * portal faucet, wait while they funded it — because an account that has never
  * received HBAR *does not exist on Hedera* — have them copy back the `0.0.…`
  * account id the faucet assigned, validate it, and then tell them to run
- * `xorv wallet associate` before they could be paid in USDC at all.
+ * `kazuo wallet associate` before they could be paid in USDC at all.
  *
  * On Arc: generate a key. The address is a function of the key, the account
  * needs no funding to exist, and it can receive USDC immediately. A provider
@@ -289,12 +289,12 @@ async function reportBalances(network: string, address: string): Promise<void> {
     spin.stop();
     ui.ok(`  holds ${ui.c.money(formatUsdc(balances.usdcUnits))}`);
     if (!balances.viewsAgree) {
-      ui.warn("  the ERC-20 and native balances disagree — XORV_STABLECOIN is not Arc's USDC");
+      ui.warn("  the ERC-20 and native balances disagree — KAZUO_STABLECOIN is not Arc's USDC");
     }
     ui.muted(`  ${explorerAddress(network, address)}`);
   } catch (err) {
     spin.stop();
     ui.warn(`  couldn't reach the RPC to verify (${err instanceof Error ? err.message : String(err)})`);
-    ui.muted("  continuing — `xorv doctor` will re-check this later");
+    ui.muted("  continuing — `kazuo doctor` will re-check this later");
   }
 }

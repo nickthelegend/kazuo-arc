@@ -1,19 +1,19 @@
 /**
- * `xorv skills` — install Xorv as a slash command inside Claude Code.
+ * `kazuo skills` — install Kazuo as a slash command inside Claude Code.
  *
  * The pitch is small and specific: you are already sitting in an agent, and
  * some of the work in front of you does not need *this* agent. A second
  * opinion from a different model, a long mechanical refactor you would rather
  * not spend your own context on, a job at 2am when your own plan is rate
- * limited. `/xorv <task>` sends that work to somebody else's machine and pays
+ * limited. `/kazuo <task>` sends that work to somebody else's machine and pays
  * them for it — a real USDC transfer on Hedera, per job, no account, no key
  * exchange, no invoice.
  *
- * That is the part worth showing. Everything else in Xorv is a marketplace;
+ * That is the part worth showing. Everything else in Kazuo is a marketplace;
  * this is the marketplace being used by the thing that needed it, from inside
  * the editor, with the receipt printed next to the answer.
  *
- * The skill is a plain markdown file that shells out to `xorv run --json`, so
+ * The skill is a plain markdown file that shells out to `kazuo run --json`, so
  * it inherits every guarantee the CLI already has — the quote is shown before
  * money moves, the price ceiling is enforced, and the settlement transaction
  * comes back with the result. There is no second implementation to keep in
@@ -29,7 +29,7 @@ import { loadConfig, resolveBrokerUrl } from "../config.js";
 /** Where a skill lives, per Claude Code's own layout. */
 export function skillDir(scope: "project" | "user", cwd = process.cwd()): string {
   const root = scope === "user" ? os.homedir() : cwd;
-  return path.join(root, ".claude", "skills", "xorv");
+  return path.join(root, ".claude", "skills", "kazuo");
 }
 
 /**
@@ -42,16 +42,16 @@ export function skillDir(scope: "project" | "user", cwd = process.cwd()): string
  */
 export function skillMarkdown(brokerUrl: string): string {
   return `---
-name: xorv
-description: Run a task on someone else's AI subscription and pay for it per job in USDC over x402 on Hedera. Use when the user asks to offload, delegate, or outsource work to the Xorv network; when they want a second model's take on something; when a job would burn context or quota that is better spent locally; or when they explicitly say /xorv. Also use to check what this machine has earned as a provider.
+name: kazuo
+description: Run a task on someone else's AI subscription and pay for it per job in USDC over x402 on Arc. Use when the user asks to offload, delegate, or outsource work to the Kazuo network; when they want a second model's take on something; when a job would burn context or quota that is better spent locally; or when they explicitly say /kazuo. Also use to check what this machine has earned as a provider.
 ---
 
-# Xorv — buy compute from the network
+# Kazuo — buy compute from the network
 
-Xorv is a marketplace for idle AI subscription quota. Someone else's machine
+Kazuo is a marketplace for idle AI subscription quota. Someone else's machine
 runs the job on the Claude / Codex / Grok plan they already pay for, and they
-get paid per job — a real USDC transfer on Hedera, settled in about three
-seconds, straight to them.
+get paid per job — a real USDC transfer on Arc, settled in about a
+second, straight to them.
 
 You are already inside an agent. This skill exists for the work that does not
 need *this* agent: a second opinion from a different model, a long mechanical
@@ -61,7 +61,7 @@ plan on.
 ## Running a job
 
 \`\`\`bash
-xorv run --json --yes --max 0.30 "<the task, as a complete self-contained prompt>"
+kazuo run --json --yes --max 0.30 "<the task, as a complete self-contained prompt>"
 \`\`\`
 
 The prompt goes to a stranger's machine with **no other context** — no repo, no
@@ -112,29 +112,29 @@ Money leaves the user's account when this runs. So:
   they set without re-asking each time.
 - **Never invent a higher ceiling** because a quote came back above it. Report
   the quote and let them decide.
-- If \`xorv\` is not installed, say so and stop: \`npm i -g @xorv/cli\`.
+- If \`kazuo\` is not installed, say so and stop: \`npm i -g @kazuo/cli\`.
 
 ## When payment fails
 
 A \`"status": "failed"\` with \`"stage": "payment"\` is almost always one of three
 things, and the \`hints\` array says which. The one people hit first: **you
-cannot pay yourself.** If this machine is also running \`xorv start\`, its
+cannot pay yourself.** If this machine is also running \`kazuo start\`, its
 config account is the provider, and buying from itself is rejected. Buy from a
 separate account:
 
 \`\`\`bash
-export XORV_PAYER_ID=0.0.xxxxx
-export XORV_PAYER_KEY=...
+export KAZUO_PAYER_ID=0.0.xxxxx
+export KAZUO_PAYER_KEY=...
 \`\`\`
 
-Those are read by \`xorv run\` directly; nothing else needs changing.
+Those are read by \`kazuo run\` directly; nothing else needs changing.
 
 ## Other things worth knowing
 
-\`xorv status\` — who is live on the network right now, and at what price.
-\`xorv earnings\` — what this machine has earned as a provider, job by job,
+\`kazuo status\` — who is live on the network right now, and at what price.
+\`kazuo earnings\` — what this machine has earned as a provider, job by job,
 plus its on-chain balance. Use this when the user asks what they have made.
-\`xorv doctor\` — why a node is not earning; it names the sandbox tier, whether
+\`kazuo doctor\` — why a node is not earning; it names the sandbox tier, whether
 each agent CLI is actually signed in, and whether the payout account can
 receive USDC.
 
@@ -142,8 +142,8 @@ Broker for this install: \`${brokerUrl}\`
 
 ## What this is not
 
-This does not give you access to the user's Xorv payout key, and it does not
-run jobs *for* the network on this machine — that is \`xorv start\`, which is a
+This does not give you access to the user's Kazuo payout key, and it does not
+run jobs *for* the network on this machine — that is \`kazuo start\`, which is a
 deliberate decision the user makes at a terminal, not something to do on their
 behalf.
 `;
@@ -185,13 +185,13 @@ export async function skillsCommand(opts: SkillsOptions = {}): Promise<void> {
   ui.ok(`installed → ${file}`);
   ui.blank();
   console.log(`  ${ui.c.muted("restart Claude Code, then:")}`);
-  console.log(`     ${ui.c.accent("/xorv")} ${ui.c.muted("refactor this parser to use a state machine")}`);
+  console.log(`     ${ui.c.accent("/kazuo")} ${ui.c.muted("refactor this parser to use a state machine")}`);
   ui.blank();
   console.log(
     `  ${ui.c.muted("the job runs on someone else's machine, and the receipt comes back with the answer.")}`,
   );
   ui.blank();
   if (!config) {
-    ui.warn("this machine is not configured yet — run `xorv init` before buying jobs");
+    ui.warn("this machine is not configured yet — run `kazuo init` before buying jobs");
   }
 }

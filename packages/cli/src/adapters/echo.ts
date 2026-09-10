@@ -5,13 +5,13 @@
  * → receipt) can be exercised on a machine with no agent CLI installed and no
  * subscription at all. Every other adapter depends on someone else's binary
  * being present and logged in; this one depends on nothing, which makes it the
- * right default for `xorv init` on a fresh machine and for CI.
+ * right default for `kazuo init` on a fresh machine and for CI.
  *
  * It is priced like the toy it is, and labelled as a test capability wherever
  * it shows up, so nobody mistakes it for real capacity.
  */
 
-import type { AdapterKind } from "@xorv/protocol";
+import type { AdapterKind } from "@kazuo/protocol";
 import type { JobAdapter, RunInput } from "./base.js";
 
 export class EchoAdapter implements JobAdapter {
@@ -35,7 +35,7 @@ export class EchoAdapter implements JobAdapter {
     }
 
     const reply = [
-      `Echo from a Xorv provider node.`,
+      `Echo from a Kazuo provider node.`,
       ``,
       `You asked (${words.length} word${words.length === 1 ? "" : "s"}):`,
       `> ${input.prompt.trim().slice(0, 800)}`,

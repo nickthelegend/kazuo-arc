@@ -40,14 +40,34 @@ export const arcMainnet = defineChain({
   },
 });
 
+/**
+ * World Chain Sepolia — the second settlement network, and where World
+ * AgentKit's AgentBook is resolved from (its mainnet twin, chain 480).
+ *
+ * Offered to Privy as a supported chain so an embedded wallet can hold USDC
+ * there too. Unlike Arc, gas on World Chain is ETH, not USDC.
+ */
+export const worldchainSepolia = defineChain({
+  id: 4801,
+  name: "World Chain Sepolia",
+  nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+  rpcUrls: {
+    default: { http: ["https://worldchain-sepolia.g.alchemy.com/public"] },
+  },
+  blockExplorers: {
+    default: { name: "WorldScan", url: "https://sepolia.worldscan.org" },
+  },
+  testnet: true,
+});
+
 export const ARC_CHAIN =
-  process.env.NEXT_PUBLIC_XORV_NETWORK === "eip155:5042" ? arcMainnet : arcTestnet;
+  process.env.NEXT_PUBLIC_KAZUO_NETWORK === "eip155:5042" ? arcMainnet : arcTestnet;
 
 /** The ERC-20 face of native USDC — a Circle FiatTokenV2, same on both networks. */
 export const USDC_ADDRESS = "0x3600000000000000000000000000000000000000" as const;
 
 /** CAIP-2 for the chain above, which is how x402 names networks. */
-export const XORV_NETWORK = `eip155:${ARC_CHAIN.id}`;
+export const KAZUO_NETWORK = `eip155:${ARC_CHAIN.id}`;
 
 /** ArcScan link for a transaction hash. */
 export function explorerTx(hash: string): string {

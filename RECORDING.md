@@ -14,39 +14,38 @@ what you do; the quoted lines are roughly what you say.
 This is the part that ruins takes. Do all of it first.
 
 ```bash
-# 1. Broker up, with the tunnel so the deployed app can reach it
-pnpm broker                       # terminal 1, leave running
-cloudflared tunnel --url http://localhost:8402    # terminal 2, copy the URL
-# ^ quick tunnels EXPIRE on their own. Start this one fresh right before you
-#   record, and re-deploy both apps onto its url — an hours-old tunnel will
-#   die mid-take.
+# 1. The broker is on Railway — check it is up (no tunnel to babysit)
+curl -s https://broker-production-03b2.up.railway.app/health
+export KAZUO_BROKER_URL=https://broker-production-03b2.up.railway.app
 
 # 2. A provider node, already registered and warm
-xorv start                        # terminal 3, leave running
+kazuo start                        # terminal 3, leave running
 
 # 3. Buy from a DIFFERENT account than the one hosting
-export XORV_PAYER_KEY=<the buyer key>   # the address is derived from it
+export KAZUO_PAYER_KEY=<the buyer key>   # the address is derived from it
 ```
 
 That last step matters more than it looks. **A provider cannot buy from
-itself** — if you skip it, every `xorv run` in the demo fails with a 402 and
+itself** — if you skip it, every `kazuo run` in the demo fails with a 402 and
 you will not know why on camera.
 
 Then:
 
 - Terminal at **~16pt**, window at 1920×1080, nothing else on screen.
-- Browser with **two tabs pre-opened**: `xorv.vercel.app` and
-  `xorv-app.vercel.app`. Logged in already if you're showing the wallet.
+- Browser with **two tabs pre-opened**: `kazuo-arc.vercel.app` and
+  `kazuo-arc-app.vercel.app`. Signed in with Privy once already, with testnet
+  USDC in the embedded wallet (copy its address from the wallet popover and
+  claim at faucet.circle.com).
 - An ArcScan tab open but scrolled to the top, ready to paste into.
-- **Run one throwaway job before recording.** It warms the broker, the mirror
-  node, and the agent CLI — the first job of a session is always the slowest,
+- **Run one throwaway job before recording.** It warms the broker, the RPC and
+  the agent CLI — the first job of a session is always the slowest,
   and you don't want that on camera.
 - Silence notifications.
 
 Sanity check, and it's the best single command to prove readiness:
 
 ```bash
-xorv doctor
+kazuo doctor
 ```
 
 Everything should be `✔` except the adapters you're not selling. If anything
@@ -58,13 +57,13 @@ been up since yesterday is still holding the old one. The failure is nasty
 because the payment succeeds and *then* the job returns
 `401 OAuth access token has expired` — the buyer is charged for nothing. Run
 `claude` once in any terminal to refresh; the node picks it up on the next job
-without a restart. Then re-run `xorv doctor` and confirm it went green.
+without a restart. Then re-run `kazuo doctor` and confirm it went green.
 
 ---
 
 ## 0:00 – 0:30 · The trailer
 
-Play `videos/xorv-launch/renders/video.mp4` full-screen. It's 62 seconds, so
+Play `videos/kazuo-launch/renders/video.mp4` full-screen. It's 62 seconds, so
 **cut it after the "402" beat at about 0:30** and hard-cut into your screen.
 
 Don't talk over it. It says the thing already, and a voice on top of a voice
@@ -77,13 +76,13 @@ reads as unfinished.
 
 ## 0:30 – 1:00 · The landing page, and the one idea
 
-**[Browser: xorv.vercel.app]** Scroll slowly through the hero.
+**[Browser: kazuo.vercel.app]** Scroll slowly through the hero.
 
-> "Xorv is a marketplace for idle AI subscription quota. You already pay for
+> "Kazuo is a marketplace for idle AI subscription quota. You already pay for
 > Claude, or Codex, or Grok. Most of the day it sits there doing nothing.
 > Someone else needs one job run, and their only option is to buy a whole plan.
 >
-> Xorv connects those two people, and settles it per job — in USDC, on Arc."
+> Kazuo connects those two people, and settles it per job — in USDC, on Arc."
 
 Scroll to **How it works** and let the five steps sit for two seconds. Then
 scroll to the **Security** section and pause on the transcript.
@@ -99,8 +98,8 @@ scroll to the **Security** section and pause on the transcript.
 **[Terminal]**
 
 ```bash
-npm i -g @xorv/cli
-xorv init
+npm i -g @kazuo/cli
+kazuo init
 ```
 
 > "One command to install. `init` asks which of your agent CLIs you want to
@@ -109,7 +108,7 @@ xorv init
 Then the command that sells the whole product:
 
 ```bash
-xorv doctor
+kazuo doctor
 ```
 
 Let it print, then point at three lines with your cursor:
@@ -129,7 +128,7 @@ Let it print, then point at three lines with your cursor:
 Now go live:
 
 ```bash
-xorv start
+kazuo start
 ```
 
 > "That's it. Registered on chain, holding a control
@@ -142,19 +141,18 @@ earnings.
 
 ## 1:45 – 2:45 · Buy a job, and watch the 402
 
-**[Browser: xorv-app.vercel.app]**
+**[Browser: kazuo-app.vercel.app]**
 
-**Connect**, top right — and this beat is now worth real screen time, because
-the wallet genuinely pays.
+**Sign in**, top right — Privy. Type an email, enter the code. That is the whole
+onboarding: Privy has just made an embedded wallet on Arc.
 
-> "Any EVM wallet. What it signs is not a transaction — it's an EIP-3009
+> "No extension, no seed phrase, no network to add. And this wallet can pay right
+> now, because what it signs is not a transaction — it's an EIP-3009
 > authorization, typed data. It never gets broadcast. The facilitator relays it
 > and pays the fee, so I need no gas at all."
 
-Approve the session, then buy the job below with it. The transfer is signed in
-your wallet, in front of the camera. **Install MetaMask and click Connect once before
-recording**, and let it add the Arc network — the extension prompt is the one
-step that can't be rehearsed headlessly.
+Open the wallet popover for a second: the address, the USDC balance, **Send
+USDC**. MetaMask still works through the same modal if you would rather show it.
 
 Type a real prompt into the composer. **Make it use tools** — that is the
 difference between a good shot and a dead one:
@@ -170,11 +168,21 @@ at once. The prompt above emits **8**, including `tool_call` and `file_edit`
 lines that stream while you talk over them. Same price, far better footage.
 
 It also puts the sandbox on screen for free: the paths in the log read
-`/private/tmp/xorv-jobs/job_.../`, which is the per-job directory from the
+`/private/tmp/kazuo-jobs/job_.../`, which is the per-job directory from the
 security beat.
 
 Pick **Claude Code** from the model picker (the real vendor logos are there —
 worth a half-second pause).
+
+On **Providers**, point at the **human** badge next to a node.
+
+> "That node proved a real person is behind it, with World ID — AgentKit. A
+> marketplace sorted on reputation is trivial to farm with bots; this is the one
+> signal a bot farm can't mint. Human-backed nodes win ties, and one person can
+> back three nodes at most."
+
+In a terminal, `kazuo agentkit status` shows the same lookup against AgentBook
+on World Chain.
 
 **Stop on the quote.** This is the beat the whole bounty is about.
 
@@ -217,17 +225,17 @@ Then open the **audit log contract** `0x383f5153…65eef3` and scroll its events
 
 ---
 
-## 3:30 – 4:10 · The part nobody else has: `/xorv` in Claude Code
+## 3:30 – 4:10 · The part nobody else has: `/kazuo` in Claude Code
 
 This is your differentiator. Give it room.
 
 **[Claude Code, in any project]**
 
 ```
-/xorv Write a Postgres query that finds duplicate rows by email, keeping the newest
+/kazuo Write a Postgres query that finds duplicate rows by email, keeping the newest
 ```
 
-> "This is Claude Code. And this is Xorv installed as a slash command inside it.
+> "This is Claude Code. And this is Kazuo installed as a slash command inside it.
 >
 > I'm sitting in one agent, and I've just asked it to send that task to a
 > *different* machine — someone else's Claude subscription — and pay for it."
@@ -243,7 +251,7 @@ When the result comes back:
 Then show how it got there:
 
 ```bash
-xorv skills
+kazuo skills
 ```
 
 > "One command installs it."
@@ -255,7 +263,7 @@ xorv skills
 **[Terminal, back on the provider machine]**
 
 ```bash
-xorv earnings
+kazuo earnings
 ```
 
 > "And on the other side of that — this is the provider's ledger. Every job it
@@ -280,21 +288,21 @@ better final frame than a logo.
 
 | Command | Show it? | Why |
 |---|---|---|
-| `xorv doctor` | **yes, prominently** | The single most convincing screen. Sandbox tier, real sign-in detection, and the broken-vs-unconfigured distinction. |
-| `xorv start` | **yes** | The "you're now a provider" moment. |
-| `xorv earnings` | **yes** | Job history plus the on-chain balance. This is the payoff shot. |
-| `xorv skills` | **yes** | Installs `/xorv`. Your differentiator. |
-| `xorv run "…"` | **yes** | The buyer path in one line, if the browser flow feels slow. |
-| `xorv status` | if time | Who's live network-wide, and at what price. |
-| `xorv test` | if time | Runs a job through each adapter locally, free. Proves the node works before selling. |
-| `xorv price` | mention | Change what you charge, per capability. |
-| `xorv pause` / `resume` | mention | Stop taking work without going offline. |
-| `xorv jobs` / `logs` | skip | Same information `earnings` already shows, less well. |
-| `xorv wallet` | skip | `earnings` ends on the wallet anyway. |
-| `xorv cancel` | skip | Nothing to see. |
-| `xorv config` | skip | Prints your account id on camera. Don't. |
+| `kazuo doctor` | **yes, prominently** | The single most convincing screen. Sandbox tier, real sign-in detection, and the broken-vs-unconfigured distinction. |
+| `kazuo start` | **yes** | The "you're now a provider" moment. |
+| `kazuo earnings` | **yes** | Job history plus the on-chain balance. This is the payoff shot. |
+| `kazuo skills` | **yes** | Installs `/kazuo`. Your differentiator. |
+| `kazuo run "…"` | **yes** | The buyer path in one line, if the browser flow feels slow. |
+| `kazuo status` | if time | Who's live network-wide, and at what price. |
+| `kazuo test` | if time | Runs a job through each adapter locally, free. Proves the node works before selling. |
+| `kazuo price` | mention | Change what you charge, per capability. |
+| `kazuo pause` / `resume` | mention | Stop taking work without going offline. |
+| `kazuo jobs` / `logs` | skip | Same information `earnings` already shows, less well. |
+| `kazuo wallet` | skip | `earnings` ends on the wallet anyway. |
+| `kazuo cancel` | skip | Nothing to see. |
+| `kazuo config` | skip | Prints your account id on camera. Don't. |
 
-**Do not run `xorv config` or `cat ~/.xorv/config.json` on camera** — that file
+**Do not run `kazuo config` or `cat ~/.kazuo/config.json` on camera** — that file
 holds the payout private key.
 
 ---
@@ -310,8 +318,8 @@ narration instead, the pronunciation trap is real and measured:
   `"paid in U S D C"` takes 1.707s — those extra 0.5s are the letters actually
   being spoken.
 - Same for **`M C P`** (not `MCP`).
-- Xorv comes back from speech recognition as "Zorv", so
-  if you auto-caption, fix those before publishing. `videos/xorv-launch/fix-captions.mjs`
+- Kazuo comes back from speech recognition as "Zorv", so
+  if you auto-caption, fix those before publishing. `videos/kazuo-launch/fix-captions.mjs`
   does exactly this for the trailer.
 
 ---
@@ -320,9 +328,9 @@ narration instead, the pronunciation trap is real and measured:
 
 | Symptom on camera | Cause | Fix before recording |
 |---|---|---|
-| `xorv run` fails with a bare 402 | You're buying from the address that's hosting | `export XORV_PAYER_KEY` |
-| "no online provider matches" | The node's heartbeat lapsed | Restart `xorv start`, wait 15s |
-| `RECONNECTING`, and the log flaps `control channel lost — retrying` every second | **Two `xorv start` processes are running.** They register under the same label and payout account, so the broker keeps replacing one with the other and both reconnect forever | `pgrep -fl "xorv start"` — kill all but one. It is stable within seconds |
+| `kazuo run` fails with a bare 402 | You're buying from the address that's hosting | `export KAZUO_PAYER_KEY` |
+| "no online provider matches" | The node's heartbeat lapsed | Restart `kazuo start`, wait 15s |
+| `RECONNECTING`, and the log flaps `control channel lost — retrying` every second | **Two `kazuo start` processes are running.** They register under the same label and payout account, so the broker keeps replacing one with the other and both reconnect forever | `pgrep -fl "kazuo start"` — kill all but one. It is stable within seconds |
 | The deployed app shows "broker offline" | **The Cloudflare quick tunnel expired.** These are ephemeral and die on their own, not just when you restart the broker — it happened to us between two takes | Restart `cloudflared tunnel --url http://localhost:8402`, take the NEW url, and re-deploy **both** apps with it. Budget 5 minutes |
 | "broker offline" but pages still load | Your machine's DNS has a stale negative entry for the new tunnel host. Vercel resolves independently, so the deployment is fine | `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`, or just ignore it — check with `curl` from another network |
 | First job takes 20+ seconds | Cold start | Run one throwaway job first |

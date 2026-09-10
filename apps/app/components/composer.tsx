@@ -163,7 +163,7 @@ export function Composer() {
       </motion.h1>
 
       <motion.p {...rise(0.18)} className="mx-auto mt-3.5 max-w-md text-[14px] leading-relaxed text-fg-3">
-        Paid per job in USDC, settled on Hedera in about three seconds, straight to the person whose
+        Paid per job in USDC, settled on Arc in about a second, straight to the person whose
         machine ran it.
       </motion.p>
 
@@ -288,7 +288,7 @@ export function Composer() {
                 className="mt-3 w-full rounded-lg bg-white px-4 py-2.5 text-[13.5px] font-medium text-black transition-all hover:bg-white/90 active:scale-[0.985] disabled:opacity-40"
               >
                 {busy === "paying"
-                  ? "Signing and settling on Hedera…"
+                  ? "Signing and settling on Arc…"
                   : `Pay ${quote.priceLabel} and run`}
               </button>
 
@@ -326,7 +326,7 @@ export function Composer() {
 /**
  * The disc.
  *
- * Ripar puts a brushed-metal orb here. Xorv's palette has no metal in it, so
+ * Ripar puts a brushed-metal orb here. Kazuo's palette has no metal in it, so
  * this is the mark's own geometry instead — four beams and a hub, rotating
  * once on arrival and then stopping. Decorative, hence `aria-hidden`.
  */

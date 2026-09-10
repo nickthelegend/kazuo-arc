@@ -43,6 +43,24 @@ function usePoll<T>(load: () => Promise<T>, intervalMs = 5_000): { data: T | nul
   return { data, error };
 }
 
+/**
+ * The World ID mark of a human-backed node or buyer.
+ *
+ * A label, not a score: it says a real person proved control of this address
+ * through World AgentKit, which is the one thing a bot farm cannot mint in bulk.
+ */
+export function HumanBacked({ title = "Human-backed — proven with World ID (AgentKit)" }: { title?: string }) {
+  return (
+    <span
+      title={title}
+      className="inline-flex items-center gap-1 rounded-full border border-[var(--line-2)] px-1.5 py-[1px] text-[10.5px] leading-none text-fg-2"
+    >
+      <span className="h-1.5 w-1.5 rounded-full bg-[var(--live)]" aria-hidden />
+      human
+    </span>
+  );
+}
+
 export function ProviderList() {
   const { data: providers, error } = usePoll<Provider[]>(useCallback(() => api.providers(), []));
 
@@ -52,7 +70,7 @@ export function ProviderList() {
         title="Can't reach the broker"
         hint={
           <>
-            Start it with <span className="mono text-fg-3">pnpm broker</span> in the xorv repo.
+            Start it with <span className="mono text-fg-3">pnpm broker</span> in the kazuo repo.
           </>
         }
       />
@@ -65,7 +83,7 @@ export function ProviderList() {
         title="No providers online"
         hint={
           <>
-            Run <span className="mono text-fg-3">npm i -g @xorv/cli &amp;&amp; xorv init</span> on any
+            Run <span className="mono text-fg-3">npm i -g @kazuo/cli &amp;&amp; kazuo init</span> on any
             machine with Claude Code, Codex or Grok installed.
           </>
         }
@@ -89,6 +107,7 @@ export function ProviderList() {
               <div className="flex items-center gap-2.5">
                 <span className="truncate text-[14px] font-medium text-fg">{p.label}</span>
                 <Status status={p.status} />
+                {p.humanBacked ? <HumanBacked /> : null}
               </div>
               <p className="mt-1 truncate text-[12.5px] text-fg-3">
                 {p.capabilities.map((c) => c.displayName).join(" · ")}
@@ -122,7 +141,7 @@ export function JobList({ limit = 15 }: { limit?: number }) {
     return (
       <Empty
         title="No jobs yet"
-        hint="Post one above — it settles on Hedera in about three seconds."
+        hint="Post one above — it settles on Arc in about a second."
       />
     );
   }
@@ -150,6 +169,7 @@ export function JobList({ limit = 15 }: { limit?: number }) {
               <div className="flex items-center gap-2.5">
                 <Status status={job.status} />
                 <span className="mono truncate text-[11.5px] text-fg-4">{job.id}</span>
+                {job.providerHumanBacked ? <HumanBacked title="Run by a human-backed provider (World ID)" /> : null}
               </div>
               <p className="mt-1.5 line-clamp-2 text-[13.5px] leading-relaxed text-fg-2">
                 {job.prompt}

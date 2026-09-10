@@ -2,7 +2,7 @@
  * Adapter registry — the one place agent kinds are wired up.
  */
 
-import type { AdapterKind } from "@xorv/protocol";
+import type { AdapterKind } from "@kazuo/protocol";
 import type { JobAdapter } from "./base.js";
 import { ClaudeCodeAdapter } from "./claude-code.js";
 import { CodexAdapter } from "./codex.js";
@@ -30,7 +30,7 @@ export function allAdapters(): JobAdapter[] {
   return (Object.keys(factories) as AdapterKind[]).map((kind) => createAdapter(kind));
 }
 
-/** Probe every adapter concurrently — used by `xorv init` and `xorv doctor`. */
+/** Probe every adapter concurrently — used by `kazuo init` and `kazuo doctor`. */
 export async function detectAvailable(): Promise<
   Array<{ adapter: JobAdapter; available: boolean }>
 > {

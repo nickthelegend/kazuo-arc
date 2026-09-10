@@ -22,7 +22,7 @@ import {
   runChild,
   safeMode,
 } from "../src/adapters/base.js";
-import type { JobEvent } from "@xorv/protocol";
+import type { JobEvent } from "@kazuo/protocol";
 
 function collector() {
   const events: Array<Omit<JobEvent, "at">> = [];
@@ -68,7 +68,7 @@ describe("EchoAdapter", () => {
       emit,
     });
     expect(result).toContain("hello world");
-    expect(result).toContain("Xorv provider node");
+    expect(result).toContain("Kazuo provider node");
     expect(events.filter((e) => e.kind === "status").length).toBeGreaterThan(1);
     expect(events.at(-1)!.kind).toBe("message");
   });
@@ -207,7 +207,7 @@ describe("cliAvailable", () => {
 
 describe("job directories", () => {
   it("creates and removes an isolated per-job directory", () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "xorv-test-"));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "kazuo-test-"));
     const dir = makeJobDir(root, "job_abc123");
     expect(fs.existsSync(dir)).toBe(true);
     fs.writeFileSync(path.join(dir, "scratch.txt"), "x");
@@ -217,7 +217,7 @@ describe("job directories", () => {
   });
 
   it("strips path separators from a job id so it can't escape the sandbox root", () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "xorv-test-"));
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "kazuo-test-"));
     const dir = makeJobDir(root, "../../../etc/evil");
     expect(path.dirname(dir)).toBe(root);
     expect(dir.includes("..")).toBe(false);
@@ -225,7 +225,7 @@ describe("job directories", () => {
   });
 
   it("never throws when removing a directory that is already gone", () => {
-    expect(() => removeJobDir("/tmp/xorv-does-not-exist-xyz")).not.toThrow();
+    expect(() => removeJobDir("/tmp/kazuo-does-not-exist-xyz")).not.toThrow();
   });
 });
 
@@ -248,12 +248,12 @@ describe("misc helpers", () => {
   });
 
   it("safeMode reads the environment", () => {
-    const original = process.env.XORV_SAFE_MODE;
-    process.env.XORV_SAFE_MODE = "1";
+    const original = process.env.KAZUO_SAFE_MODE;
+    process.env.KAZUO_SAFE_MODE = "1";
     expect(safeMode()).toBe(true);
-    process.env.XORV_SAFE_MODE = "";
+    process.env.KAZUO_SAFE_MODE = "";
     expect(safeMode()).toBe(false);
-    if (original === undefined) delete process.env.XORV_SAFE_MODE;
-    else process.env.XORV_SAFE_MODE = original;
+    if (original === undefined) delete process.env.KAZUO_SAFE_MODE;
+    else process.env.KAZUO_SAFE_MODE = original;
   });
 });

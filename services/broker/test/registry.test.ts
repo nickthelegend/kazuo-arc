@@ -7,7 +7,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Registry } from "../src/registry.js";
-import type { Capability, RegisterRequest } from "@xorv/protocol";
+import type { Capability, RegisterRequest } from "@kazuo/protocol";
 
 function capability(over: Partial<Capability> = {}): Capability {
   return {

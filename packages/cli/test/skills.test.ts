@@ -19,14 +19,14 @@ const body = skillMarkdown(BROKER);
 describe("skill frontmatter", () => {
   it("is a valid skill document with a name Claude Code can invoke", () => {
     expect(body.startsWith("---\n")).toBe(true);
-    expect(body).toMatch(/^name: xorv$/m);
+    expect(body).toMatch(/^name: kazuo$/m);
     expect(body).toMatch(/^description: .{80,}$/m);
   });
 
   it("describes when to reach for it, not just what it is", () => {
     // A description that only says what a tool *is* never gets invoked.
     const description = /^description: (.+)$/m.exec(body)?.[1] ?? "";
-    for (const cue of ["offload", "second model", "/xorv"]) {
+    for (const cue of ["offload", "second model", "/kazuo"]) {
       expect(description.toLowerCase()).toContain(cue.toLowerCase());
     }
   });
@@ -46,7 +46,7 @@ describe("spending discipline", () => {
   });
 
   it("tells the agent to stop rather than guess when the CLI is missing", () => {
-    expect(body).toContain("npm i -g @xorv/cli");
+    expect(body).toContain("npm i -g @kazuo/cli");
   });
 });
 
@@ -70,7 +70,7 @@ describe("known traps", () => {
   it("explains that a provider cannot buy from itself", () => {
     // The first thing anyone hits when they demo on the machine they host on.
     expect(body).toMatch(/cannot pay yourself/i);
-    expect(body).toContain("XORV_PAYER_ID");
+    expect(body).toContain("KAZUO_PAYER_ID");
   });
 
   it("warns that the prompt travels without any local context", () => {
@@ -84,23 +84,23 @@ describe("known traps", () => {
 
 describe("boundaries", () => {
   it("does not hand the agent the payout key or let it host jobs unasked", () => {
-    expect(body).toMatch(/does not give you access to the user's Xorv payout key/i);
-    expect(body).toMatch(/xorv start.*deliberate decision/is);
+    expect(body).toMatch(/does not give you access to the user's Kazuo payout key/i);
+    expect(body).toMatch(/kazuo start.*deliberate decision/is);
   });
 });
 
 describe("skillDir", () => {
   it("writes into the project by default", () => {
-    expect(skillDir("project", "/repo")).toBe(path.join("/repo", ".claude", "skills", "xorv"));
+    expect(skillDir("project", "/repo")).toBe(path.join("/repo", ".claude", "skills", "kazuo"));
   });
 
   it("writes into the home directory when installed globally", () => {
-    expect(skillDir("user")).toBe(path.join(os.homedir(), ".claude", "skills", "xorv"));
+    expect(skillDir("user")).toBe(path.join(os.homedir(), ".claude", "skills", "kazuo"));
   });
 });
 
 describe("as written to disk", () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "xorv-skill-"));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "kazuo-skill-"));
   afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
   it("round-trips as a readable file", () => {

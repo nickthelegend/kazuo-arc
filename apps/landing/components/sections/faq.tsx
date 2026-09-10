@@ -16,15 +16,15 @@ import { cn } from "@/lib/utils";
 const FAQ = [
   {
     q: "Is this against my AI provider's terms of service?",
-    a: "Possibly — check yours. Most consumer AI subscriptions are licensed to an individual, and reselling that capacity may breach them. Xorv is infrastructure and doesn't decide this for you: run it against quota you're entitled to share, a team or enterprise plan that permits it, or your own local models via the OpenAI-compatible adapter.",
+    a: "Possibly — check yours. Most consumer AI subscriptions are licensed to an individual, and reselling that capacity may breach them. Kazuo is infrastructure and doesn't decide this for you: run it against quota you're entitled to share, a team or enterprise plan that permits it, or your own local models via the OpenAI-compatible adapter.",
   },
   {
     q: "What can a stranger's prompt do to my machine?",
-    a: "Each job runs in a fresh empty directory under ~/.xorv/jobs that is deleted when the job ends, and that directory is the agent's working directory. But these CLIs can run shell commands, and a shell command can leave a directory — so this is blast-radius reduction, not a sandbox. Run the node in a container or a VM if you want a real boundary, or set XORV_SAFE_MODE=1 to disable tools entirely and sell text generation only.",
+    a: "Each job runs in a fresh empty directory under ~/.kazuo/jobs that is deleted when the job ends, and that directory is the agent's working directory. But these CLIs can run shell commands, and a shell command can leave a directory — so this is blast-radius reduction, not a sandbox. Run the node in a container or a VM if you want a real boundary, or set KAZUO_SAFE_MODE=1 to disable tools entirely and sell text generation only.",
   },
   {
     q: "How do I pay if I hold no gas token?",
-    a: "There isn't one to hold. On Arc, USDC is the native gas token — the thing you pay in and the thing fees are charged in are the same asset. And you spend none of it on fees: you sign an EIP-3009 authorization, which is typed data rather than a transaction, and Xorv's own facilitator relays it and pays the fee. Any address can receive USDC immediately, with no setup at all.",
+    a: "There isn't one to hold. On Arc, USDC is the native gas token — the thing you pay in and the thing fees are charged in are the same asset. And you spend none of it on fees: you sign an EIP-3009 authorization, which is typed data rather than a transaction, and Kazuo's own facilitator relays it and pays the fee. Any address can receive USDC immediately, with no setup at all.",
   },
   {
     q: "What stops a provider taking the money and not doing the work?",
@@ -40,7 +40,7 @@ const FAQ = [
   },
   {
     q: "Can an agent use this without a human?",
-    a: "That's the point. Xorv ships an MCP server: an agent discovers capacity, prices a job, pays for it on-chain and gets the result back with an ArcScan link — no account, no card, no human in the loop. It carries a hard per-call spending ceiling, because a model that can spend without a bound is a model that can empty an account through a loop it didn't mean to write.",
+    a: "That's the point. Kazuo ships an MCP server: an agent discovers capacity, prices a job, pays for it on-chain and gets the result back with an ArcScan link — no account, no card, no human in the loop. It carries a hard per-call spending ceiling, because a model that can spend without a bound is a model that can empty an account through a loop it didn't mean to write.",
   },
 ];
 

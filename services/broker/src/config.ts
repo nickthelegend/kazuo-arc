@@ -9,7 +9,7 @@
 import { config as loadDotenv } from "dotenv";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { ARC_TESTNET_CAIP2, accountFor, isAccountAddress, parsePrivateKey } from "@xorv/protocol";
+import { ARC_TESTNET_CAIP2, accountFor, isAccountAddress, parsePrivateKey } from "@kazuo/protocol";
 
 // The repo keeps one .env at the root; the broker is two directories down.
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -21,7 +21,7 @@ export interface BrokerConfig {
   /** The operator's address, derived from the key rather than configured twice. */
   operatorAddress: string;
   operatorKey: string;
-  /** Deployed XorvLog contract; null disables the audit trail rather than failing. */
+  /** Deployed KazuoLog contract; null disables the audit trail rather than failing. */
   logAddress: string | null;
   port: number;
   publicUrl: string;
@@ -53,7 +53,7 @@ function optional(name: string): string | null {
 }
 
 export function loadConfig(): BrokerConfig {
-  const operatorKey = parsePrivateKey(required("XORV_OPERATOR_KEY"));
+  const operatorKey = parsePrivateKey(required("KAZUO_OPERATOR_KEY"));
 
   // Derived, not configured. The Hedera version required an account id
   // alongside the key and could not check that the two matched — a mismatched
@@ -61,36 +61,38 @@ export function loadConfig(): BrokerConfig {
   // An EVM address is a pure function of its key, so the pair cannot disagree.
   const operatorAddress = accountFor(operatorKey).address;
 
-  const declared = optional("XORV_OPERATOR_ADDRESS");
+  const declared = optional("KAZUO_OPERATOR_ADDRESS");
   if (declared && declared.toLowerCase() !== operatorAddress.toLowerCase()) {
     throw new Error(
-      `XORV_OPERATOR_ADDRESS is ${declared} but XORV_OPERATOR_KEY controls ${operatorAddress}. ` +
+      `KAZUO_OPERATOR_ADDRESS is ${declared} but KAZUO_OPERATOR_KEY controls ${operatorAddress}. ` +
         `Remove the address — it is derived from the key — or fix the key.`,
     );
   }
 
-  const logAddress = optional("XORV_LOG_ADDRESS");
+  const logAddress = optional("KAZUO_LOG_ADDRESS");
   if (logAddress && !isAccountAddress(logAddress)) {
-    throw new Error(`XORV_LOG_ADDRESS must be an EVM address, got "${logAddress}"`);
+    throw new Error(`KAZUO_LOG_ADDRESS must be an EVM address, got "${logAddress}"`);
   }
 
   return {
-    network: process.env.XORV_NETWORK?.trim() || ARC_TESTNET_CAIP2,
+    network: process.env.KAZUO_NETWORK?.trim() || ARC_TESTNET_CAIP2,
     operatorAddress,
     operatorKey,
     logAddress,
-    port: Number(process.env.XORV_BROKER_PORT ?? 8402),
+    // Railway, Render and Fly inject `PORT` and route only to it. The explicit
+    // variable still wins, so a local .env keeps working unchanged.
+    port: Number(process.env.KAZUO_BROKER_PORT ?? process.env.PORT ?? 8402),
     publicUrl:
-      process.env.XORV_BROKER_URL?.trim() ||
-      `http://localhost:${process.env.XORV_BROKER_PORT ?? 8402}`,
-    corsOrigins: (process.env.XORV_CORS_ORIGINS ?? "")
+      process.env.KAZUO_BROKER_URL?.trim() ||
+      `http://localhost:${process.env.KAZUO_BROKER_PORT ?? process.env.PORT ?? 8402}`,
+    corsOrigins: (process.env.KAZUO_CORS_ORIGINS ?? "")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
-    feeBps: Number(process.env.XORV_FEE_BPS ?? 0),
-    facilitatorMode: process.env.XORV_FACILITATOR?.trim() || "self",
-    dbFile: process.env.XORV_DB?.trim() || path.resolve(here, "../../../data/xorv.db"),
-    mongoUri: process.env.XORV_MONGO_URI?.trim() || null,
-    mongoDb: process.env.XORV_MONGO_DB?.trim() || "xorv",
+    feeBps: Number(process.env.KAZUO_FEE_BPS ?? 0),
+    facilitatorMode: process.env.KAZUO_FACILITATOR?.trim() || "self",
+    dbFile: process.env.KAZUO_DB?.trim() || path.resolve(here, "../../../data/kazuo.db"),
+    mongoUri: process.env.KAZUO_MONGO_URI?.trim() || null,
+    mongoDb: process.env.KAZUO_MONGO_DB?.trim() || "kazuo",
   };
 }

@@ -28,7 +28,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { AdapterKind } from "@xorv/protocol";
+import type { AdapterKind } from "@kazuo/protocol";
 
 /**
  * Cached with its expiry, not forever.
@@ -145,7 +145,7 @@ function isStale(entry: CachedCredentials): boolean {
  * Whether the agent's session is currently usable.
  *
  * Distinct from "a token exists" — an expired token exists and fails every
- * job. `xorv doctor` reports on this so a stale session is caught before a
+ * job. `kazuo doctor` reports on this so a stale session is caught before a
  * buyer pays for it rather than after.
  */
 export function credentialsExpired(kind: AdapterKind): boolean {
@@ -161,7 +161,7 @@ export function canAuthenticate(kind: AdapterKind): boolean {
   return Object.keys(agentCredentials(kind)).length > 0;
 }
 
-/** For tests, and for `xorv doctor` re-checking after a login. */
+/** For tests, and for `kazuo doctor` re-checking after a login. */
 export function resetCredentialCache(): void {
   cache.clear();
 }

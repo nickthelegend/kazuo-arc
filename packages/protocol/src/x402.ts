@@ -1,13 +1,13 @@
 /**
- * Xorv's x402 wiring.
+ * Kazuo's x402 wiring.
  *
  * Two things live here that the broker and the CLI both need:
  *
- *  1. `buildFacilitator` — Xorv runs its **own** facilitator in-process instead
+ *  1. `buildFacilitator` — Kazuo runs its **own** facilitator in-process instead
  *     of calling out to a hosted one. That matters beyond independence: the
  *     facilitator is the party that broadcasts, so running it ourselves is what
  *     lets a job poster hold nothing but USDC and still transact. They sign an
- *     authorization; Xorv submits it and pays the fee.
+ *     authorization; Kazuo submits it and pays the fee.
  *
  *  2. `paymentOptionsFor` — the `accepts` array a 402 offers.
  *
@@ -25,7 +25,7 @@
  * Both end in the same place: the buyer needs no gas token, and the money moves
  * buyer → provider directly with no escrow in between.
  *
- * The consequence for this file is that there is **no Xorv-specific scheme
+ * The consequence for this file is that there is **no Kazuo-specific scheme
  * code**. Hedera needed a bespoke signer that built a fresh SDK client per
  * settlement, because submitting a transaction frozen by someone else's client
  * corrupted the submitting client's internal state and every payment after the
@@ -41,14 +41,14 @@ import { HTTPFacilitatorClient } from "@x402/core/server";
 import { registerExactEvmScheme } from "@x402/evm/exact/facilitator";
 import { toFacilitatorEvmSigner } from "@x402/evm";
 import { getAddress, type PublicClient, type WalletClient } from "viem";
-import { QUOTE_TTL_SECONDS, XORV_SCHEME, usdcAddress } from "./constants.js";
+import { QUOTE_TTL_SECONDS, KAZUO_SCHEME, usdcAddress } from "./constants.js";
 import { readClient, writeClient } from "./chain.js";
 import { usdMicrosToUsdcUnits } from "./money.js";
 
 /**
  * A hosted x402 facilitator, kept as a named fallback so switching is a
  * one-word config change. There is no public Arc facilitator today, which is
- * part of why Xorv runs its own.
+ * part of why Kazuo runs its own.
  */
 export const PUBLIC_FACILITATOR_URL = "https://x402.org/facilitator";
 
@@ -183,7 +183,7 @@ export function buildFacilitator(opts: {
  * HBAR, your choice" branch, along with the live exchange rate it depended on,
  * has no counterpart here.
  *
- * `payTo` is a resolver rather than a fixed string because Xorv pays the
+ * `payTo` is a resolver rather than a fixed string because Kazuo pays the
  * matched **provider** directly — the broker never takes custody of a job's
  * money, it only introduces the two parties and witnesses the result.
  *
@@ -202,7 +202,7 @@ export function paymentOptionsFor(opts: {
 }): PaymentOption[] {
   return [
     {
-      scheme: XORV_SCHEME,
+      scheme: KAZUO_SCHEME,
       network: opts.network as Network,
       payTo: opts.payTo,
       price: {
