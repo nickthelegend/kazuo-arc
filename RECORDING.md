@@ -1,337 +1,260 @@
 # The demo video — what to record, and what to say
 
-The submission asks for **under 5 minutes**. This is a shot list for about
-**4:40**, in the order the story actually lands, with the exact words to say.
+ETHOnline asks for a short video (keep it **under 5 minutes**; Arc and Privy both
+want to see the working product, World wants AgentKit shown in use). This is a
+shot list for about **4:30**, in the order the story lands. Everything in it was
+run for real on 2026-09-13 — nothing here depends on a feature that isn't live.
 
-Read it once, then record. Don't read it *while* recording — the script below
-is written to be spoken from memory in your own words. The bracketed lines are
-what you do; the quoted lines are roughly what you say.
+Read it once, then record in your own words. Bracketed lines are what you do;
+quoted lines are roughly what you say.
 
 ---
 
 ## Before you hit record
 
-This is the part that ruins takes. Do all of it first.
+The demo runs on **three processes on this Mac**. Keep the machine awake and the
+lid open for the whole recording.
+
+| Process | Command | Check |
+|---|---|---|
+| Tunnel | `cloudflared tunnel --url http://localhost:8402` | prints a `https://…trycloudflare.com` URL |
+| Broker | `node services/broker/dist/index.js` (from the repo root, reads `.env`) | `curl -s <tunnel>/health` → `{"ok":true,…}` |
+| Provider | `kazuo start` | dashboard shows `LIVE` and `beat …s ago` |
+
+Today's tunnel is `https://surround-ports-prime-audience.trycloudflare.com`. **If the
+tunnel restarts, its URL changes** — put the new one in
+`NEXT_PUBLIC_KAZUO_BROKER_URL` on both Vercel projects (and `KAZUO_BROKER_URL` on
+`kazuo-arc-app`) and redeploy both. Budget 5 minutes.
+
+The CLI is not on npm yet, so alias it from the clone:
 
 ```bash
-# 1. The broker is on Railway — check it is up (no tunnel to babysit)
-curl -s https://broker-production-03b2.up.railway.app/health
-export KAZUO_BROKER_URL=https://broker-production-03b2.up.railway.app
-
-# 2. A provider node, already registered and warm
-kazuo start                        # terminal 3, leave running
-
-# 3. Buy from a DIFFERENT account than the one hosting
-export KAZUO_PAYER_KEY=<the buyer key>   # the address is derived from it
+alias kazuo="node $PWD/packages/cli/dist/index.js"
+export KAZUO_BROKER_URL=https://surround-ports-prime-audience.trycloudflare.com
+export KAZUO_PAYER_KEY=<the demo payer key>   # a DIFFERENT account from the provider
 ```
 
-That last step matters more than it looks. **A provider cannot buy from
-itself** — if you skip it, every `kazuo run` in the demo fails with a 402 and
-you will not know why on camera.
+**A provider cannot buy from itself** — skip the payer key and every `kazuo run`
+fails with a bare 402.
 
 Then:
 
-- Terminal at **~16pt**, window at 1920×1080, nothing else on screen.
-- Browser with **two tabs pre-opened**: `kazuo-arc.vercel.app` and
-  `kazuo-arc-app.vercel.app`. Signed in with Privy once already, with testnet
-  USDC in the embedded wallet (copy its address from the wallet popover and
-  claim at faucet.circle.com).
-- An ArcScan tab open but scrolled to the top, ready to paste into.
-- **Run one throwaway job before recording.** It warms the broker, the RPC and
-  the agent CLI — the first job of a session is always the slowest,
-  and you don't want that on camera.
-- Silence notifications.
+- Terminal at ~16pt, window 1920×1080, nothing else on screen. Notifications off.
+- Browser tabs: `https://kazuo-arc.vercel.app`, `https://kazuo-arc-app.vercel.app`,
+  and ArcScan (`https://testnet.arcscan.app`).
+- **Browser payment — pick one before recording:**
+  - *Privy (best for the Privy track):* sign in on the job board with your email,
+    open the wallet popover, copy the embedded wallet address, fund it with
+    testnet USDC at `faucet.circle.com`. Then paying a quote signs from that wallet.
+  - *No wallet:* "Pay and run" works for anyone as long as the broker's `.env`
+    has `KAZUO_DEMO_PAYER_KEY` — the job board relays the payment to the broker,
+    which pays from that account on this machine. Without it the button says
+    "No demo payer configured" (by design).
+  - *Neither:* show the quote in the browser, then pay the same job with
+    `kazuo run` in the terminal. Still real, still on-chain.
+- **World App on your phone** if you want the live Selfie Check beat.
+- Run one throwaway job first — the first job of a session is the slowest.
 
-Sanity check, and it's the best single command to prove readiness:
+Readiness check:
 
 ```bash
 kazuo doctor
 ```
 
-Everything should be `✔` except the adapters you're not selling. If anything
-is `✖`, fix it now — that's the command telling you the demo will fail.
-
-**The one that will catch you: `claude-code … signed out — session expired`.**
-Claude Code's OAuth token expires roughly daily, and a provider node that has
-been up since yesterday is still holding the old one. The failure is nasty
-because the payment succeeds and *then* the job returns
-`401 OAuth access token has expired` — the buyer is charged for nothing. Run
-`claude` once in any terminal to refresh; the node picks it up on the next job
-without a restart. Then re-run `kazuo doctor` and confirm it went green.
+It should end `nothing broken`. On this Mac it shows Codex and Echo `signed in ·
+selling`; Claude Code, Grok and OpenCode are installed but not sold (`kazuo init`
+to add them). **Do not sell Claude Code on camera unless `claude` was run in the
+last day** — its OAuth token expires, and a paid job then fails after settlement.
 
 ---
 
-## 0:00 – 0:30 · The trailer
+## 0:00 – 0:25 · The hook
 
-Play `videos/kazuo-launch/renders/video.mp4` full-screen. It's 62 seconds, so
-**cut it after the "402" beat at about 0:30** and hard-cut into your screen.
+**[Browser: kazuo-arc.vercel.app, top of the hero]**
 
-Don't talk over it. It says the thing already, and a voice on top of a voice
-reads as unfinished.
-
-> *(after the cut, over your own desktop)*
-> "That's the pitch. Here's the thing actually working."
+> "You pay for Claude or Codex and use a fraction of it. Someone else needs one
+> job done and has to buy a whole plan. Kazuo is the rail between them — every job
+> settles as a USDC transfer on Arc, straight to the machine that ran it."
 
 ---
 
-## 0:30 – 1:00 · The landing page, and the one idea
+## 0:25 – 0:55 · The landing page
 
-**[Browser: kazuo.vercel.app]** Scroll slowly through the hero.
+Scroll to **How it works**, pause two seconds. Then **Receipts**.
 
-> "Kazuo is a marketplace for idle AI subscription quota. You already pay for
-> Claude, or Codex, or Grok. Most of the day it sits there doing nothing.
-> Someone else needs one job run, and their only option is to buy a whole plan.
->
-> Kazuo connects those two people, and settles it per job — in USDC, on Arc."
+> "These aren't mock rows. The broker indexes a contract on Arc, KazuoLog, and
+> every paid job leaves a receipt there — job, both accounts, amount."
 
-Scroll to **How it works** and let the five steps sit for two seconds. Then
-scroll to the **Security** section and pause on the transcript.
+Scroll to **Security**.
 
-> "And because you're running strangers' prompts on your own machine, every job
-> is sandboxed. That's a real transcript — a paid job that tried to read the
-> payout key, and got refused."
+> "You're running strangers' prompts on your own machine, so every job runs in an
+> OS sandbox — the payout key is unreadable to the job."
 
 ---
 
-## 1:00 – 1:45 · Become a provider
+## 0:55 – 1:40 · Become a provider
 
 **[Terminal]**
 
 ```bash
-npm i -g @kazuo/cli
-kazuo init
-```
-
-> "One command to install. `init` asks which of your agent CLIs you want to
-> sell, and what to charge per job."
-
-Then the command that sells the whole product:
-
-```bash
 kazuo doctor
 ```
 
-Let it print, then point at three lines with your cursor:
+Point at three lines:
 
-> "This is the diagnostic. Three things worth pointing at.
->
-> **Sandbox** — it names the actual mechanism. macOS seatbelt here. Not the
-> word 'sandboxed', the mechanism, so you know what you've really got.
->
-> **Claude Code, signed in, selling** — it checks whether the CLI is actually
-> authenticated, not just installed. A signed-out CLI answers `--version`
-> perfectly happily and then fails every paid job you take.
->
-> And the last line — **nothing broken, three things not set up**. Those are
-> different sentences, and most tools blur them."
-
-Now go live:
+> "Sandbox — it names the mechanism, macOS seatbelt. Codex — signed in, selling; it
+> checks the CLI is actually authenticated, not just installed. And the last line:
+> nothing broken."
 
 ```bash
 kazuo start
 ```
 
-> "That's it. Registered on chain, holding a control
-> channel open, waiting for work."
+> "Registered — and that registration is written on chain. It holds a control
+> channel open to the broker and waits for work."
 
-Leave the dashboard visible for a beat — label, heartbeat, capabilities,
-earnings.
+Leave the dashboard up: `LIVE`, heartbeat, the two capabilities and prices.
 
 ---
 
-## 1:45 – 2:45 · Buy a job, and watch the 402
+## 1:40 – 2:40 · Buy a job, and watch the 402
 
-**[Browser: kazuo-app.vercel.app]**
+**[Browser: kazuo-arc-app.vercel.app]**
 
-**Sign in**, top right — Privy. Type an email, enter the code. That is the whole
-onboarding: Privy has just made an embedded wallet on Arc.
+Open **Providers**: your node, online, heartbeat, prices. Back to **Jobs**.
 
-> "No extension, no seed phrase, no network to add. And this wallet can pay right
-> now, because what it signs is not a transaction — it's an EIP-3009
-> authorization, typed data. It never gets broadcast. The facilitator relays it
-> and pays the fee, so I need no gas at all."
+If you set up Privy: **Sign in** → the Privy modal (email or wallet).
 
-Open the wallet popover for a second: the address, the USDC balance, **Send
-USDC**. MetaMask still works through the same modal if you would rather show it.
+> "An email is enough. Privy makes an embedded wallet on Arc, and it can pay right
+> away — what it signs is an EIP-3009 authorization, typed data, never broadcast.
+> The facilitator relays it and pays the fee. No gas, no extension."
 
-Type a real prompt into the composer. **Make it use tools** — that is the
-difference between a good shot and a dead one:
+In the composer, pick **Codex** in the model picker and type:
 
 ```
-Create a file fizzbuzz.js that prints FizzBuzz for 1..20, then run it with node
-and show me the output.
+Write a Python one-liner that reverses a string. Just the code, nothing else.
 ```
 
-Measured on real jobs: a pure "write me a function" prompt emits **3 log
-events** — session started, then silence for ~15s, then the whole answer lands
-at once. The prompt above emits **8**, including `tool_call` and `file_edit`
-lines that stream while you talk over them. Same price, far better footage.
+Click the arrow. **Stop on the quote card.**
 
-It also puts the sandbox on screen for free: the paths in the log read
-`/private/tmp/kazuo-jobs/job_.../`, which is the per-job directory from the
-security beat.
+> "Before any money moves I get terms: which machine runs it, what it costs, and
+> it pays that machine's own address. That's HTTP 402 doing real work."
 
-Pick **Claude Code** from the model picker (the real vendor logos are there —
-worth a half-second pause).
+Pay (Privy wallet or demo payer), or in the terminal:
 
-On **Providers**, point at the **human** badge next to a node.
+```bash
+kazuo run --adapter codex --max 0.25 "Write a Python one-liner that reverses a string. Just the code, nothing else."
+```
 
-> "That node proved a real person is behind it, with World ID — AgentKit. A
-> marketplace sorted on reputation is trivial to farm with bots; this is the one
-> signal a bot farm can't mint. Human-backed nodes win ties, and one person can
-> back three nodes at most."
-
-In a terminal, `kazuo agentkit status` shows the same lookup against AgentBook
-on World Chain.
-
-**Stop on the quote.** This is the beat the whole bounty is about.
-
-> "Before any money moves, I get terms back. Who's going to run this — that's a
-> real machine, with a real Arc address. What it costs. And it pays straight
-> to them; the broker never touches the money.
->
-> That's HTTP 402. A status code nobody ever used, doing actual work."
-
-Pay it. Watch the log stream. Read the answer out loud, briefly.
+Watch the job page: status, execution log, the answer, then the **On-chain
+receipt** panel — payer, paid to, amount, `sha256` of the result.
 
 ---
 
-## 2:45 – 3:30 · Prove it on-chain
+## 2:40 – 3:15 · Prove it on chain
 
-Copy the transaction hash from the receipt, open ArcScan.
+Click **View transfer on ArcScan**. Point at two things only:
 
-**Point at two things and only two things.**
+> "The USDC moved buyer to provider, directly — no escrow, no platform custody. And
+> the transaction was sent by the facilitator, so every fee came from it. The buyer
+> never broadcast anything. On Arc the gas token is USDC, and the buyer spent none
+> of it on fees."
 
-> "First — the token moved buyer to provider. Directly. No escrow, no float,
-> no platform in the middle taking custody.
->
-> Second, and this is the one that matters —"
-
-Scroll to the fee section.
-
-> "— every fee came from the facilitator. Not from the buyer. The buyer never
-> broadcast anything, so they could not have paid a fee even in principle.
->
-> On most chains, 'go buy the gas token before you can spend your stablecoin' is
-> exactly where a normal person's crypto payment dies. On Arc the money and the gas are
-> the same token, and the buyer spends none of it on fees. This transaction is
-> the proof."
-
-Then open the **audit log contract** `0x383f5153…65eef3` and scroll its events.
-
-> "And every settled job leaves a receipt here. Job id, both accounts, the
-> amount, and a SHA-256 of the result — so the record is auditable without the
-> work itself ever being public."
+Back on the job page, **View on-chain receipt** → the KazuoLog entry. Then the
+job board's **Network** page: "Receipts from the chain".
 
 ---
 
-## 3:30 – 4:10 · The part nobody else has: `/kazuo` in Claude Code
+## 3:15 – 3:50 · World: human-backed nodes
 
-This is your differentiator. Give it room.
+**[Terminal]**
 
-**[Claude Code, in any project]**
+```bash
+kazuo agentkit status
+```
+
+> "A marketplace sorted on reputation is easy to farm with bots. So every node
+> signs a World AgentKit challenge with its payout key, and the broker looks that
+> address up in AgentBook on World Chain. Right now this node is not registered —
+> so it's treated as anonymous. Human-backed nodes win ties, one human can back at
+> most three nodes, and a buyer can demand human-backed only."
+
+```bash
+kazuo run --human-backed-only --adapter echo --max 0.01 "hello"
+```
+
+> "No human-backed node online — so it refuses rather than quietly giving me a bot."
+
+*Optional, if you have World App:* `kazuo verify` → scan the QR → Selfie Check →
+the terminal prints `human verified`, and on **Providers** the node gains the
+**human** badge. Only show this if you ran it once before recording.
+
+---
+
+## 3:50 – 4:15 · An agent paying an agent
+
+**[Claude Code, in any project]** (install once with `kazuo skills`)
 
 ```
 /kazuo Write a Postgres query that finds duplicate rows by email, keeping the newest
 ```
 
-> "This is Claude Code. And this is Kazuo installed as a slash command inside it.
->
-> I'm sitting in one agent, and I've just asked it to send that task to a
-> *different* machine — someone else's Claude subscription — and pay for it."
+> "This is Claude Code sending a task to someone else's machine and paying for it —
+> no account, no API key, no invoice. The answer comes back with the transaction."
 
-When the result comes back:
-
-> "There's the answer. There's who ran it, and what it cost. And there's the
-> transaction.
->
-> That's an agent paying another agent for compute, per request, with no
-> account, no API key, and no invoice. That's what x402 is actually for."
-
-Then show how it got there:
-
-```bash
-kazuo skills
-```
-
-> "One command installs it."
+(The MCP server does the same for any MCP client: `kazuo_quote`, `kazuo_run_job`.)
 
 ---
 
-## 4:10 – 4:40 · What you earned, and close
-
-**[Terminal, back on the provider machine]**
+## 4:15 – 4:30 · Close
 
 ```bash
 kazuo earnings
-```
-
-> "And on the other side of that — this is the provider's ledger. Every job it
-> ran, what it charged, and the on-chain balance underneath.
->
-> That USDC is real. It's on Arc testnet right now."
-
-Close on:
-
-```bash
 pnpm test
 ```
 
-> "295 tests. No credentials, no network."
+> "The provider's ledger — every job and the on-chain balance underneath. And 347
+> tests, no credentials, no network."
 
-Let the green scroll and end. **Don't add an outro.** The test output is a
-better final frame than a logo.
+End on the green test output. No outro.
 
 ---
 
-## Every CLI command, and whether it earns screen time
+## Never on camera
+
+- `.env`, `kazuo config`, `~/.kazuo*/config.json`, `apps/app/.env.local` — they hold
+  keys or print account details.
+- The Vercel/Railway dashboards' environment variable pages.
+
+## Commands worth screen time
 
 | Command | Show it? | Why |
 |---|---|---|
-| `kazuo doctor` | **yes, prominently** | The single most convincing screen. Sandbox tier, real sign-in detection, and the broken-vs-unconfigured distinction. |
-| `kazuo start` | **yes** | The "you're now a provider" moment. |
-| `kazuo earnings` | **yes** | Job history plus the on-chain balance. This is the payoff shot. |
-| `kazuo skills` | **yes** | Installs `/kazuo`. Your differentiator. |
-| `kazuo run "…"` | **yes** | The buyer path in one line, if the browser flow feels slow. |
-| `kazuo status` | if time | Who's live network-wide, and at what price. |
-| `kazuo test` | if time | Runs a job through each adapter locally, free. Proves the node works before selling. |
-| `kazuo price` | mention | Change what you charge, per capability. |
-| `kazuo pause` / `resume` | mention | Stop taking work without going offline. |
-| `kazuo jobs` / `logs` | skip | Same information `earnings` already shows, less well. |
-| `kazuo wallet` | skip | `earnings` ends on the wallet anyway. |
-| `kazuo cancel` | skip | Nothing to see. |
-| `kazuo config` | skip | Prints your account id on camera. Don't. |
-
-**Do not run `kazuo config` or `cat ~/.kazuo/config.json` on camera** — that file
-holds the payout private key.
-
----
+| `kazuo doctor` | **yes** | Sandbox tier, real sign-in detection, broken vs not set up |
+| `kazuo start` | **yes** | The "you're a provider now" moment, registration on chain |
+| `kazuo run "…"` | **yes** | The whole buyer path in one line |
+| `kazuo agentkit status` | **yes** | World AgentKit + AgentBook, live |
+| `kazuo earnings` | **yes** | Job history plus the on-chain balance |
+| `kazuo skills` | mention | Installs `/kazuo` in Claude Code |
+| `kazuo status` | if time | Network-wide view, including the on-chain audit counts |
+| `kazuo test` | if time | Runs each capability locally, free |
+| `kazuo verify` | only if rehearsed | World ID Selfie Check QR |
+| `kazuo config` | **never** | Prints account details |
 
 ## If you'd rather not talk
 
-Every line above is written to be spoken, but if you want to generate the
-narration instead, the pronunciation trap is real and measured:
+For generated narration: write **`U S D C`** and **`M C P`** letter by letter in
+the TTS input, or engines collapse them into one syllable. Speech recognition
+hears "Kazuo" unreliably — check auto-captions before publishing.
 
-- **`USDC` must be written `U S D C`** in any TTS input. As one token, engines
-  collapse it into a single syllable that sounds like "us-dee-see" or just
-  "usd". Measured on Kokoro: `"paid in USDC"` synthesizes in 1.173s;
-  `"paid in U S D C"` takes 1.707s — those extra 0.5s are the letters actually
-  being spoken.
-- Same for **`M C P`** (not `MCP`).
-- Kazuo comes back from speech recognition as "Zorv", so
-  if you auto-caption, fix those before publishing. `videos/kazuo-launch/fix-captions.mjs`
-  does exactly this for the trailer.
-
----
-
-## The failure modes that eat takes
+## Failure modes that eat takes
 
 | Symptom on camera | Cause | Fix before recording |
 |---|---|---|
-| `kazuo run` fails with a bare 402 | You're buying from the address that's hosting | `export KAZUO_PAYER_KEY` |
-| "no online provider matches" | The node's heartbeat lapsed | Restart `kazuo start`, wait 15s |
-| `RECONNECTING`, and the log flaps `control channel lost — retrying` every second | **Two `kazuo start` processes are running.** They register under the same label and payout account, so the broker keeps replacing one with the other and both reconnect forever | `pgrep -fl "kazuo start"` — kill all but one. It is stable within seconds |
-| The deployed app shows "broker offline" | **The Cloudflare quick tunnel expired.** These are ephemeral and die on their own, not just when you restart the broker — it happened to us between two takes | Restart `cloudflared tunnel --url http://localhost:8402`, take the NEW url, and re-deploy **both** apps with it. Budget 5 minutes |
-| "broker offline" but pages still load | Your machine's DNS has a stale negative entry for the new tunnel host. Vercel resolves independently, so the deployment is fine | `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`, or just ignore it — check with `curl` from another network |
-| First job takes 20+ seconds | Cold start | Run one throwaway job first |
-| `doctor` says `sandbox: env` | You're on a host with no seatbelt/bubblewrap | Say so, or record on macOS |
+| `kazuo run` fails with a bare 402 | Buying from the provider's own account | `export KAZUO_PAYER_KEY` for a different account |
+| "no online provider matches" | Heartbeat lapsed, or the price ceiling is below every capability | Restart `kazuo start`; raise `--max` |
+| Job board says "broker offline" | The tunnel or the broker stopped, or the tunnel restarted with a new URL | Restart it; if the URL changed, update both Vercel projects and redeploy |
+| "No demo payer configured" | The broker was started without `KAZUO_DEMO_PAYER_KEY` | Add it to `.env` and restart the broker, or pay with Privy / `kazuo run` |
+| Provider flaps `control channel lost` | Two `kazuo start` processes | `pgrep -fl "kazuo.*start"` — keep one |
+| First job takes 20+ s | Cold start | Run a throwaway job first |
+| Claude Code job fails after paying | Expired Claude Code OAuth | Run `claude` once, re-run `kazuo doctor` |

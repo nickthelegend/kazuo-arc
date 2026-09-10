@@ -40,10 +40,16 @@
     },
     {
       "name": "provider",
-      "runtimeExecutable": "sh",
+      "runtimeExecutable": "env",
       "runtimeArgs": [
-        "-c",
-        "export KAZUO_HOME=\"$HOME/.kazuo-arc-demo/provider\" KAZUO_BROKER_URL=http://localhost:8402 KAZUO_SANDBOX=none; export KAZUO_PRIVATE_KEY=\"$(grep '^KAZUO_DEMO_PROVIDER_KEY=' .env | cut -d= -f2)\"; exec node packages/cli/dist/index.js start --port 8411"
+        "KAZUO_HOME=/Users/jaibajrang/.kazuo-arc-demo/provider",
+        "KAZUO_BROKER_URL=http://localhost:8402",
+        "KAZUO_SANDBOX=none",
+        "node",
+        "packages/cli/dist/index.js",
+        "start",
+        "--port",
+        "8411"
       ],
       "port": 8411
     }

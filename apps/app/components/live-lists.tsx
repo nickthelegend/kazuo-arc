@@ -62,7 +62,12 @@ export function HumanBacked({ title = "Human-backed — proven with World ID (Ag
 }
 
 export function ProviderList() {
-  const { data: providers, error } = usePoll<Provider[]>(useCallback(() => api.providers(), []));
+  const { data, error } = usePoll<Provider[]>(useCallback(() => api.providers(), []));
+  // A node that stops heartbeating stays in the broker's registry for ten
+  // minutes before it is reaped. Listing it here, under "Live providers" and
+  // marked Offline, contradicts the heading and hid the empty state after the
+  // last node went away — while the sidebar already said "0 provider(s) live".
+  const providers = data?.filter((p) => p.status !== "offline");
 
   if (error) {
     return (

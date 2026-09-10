@@ -30,15 +30,27 @@ export async function agentkitProof(
   brokerUrl: string,
   target: "register" | "quote",
   privateKey: string,
+  /**
+   * Told why no proof was made. Never fatal, but never silent either: a node
+   * that quietly registered without its proof once lost its human-backed label
+   * after a broker restart, and nothing anywhere said why.
+   */
+  onSkip?: (reason: string) => void,
 ): Promise<string | null> {
   if (process.env.KAZUO_AGENTKIT === "0") return null;
   try {
     const res = await fetch(`${brokerUrl}/api/agentkit/challenge?for=${target}`, {
       signal: AbortSignal.timeout(10_000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      onSkip?.(`challenge request answered ${res.status}`);
+      return null;
+    }
     const { agentkit } = (await res.json()) as { agentkit?: AgentkitExtension };
-    if (!agentkit) return null;
+    if (!agentkit) {
+      onSkip?.("broker offers no AgentKit challenge");
+      return null;
+    }
 
     const account = accountFor(privateKey);
     const client = createAgentkitClient({
@@ -50,7 +62,8 @@ export async function agentkitProof(
       },
     });
     return await client.createHeader(agentkit);
-  } catch {
+  } catch (err) {
+    onSkip?.(err instanceof Error ? err.message : String(err));
     return null;
   }
 }

@@ -26,6 +26,8 @@ import { ARC_CHAIN } from "@/lib/chains";
 export const runtime = "nodejs";
 /** Never prerender or cache: this route moves funds. */
 export const dynamic = "force-dynamic";
+/** A settlement on Arc plus the broker round trip; well under this, but never cut off mid-payment. */
+export const maxDuration = 60;
 
 const BROKER_URL = (process.env.KAZUO_BROKER_URL ?? "http://localhost:8402").replace(/\/+$/, "");
 
@@ -70,13 +72,31 @@ export async function POST(request: Request): Promise<NextResponse> {
   // Only a key is needed. The address is derived from it, so there is no second
   // value to configure and no way for the two to disagree.
   if (!payerKey) {
-    return NextResponse.json(
-      {
-        error:
-          "No demo payer configured. Set KAZUO_DEMO_PAYER_KEY in .env.local — see .env.example.",
-      },
-      { status: 501 },
-    );
+    // The usual case: no key in this deployment. The broker holds the demo
+    // account's key on its own machine and pays through its own x402 route, so
+    // the secret never has to be copied into a hosting provider's environment.
+    // Its answer — including "no demo payer configured" — is relayed as is.
+    let forward: unknown;
+    try {
+      forward = await request.json();
+    } catch {
+      return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
+    }
+    try {
+      const res = await fetch(`${BROKER_URL}/api/demo/pay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(forward),
+        signal: AbortSignal.timeout(55_000),
+      });
+      const payload = (await res.json().catch(() => ({ error: `broker returned ${res.status}` }))) as Record<string, unknown>;
+      return NextResponse.json(payload, { status: res.status });
+    } catch (err) {
+      return NextResponse.json(
+        { error: `Can't reach the broker to pay: ${err instanceof Error ? err.message : String(err)}` },
+        { status: 502 },
+      );
+    }
   }
 
   let body: { quoteId?: string };

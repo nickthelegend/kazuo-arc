@@ -41,10 +41,21 @@ const GLYPH: Record<JobEvent["kind"], { mark: string; tone: string }> = {
  * soon as it reaches a terminal state — a finished job is a static document,
  * and holding an event stream open for it wastes a connection on both ends.
  */
-export function JobView({ jobId, initial }: { jobId: string; initial: Job | null }) {
+export function JobView({
+  jobId,
+  initial,
+  loadError = null,
+}: {
+  jobId: string;
+  initial: Job | null;
+  /** Why the server-side fetch came back empty, when it did. */
+  loadError?: "not_found" | "unreachable" | null;
+}) {
   const [job, setJob] = useState<Job | null>(initial);
   const [events, setEvents] = useState<JobEvent[]>(initial?.events ?? []);
   const [streaming, setStreaming] = useState(false);
+  // Bumped to reopen the event stream after it closed for good (see below).
+  const [streamEpoch, setStreamEpoch] = useState(0);
   const animate = useEntrance();
   const logRef = useRef<HTMLDivElement | null>(null);
 
@@ -76,24 +87,74 @@ export function JobView({ jobId, initial }: { jobId: string; initial: Job | null
         void api.job(jobId).then(setJob).catch(() => {});
       }, 6_000);
     });
-    source.addEventListener("error", () => setStreaming(false));
+    // EventSource retries a dropped connection on its own, but an HTTP error —
+    // what a tunnel answers while the broker is down — closes it for good. The
+    // page then sat on "Can't reach the broker" forever, even after the broker
+    // came back. So when it closes, look the job up again after a pause and
+    // reopen the stream; a finished job needs no stream, a 404 needs no retry.
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    source.addEventListener("error", () => {
+      setStreaming(false);
+      if (source.readyState !== EventSource.CLOSED) return;
+      retry = setTimeout(() => {
+        api
+          .job(jobId)
+          .then((fresh) => {
+            setJob(fresh);
+            if (fresh.events) setEvents(fresh.events);
+            setStreamEpoch((n) => n + 1);
+          })
+          .catch((err: unknown) => {
+            if (err instanceof Error && / → 404\b/.test(err.message)) return;
+            setStreamEpoch((n) => n + 1);
+          });
+      }, 5_000);
+    });
 
-    return () => source.close();
-  }, [jobId, terminal]);
+    return () => {
+      source.close();
+      clearTimeout(retry);
+    };
+  }, [jobId, terminal, streamEpoch]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
   }, [events.length]);
 
+  // A running job's "took" is a live clock. Read from Date.now() during render,
+  // the server's HTML and the browser's first render disagree by however long
+  // the page took to arrive, and React throws hydration error #418. So the
+  // ticking value exists only after mount; both renders start from the same "—".
+  const [now, setNow] = useState<number | null>(null);
+  const startedAt = job?.startedAt ?? null;
+  useEffect(() => {
+    if (terminal || !startedAt) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1_000);
+    return () => clearInterval(timer);
+  }, [terminal, startedAt]);
+
   if (!job) {
+    // An unreachable broker is not evidence the job is gone: saying "not found"
+    // about a paid job that exists sends its buyer looking for a lost payment.
+    // The event stream above keeps retrying, so the page fills in by itself
+    // once the broker answers again.
+    if (loadError === "unreachable") {
+      return (
+        <Empty
+          title="Can't reach the broker"
+          hint="The job may still exist — this page will load it as soon as the broker answers."
+        />
+      );
+    }
     return <Empty title="Job not found" hint="It may have expired, or the broker restarted." />;
   }
 
   const elapsed =
     job.completedAt && job.startedAt
       ? job.completedAt - job.startedAt
-      : job.startedAt
-        ? Date.now() - job.startedAt
+      : job.startedAt && now !== null
+        ? now - job.startedAt
         : 0;
 
   return (

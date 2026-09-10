@@ -1,8 +1,8 @@
 # ETHOnline 2026 — Kazuo
 
 **Kazuo turns idle AI subscription quota into a paid marketplace: every job settles as a USDC transfer on
-Arc over x402, World AgentKit tells human-backed nodes and agents apart from bots, and Privy gives anyone
-with an email a wallet that can pay.**
+Arc over x402, World AgentKit and World ID tell human-backed nodes and agents apart from bots, and Privy
+gives anyone with an email a wallet that can pay.**
 
 You pay for Claude, Codex or Grok and use a fraction of it. Someone else needs one job done and has to buy a
 whole plan to get it. Kazuo is the rail between them. The buyer can be a person in a browser, a terminal, or
@@ -14,9 +14,10 @@ human *is* there matters.
 |---|---|
 | Landing | https://kazuo-arc.vercel.app |
 | Job board | https://kazuo-arc-app.vercel.app |
-| Broker | `https://broker-production-03b2.up.railway.app` (Railway) |
+| Broker | Served during judging through a Cloudflare tunnel to the broker on the builder's machine (current URL is baked into both deployments); the Railway image is built and waits for its operator key |
 | Architecture diagram | [ARCHITECTURE.md](ARCHITECTURE.md#architecture-diagram) |
 | World feedback | [FEEDBACK-WORLD.md](FEEDBACK-WORLD.md) |
+| Demo script | [RECORDING.md](RECORDING.md) |
 | Continuity | Yes — this began as Xorv on Hedera; see "What is new at this event" below |
 
 ---
@@ -31,26 +32,28 @@ Agents hold wallets and pay per job in USDC over **x402**, one of the protocols 
 - The buyer signs an **EIP-3009 `transferWithAuthorization`** (typed data, never broadcast). The broker's
   facilitator relays it and pays the fee. **The buyer's gas is asserted to be zero**, not assumed.
 - Money moves **buyer → provider in one transfer**. The broker is never the payee; protocol fee 0%.
-- Receipts (a SHA-256 of each result) are appended to the **`KazuoLog`** contract on Arc.
+- Registrations, sampled heartbeats and receipts (a SHA-256 of each result) are appended to the
+  **`KazuoLog`** contract on Arc, and the job board and landing page read them back from a persisted index.
 - An **MCP server** lets any model discover capacity, price a job, pay and get the result, with a hard
-  per-call spending ceiling.
+  per-call spending ceiling; `/kazuo` does the same from inside Claude Code.
 
-### World — AgentKit (Continuity)
+### World — AgentKit (Continuity) · Selfie Check
 
 A capacity market sorted on reputation has an obvious attack: spin up a thousand nodes and farm the success
-score. Kazuo uses **AgentKit** to make the one signal a bot farm cannot mint:
+score. Kazuo uses World to make the one signal a bot farm cannot mint:
 
 - Provider nodes sign a broker-issued **SIWE challenge** with their payout key
   (`GET /api/agentkit/challenge`); the broker verifies it with `@worldcoin/agentkit` and resolves the address
-  in **AgentBook** on World Chain.
+  in **AgentBook** on World Chain. Buyers' agents sign the same way on every quote.
 - **Human-backed nodes win price ties ahead of track record.** Buyers can require human-backed providers only
   (`kazuo run --human-backed-only`, MCP `human_backed_only`). **One human can back at most three live nodes**,
   so the label cannot be bought in bulk.
-- **Buying agents prove themselves the same way.** Every job records `providerHumanBacked` and
-  `buyerHumanBacked`; the job board shows the badge.
-- The proof never changes the price and never gates payment — an anonymous agent still gets its job done.
-- `kazuo agentkit status` reads AgentBook for the node's address; `kazuo agentkit register` starts World App
-  verification. Feedback on docs, portal and testing: [FEEDBACK-WORLD.md](FEEDBACK-WORLD.md).
+- **World ID Selfie Check** as a second route to the label: the broker issues RP-signed, single-use requests,
+  checks nonce, expiry, action and signal hash itself, then verifies the proof with World's API.
+  `kazuo verify` shows the QR in a terminal; the job board has the same flow for buyers.
+- Every job records `providerHumanBacked` and `buyerHumanBacked`; the job board shows the badge. The proof
+  never changes the price and never gates payment — an anonymous agent still gets its job done.
+- Feedback on docs, portal and testing: [FEEDBACK-WORLD.md](FEEDBACK-WORLD.md).
 
 ### Privy — Best Financial Flow
 
@@ -67,41 +70,52 @@ score. Kazuo uses **AgentKit** to make the one signal a bot farm cannot mint:
 
 ## Proof
 
-### Already on Arc testnet (produced before the Xorv → Kazuo rename, same contracts and code paths)
+### Produced at this event, after the rename (Arc testnet)
 
 | | |
 |---|---|
-| A real model job, bought and paid for | [`0x83f81832…5e77f7c`](https://testnet.arcscan.app/tx/0x83f81832a17b95e3c390f264abc8cb24d2cf35ad48955155bddc21e8a5e77f7c) — $0.20 to a Codex node, prompt in, working code out |
-| The browser wallet path | [`0xb495004c…ce4c5c14`](https://testnet.arcscan.app/tx/0xb495004c5f6edf913bd80b3522e0c6c6776d967d77376c19baed83cace4c5c14) — EIP-712 typed data from the app's payment code |
-| Full lifecycle: quote → 402 → pay → dispatch → result → receipt | [`0xad0887af…ff8113d`](https://testnet.arcscan.app/tx/0xad0887afa017182d22f82fd7a51336381fae0f69cbb8df42686b63e45ff8113d) |
-| The zero-gas proof | [`0x9c1fed2b…f4f0c67`](https://testnet.arcscan.app/tx/0x9c1fed2b2c87bf85bef22045ff3a440e3d4463c2147cdd00f66777163f4f0c67) — buyer's gas: 0 wei |
+| A real Codex job, $0.20 | settlement [`0x042613d2…6ddb`](https://testnet.arcscan.app/tx/0x042613d2c1f4fddb37629bb96aafafcc28e8654798d695ca18ed2690d5c46ddb) · receipt [`0xaffd433d…07c1`](https://testnet.arcscan.app/tx/0xaffd433d023631b1890f840eb766974a08c06886bb5b4bdd0457ad1b82f007c1) — answer `print(input()[::-1])` |
+| An agent paying over MCP | settlement [`0x307792e8…9f99`](https://testnet.arcscan.app/tx/0x307792e88f11bd6c5d88661ddc1390b4c5321dd1d184c7fc0c0d0eeb76cd9f99) · receipt [`0x2cdcae5c…454a`](https://testnet.arcscan.app/tx/0x2cdcae5c05ada8cb70f432a8fcbfdabe4a47d8e3ab7d944f0736a6b54857454a) |
+| CLI job, decoded from chain | settlement [`0x12c3a36b…6d10`](https://testnet.arcscan.app/tx/0x12c3a36b9eb6a36498982b35b7d14e697655e92afdefc55647ac90a32f386d10) — one USDC `Transfer` payer → provider, `from` = facilitator · receipt [`0x093bb763…acd3`](https://testnet.arcscan.app/tx/0x093bb76328c49befbb8b0482e4ec99c4bd7abe3a2baf3595c99cfe850a56acd3) with the same `resultHash` the job page shows |
+| Zero-gas proof, re-run | [`0xbc95f083…4d12`](https://testnet.arcscan.app/tx/0xbc95f083b33b2d95c8317cdca5386a70b6ea88dc2e9c2075e03b1deabd9c4d12) — buyer's gas 0 wei |
+| Provider registration on chain | [`0x530bcd9f…1520`](https://testnet.arcscan.app/tx/0x530bcd9f1e0014ef8edd9e9fc054db890e62b3772eb2d773689d0246c5831520) (KazuoLog kind 1) |
+| Recovered after a machine restart | settlement [`0x8d77bd8c…c60a`](https://testnet.arcscan.app/tx/0x8d77bd8ca593dc229e2e926e8fd49dda50fa13701150f78ebe0e2d7a9b97c60a) · receipt [`0x748f671b…2512`](https://testnet.arcscan.app/tx/0x748f671ba0639ac43296d872991a1b08a8c3f44627ec99d532690d3347392512) |
 | The audit log contract (`KazuoLog`) | [`0x383f5153…65eef3`](https://testnet.arcscan.app/address/0x383f5153db8bb18c7c25157fb3493645a465eef3) |
-| USDC | [`0x3600…0000`](https://testnet.arcscan.app/token/0x3600000000000000000000000000000000000000) — Circle FiatTokenV2 |
+| World AgentKit, live | broker log on register: `agentkit proof verified — no human in AgentBook` (AgentBook `0xA23aB271…b944dA` on World Chain) |
+| World ID RP signature | a request's signature recovers exactly to the registered signer `0xd4F041AB…9b78Dc` |
 
-Measured on those transactions: x402 settlement 91,641 gas ($0.00185); audit append 43,460 gas ($0.00088);
-contract deploy 211,940 gas ($0.0043); buyer's gas, ever: $0.00.
+Every item above, plus 60 browser, API and on-chain checks with their evidence, is in
+[TESTPLAN.md](TESTPLAN.md).
 
-### Deployed at this event
+### Before the rename (same contracts and code paths)
 
 | | |
 |---|---|
-| Landing | https://kazuo-arc.vercel.app — built and typechecked on Vercel, verified live |
-| Job board, with Privy | https://kazuo-arc-app.vercel.app — built and typechecked on Vercel; Privy bundled with the app id |
-| Broker image | Builds on Railway (`pnpm install --frozen-lockfile` + `tsc` inside the image) |
+| A real model job | [`0x83f81832…5e77f7c`](https://testnet.arcscan.app/tx/0x83f81832a17b95e3c390f264abc8cb24d2cf35ad48955155bddc21e8a5e77f7c) — $0.20 to a Codex node |
+| The browser wallet path | [`0xb495004c…ce4c5c14`](https://testnet.arcscan.app/tx/0xb495004c5f6edf913bd80b3522e0c6c6776d967d77376c19baed83cace4c5c14) — EIP-712 typed data from the app's payment code |
+| Full lifecycle | [`0xad0887af…ff8113d`](https://testnet.arcscan.app/tx/0xad0887afa017182d22f82fd7a51336381fae0f69cbb8df42686b63e45ff8113d) |
+| The zero-gas proof | [`0x9c1fed2b…f4f0c67`](https://testnet.arcscan.app/tx/0x9c1fed2b2c87bf85bef22045ff3a440e3d4463c2147cdd00f66777163f4f0c67) |
+
+Measured: x402 settlement 91,641 gas ($0.00185); audit append 43,460 gas ($0.00088); buyer's gas, ever: $0.00.
 
 ---
 
 ## What is new at this event (continuity)
 
-- **World AgentKit** end to end: broker gate, registry rules, CLI and MCP proofs, `kazuo agentkit`, UI badge.
+- **World AgentKit** end to end: broker-minted SIWE challenge, verification, AgentBook resolution on World
+  Chain, ranking and sybil rules, CLI and MCP proofs, `kazuo agentkit`, UI badge.
+- **World ID Selfie Check**: RP-signed requests, broker-side nonce/replay checks, World verify API,
+  `kazuo verify` terminal QR, job-board widget.
 - **Privy** sign-in with embedded wallets that pay over x402, and Send USDC.
 - **World Chain networks** (`eip155:4801`, `eip155:480`) in the protocol package.
+- **A persisted forward index of the audit log**, so receipts are readable however old, without scanning the
+  chain per request; RPC-budget aware so it never starves settlements.
 - **Renamed Xorv → Kazuo** across every package, binary, env var, tool and doc.
-- **Public deployment**: Vercel (landing, job board) and Railway (broker with a persistent volume).
-- Architecture diagram, World feedback document.
+- **Public deployment** of the landing page and job board on Vercel; broker image for Railway.
+- Architecture diagram, World feedback document, end-to-end test plan with live evidence.
 
 What existed before the event: the x402 marketplace on Arc — broker, CLI, MCP server, sandbox, job board,
-landing page, the audit trail (then named `XorvLog`), and the Arc proofs above.
+landing page, the audit trail (then named `XorvLog`), and the pre-rename Arc proofs above.
 
 ---
 
@@ -109,25 +123,27 @@ landing page, the audit trail (then named `XorvLog`), and the Arc proofs above.
 
 A judge will find these anyway, and finding them undisclosed is worse than reading them here.
 
-- **The Railway broker is not serving yet.** Its image builds and the container starts, then stops at one
-  missing secret: the operator key. That key was deliberately not pushed to Railway by the build agent; the
-  owner sets it. Until then the deployed job board cannot list providers.
-- **No address is registered in AgentBook yet.** The verification, AgentBook resolution and ranking rules are
-  implemented, but registering an address requires a person to verify in World App. Until someone does, every
-  node reads as "not proven".
-- **The Privy flow has no on-chain payment from an embedded wallet yet.** It is deployed and bundled; the
-  first payment needs a signed-in user holding testnet USDC.
+- **The broker runs on the builder's machine during judging**, reached through a Cloudflare quick tunnel.
+  The Railway image builds, but the service needs its operator key, which the owner sets and tooling never
+  pushes. If the tunnel restarts its URL changes and both frontends need a redeploy.
+- **No address is registered in AgentBook, and no Selfie Check scan has been completed.** Verification,
+  AgentBook resolution, the RP-signed World ID request and the ranking rules are live, but the human step
+  needs a person with World App. Until then every node reads "not proven".
+- **No on-chain payment from a Privy embedded wallet yet.** The Privy modal and app config are live on the
+  deployed job board; the first payment needs a signed-in email user holding testnet USDC.
 - **World Chain settlement is supported in configuration only.** The facilitator holds no ETH on World Chain
   Sepolia, so no job has settled there. Arc is the settlement network that is proven.
-- **Privy server wallets and policies (the B2B track) are not built.** The app secret available to the build
-  was rejected by Privy's API.
-- **Claude Code did not run a paid job on the original host** — its OAuth token had expired, so the proven
-  real-model job used Codex. `kazuo doctor` names the failure; `kazuo test` catches it before anyone pays.
-- **Three of five adapters fail under the macOS sandbox** (Codex and OpenCode cannot start under seatbelt,
-  Grok returns empty). The real-model proof ran with `KAZUO_SANDBOX=none`, and says so.
+- **Privy server wallets and policies (the B2B track) are not built.** The app secret available was rejected
+  by Privy's API.
+- **The CLI, MCP server and protocol package are not on npm yet**, and the GitHub repository is not public at
+  the time of writing; both are the owner's call.
+- **Claude Code is installed but not sold by the demo node**, because its OAuth token expires daily and a paid
+  job would fail after settlement. The real-model proof uses Codex. `kazuo doctor` reports each adapter.
+- **Codex runs with `KAZUO_SANDBOX=none` on the demo node**, because Codex and OpenCode cannot start under
+  macOS seatbelt. `kazuo test` and `kazuo doctor` say which adapters work under which sandbox.
 - **A buyer whose only matched provider fails is not refunded.** Payment settles before the job runs because
   an EIP-3009 authorization expires; the protection is free reassignment, which needs a second provider.
-- **The audit log costs gas.** Heartbeats are sampled hourly ($0.021/day per idle provider) because every
-  entry costs $0.00088 and the broker takes a 0% fee.
-- **Keys in the development `.env` have passed through chat sessions** and should be rotated before any real
+- **The audit log costs gas.** Heartbeats are sampled hourly because every entry costs $0.00088 and the broker
+  takes a 0% fee.
+- **Keys in the development `.env` have passed through chat sessions** and must be rotated before any real
   value touches them.

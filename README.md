@@ -3,7 +3,7 @@
 <img src="brand/kazuo-logo.svg" alt="Kazuo" width="260" />
 
 **A decentralized AI capacity network.**
-Rent out the Claude / Codex / Grok subscription you already pay for, and get paid **per job in USDC over [x402](https://x402.org) on [Arc](https://www.circle.com/arc)**.
+Rent out the Claude / Codex / Grok subscription you already pay for, and get paid **per job in USDC over [x402](https://x402.org) on [Arc](https://www.arc.io/)**.
 
 [![x402](https://img.shields.io/badge/x402-v2-7C5CFF?style=flat-square)](https://x402.org)
 [![Arc](https://img.shields.io/badge/Arc-testnet-3DDCFF?style=flat-square)](https://testnet.arcscan.app)
@@ -13,7 +13,7 @@ Rent out the Claude / Codex / Grok subscription you already pay for, and get pai
 
 <div align="center">
 
-**Live:** [kazuo-arc.vercel.app](https://kazuo-arc.vercel.app) · job board [kazuo-arc-app.vercel.app](https://kazuo-arc-app.vercel.app) · broker `broker-production-03b2.up.railway.app`
+**Live:** [kazuo-arc.vercel.app](https://kazuo-arc.vercel.app) · job board [kazuo-arc-app.vercel.app](https://kazuo-arc-app.vercel.app) · broker served over a Cloudflare tunnel during judging (the Railway image needs its operator key)
 
 `@kazuo/cli`, `@kazuo/mcp` and `@kazuo/protocol` are not on npm yet — build from this repo.
 
@@ -27,7 +27,7 @@ Rent out the Claude / Codex / Grok subscription you already pay for, and get pai
 pnpm install && pnpm build && pnpm test
 ```
 
-**295 tests, no credentials and no network required** — the two pieces that
+**347 tests, no credentials and no network required** — the two pieces that
 touch the chain (the facilitator and the audit writer) are stubbed, so
 everything from a buyer's first request to a published receipt runs as
 production code.
@@ -50,6 +50,9 @@ Then the live proof, all on Arc testnet and all openly readable:
 | The browser wallet path | [`0xb495004c…ce4c5c14`](https://testnet.arcscan.app/tx/0xb495004c5f6edf913bd80b3522e0c6c6776d967d77376c19baed83cace4c5c14) — the app's production payment code |
 | Full lifecycle, quote → 402 → pay → dispatch → result → receipt | [`0xad0887af…ff8113d`](https://testnet.arcscan.app/tx/0xad0887afa017182d22f82fd7a51336381fae0f69cbb8df42686b63e45ff8113d) |
 | The audit log | [`0x383f5153…65eef3`](https://testnet.arcscan.app/address/0x383f5153db8bb18c7c25157fb3493645a465eef3) |
+| Codex job after the Kazuo rename (ETHOnline) | [`0x042613d2…6ddb`](https://testnet.arcscan.app/tx/0x042613d2c1f4fddb37629bb96aafafcc28e8654798d695ca18ed2690d5c46ddb) — $0.20, answer `print(input()[::-1])`, receipt [`0xaffd433d…07c1`](https://testnet.arcscan.app/tx/0xaffd433d023631b1890f840eb766974a08c06886bb5b4bdd0457ad1b82f007c1) |
+| An agent paying over MCP (ETHOnline) | [`0x307792e8…9f99`](https://testnet.arcscan.app/tx/0x307792e88f11bd6c5d88661ddc1390b4c5321dd1d184c7fc0c0d0eeb76cd9f99), receipt [`0x2cdcae5c…454a`](https://testnet.arcscan.app/tx/0x2cdcae5c05ada8cb70f432a8fcbfdabe4a47d8e3ab7d944f0736a6b54857454a) |
+| Zero-gas proof, re-run after the rename | [`0xbc95f083…4d12`](https://testnet.arcscan.app/tx/0xbc95f083b33b2d95c8317cdca5386a70b6ea88dc2e9c2075e03b1deabd9c4d12) — buyer's gas 0 wei |
 
 ### What is proven, and what isn't
 
@@ -61,14 +64,16 @@ Then the live proof, all on Arc testnet and all openly readable:
 | ✅ On-chain audit trail | `KazuoLog` — registrations, liveness, receipts as indexed events |
 | ✅ Browser wallet paying directly | EIP-712 typed data; any EVM wallet, no relay, no project id |
 | ✅ MCP: an agent buying capacity | Verified over stdio |
-| ✅ Survives a broker restart | SQLite + MongoDB |
+| ✅ Survives a broker restart | SQLite — jobs, receipts index and cursor survived a full machine reboot (MongoDB mirror is optional and not configured) |
 | ✅ OS-level job sandbox | Seatbelt / bubblewrap / container — a hostile prompt cannot read the payout key |
 | ⚠️ Claude Code, paid | Its OAuth token had expired on this host; the paid attempt failed *after* settlement. `kazuo doctor` names it exactly. Codex was used for the proof instead |
 | ⚠️ Three of five adapters under the sandbox | Codex and OpenCode can't start under seatbelt, Grok returns empty. `kazuo test` catches all three before a node goes live. The real-model proof above ran with `KAZUO_SANDBOX=none` |
 | ✅ Landing + job board deployed | [kazuo-arc.vercel.app](https://kazuo-arc.vercel.app), [kazuo-arc-app.vercel.app](https://kazuo-arc-app.vercel.app) — built and typechecked on Vercel |
-| ⚠️ Broker on Railway | The image builds and starts on Railway; it needs its operator key set before it serves |
-| ⚠️ World AgentKit | Built: broker verifies SIWE proofs and resolves addresses in AgentBook; human-backed nodes win ties, one human backs ≤ 3 nodes. Not yet proven: no address is registered in AgentBook — that step needs a person in World App |
-| ⚠️ Privy | Built and deployed (Privy bundled in the live job board): email sign-in creates an embedded wallet on Arc that pays with the same EIP-712 path, plus Send USDC. Not yet proven with an on-chain payment |
+| ✅ Public receipts feed | The job board's Network page and the landing page read real `KazuoLog` receipts from a persisted forward index |
+| ⚠️ Broker hosting | Live for judging through a Cloudflare tunnel to a broker on the builder's machine. The Railway image builds, but the service needs its operator key before it serves |
+| ⚠️ World AgentKit | Live: nodes sign a broker-minted SIWE challenge on register, the broker verifies it and reads AgentBook on World Chain (`agentkit proof verified — no human in AgentBook`); human-backed nodes win ties, one human backs ≤ 3 nodes, `--human-backed-only` returns 503 when none qualify. Not yet proven: no address is registered in AgentBook — that needs a person in World App |
+| ⚠️ World ID Selfie Check | Live: RP-signed single-use requests (signature recovers to the registered signer), nonce/replay checks before World's verify API, `kazuo verify` terminal QR, job-board widget. Not yet proven: a real scan |
+| ⚠️ Privy | Live: the Privy modal (email + wallet) loads with the app's config on the deployed job board; embedded wallets pay with the same EIP-712 path, plus Send USDC. Not yet proven with an on-chain payment from an embedded wallet — that needs a signed-in email user |
 
 Every one of those caveats is expanded, with the failing output, in
 [SUBMISSION.md](SUBMISSION.md).
@@ -135,13 +140,15 @@ run on the quota you were already paying for. Each job settles as a **real on-ch
 directly from the buyer to you** — no invoices, no platform float, no payout schedule.
 
 ```bash
-npm i -g @kazuo/cli
+pnpm install && pnpm build
+alias kazuo="node $PWD/packages/cli/dist/index.js"
 kazuo init
 kazuo start
 ```
 
-> Published as `@kazuo/cli` rather than `kazuo` — npm rejects the bare name as too
-> close to existing packages. The binary is still `kazuo`.
+> The CLI will ship as `@kazuo/cli` (npm rejects the bare name `kazuo` as too close
+> to existing packages); until it is published, run it from a clone as above.
+> The binary is `kazuo` either way.
 
 ---
 
@@ -338,7 +345,7 @@ On-chain receipt: https://testnet.arcscan.app/tx/0xd36ae7e5…b4d65cba
 ## Tests
 
 ```bash
-pnpm test    # 295 tests, no credentials, no network
+pnpm test    # 347 tests, no credentials, no network
 ```
 
 Unit tests for money math, key parsing, the matcher and the terminal layout —
@@ -363,11 +370,14 @@ Persists to a volume, health-checks itself, and runs as a non-root user. Set
 `KAZUO_TRUST_PROXY=1` behind a reverse proxy so rate limiting sees real client
 IPs. `/metrics` speaks Prometheus.
 
-> Deployed on Railway from this Dockerfile (Node 24 for `node:sqlite`, a Railway
+> Built on Railway from this Dockerfile (Node 24 for `node:sqlite`, a Railway
 > volume at `/data`, `RAILWAY_RUN_UID=0` so the non-root image can write it).
 > Doing so found one incompatibility: Railway rejects a Dockerfile `VOLUME`
 > instruction, so the volume is attached to the service and compose mounts its
-> own. The broker listens on `KAZUO_BROKER_PORT`, falling back to `PORT`.
+> own. The broker listens on `KAZUO_BROKER_PORT`, falling back to `PORT`. The
+> Railway service does not serve yet: it needs `KAZUO_OPERATOR_KEY`, which is set
+> by the owner, never pushed by tooling. During judging the same build runs on the
+> builder's machine behind a Cloudflare tunnel.
 
 ---
 

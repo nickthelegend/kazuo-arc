@@ -758,3 +758,71 @@ describe("public surface", () => {
     b.close();
   }, 20_000);
 });
+
+describe("cancelling a running job", () => {
+  it("keeps the buyer's reason when the provider's own failure report arrives late", async () => {
+    const provider = await connectProvider(h);
+    const q = await quote(h);
+    const paid = (await (
+      await h.paidFetch(`${h.base}/api/jobs/${q.body.quoteId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      })
+    ).json()) as { jobId: string };
+    const dispatched = await waitFor(() => provider.dispatched[0]);
+
+    const cancel = await fetch(`${h.base}/api/jobs/${paid.jobId}/cancel`, { method: "POST" });
+    expect(cancel.status).toBe(200);
+
+    // What a real node sends once its adapter has been killed by the cancel.
+    provider.ws.send(
+      JSON.stringify({ type: "job.error", jobId: dispatched.jobId, error: "job was cancelled or timed out", durationMs: 5 }),
+    );
+    await new Promise((r) => setTimeout(r, 200));
+
+    const after = h.jobs.get(paid.jobId);
+    expect(after?.status).toBe("failed");
+    expect(after?.error).toBe("cancelled by the buyer");
+    expect(after?.events?.some((e) => /reassigned/.test(e.text))).toBe(false);
+    provider.close();
+  }, 20_000);
+});
+
+describe("the demo payer", () => {
+  const post = (body: unknown) =>
+    fetch(`${h.base}/api/demo/pay`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  afterEach(() => {
+    delete process.env.KAZUO_DEMO_PAYER_KEY;
+  });
+
+  it("answers 501 when this broker has no demo account", async () => {
+    delete process.env.KAZUO_DEMO_PAYER_KEY;
+    const res = await post({ quoteId: "qte_anything" });
+    expect(res.status).toBe(501);
+  });
+
+  it("checks the request and the quote before any money could move", async () => {
+    process.env.KAZUO_DEMO_PAYER_KEY = `0x${"11".repeat(32)}`;
+    expect((await post({})).status).toBe(400);
+    const unknown = await post({ quoteId: "qte_doesnotexist" });
+    expect(unknown.status).toBe(404);
+    expect(((await unknown.json()) as { error: string }).error).toBe(
+      "quote not found or expired — request a new one",
+    );
+  });
+
+  it("refuses to pay for a job above the demo ceiling", async () => {
+    process.env.KAZUO_DEMO_PAYER_KEY = `0x${"11".repeat(32)}`;
+    const provider = await connectProvider(h, { price: 300_000 });
+    const q = await quote(h, "expensive", 500_000);
+    expect(q.status).toBe(200);
+    const res = await post({ quoteId: q.body.quoteId });
+    expect(res.status).toBe(403);
+    provider.close();
+  });
+});

@@ -4,8 +4,8 @@ import {
   ARC_URL,
   CHAIN,
   CIRCLE_URL,
+  INSTALL_URL,
   LOOM_URL,
-  NPM_URL,
   PRIVY_URL,
   REPO_URL,
   WORLD_AGENTKIT_URL,
@@ -26,7 +26,7 @@ const COLUMNS = [
     title: "Build",
     links: [
       { label: "GitHub", href: REPO_URL, external: true },
-      { label: "CLI on npm", href: NPM_URL, external: true },
+      { label: "Install the CLI", href: INSTALL_URL, external: true },
       { label: "x402", href: X402_URL, external: true },
       { label: "Arc", href: ARC_URL, external: true },
       { label: "Circle", href: CIRCLE_URL, external: true },

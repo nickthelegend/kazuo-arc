@@ -42,7 +42,7 @@ flowchart LR
     MCP["@kazuo/mcp<br/>an agent with a wallet"]
   end
 
-  subgraph Broker["Broker (Hono, Railway)"]
+  subgraph Broker["Broker (Hono · Docker image for Railway; served via Cloudflare tunnel during judging)"]
     Q["POST /api/quotes<br/>matcher: price → human-backed → track record"]
     PAY["POST /api/jobs/:quote<br/>x402 resource server"]
     FAC["self-hosted facilitator<br/>(operator pays gas)"]
@@ -88,7 +88,7 @@ flowchart LR
 | Package | What it is |
 |---|---|
 | `packages/protocol` | The shared vocabulary: domain types, money math, Arc plumbing, x402 wiring. Depended on by everything. No I/O beyond an RPC endpoint. |
-| `packages/cli` | `kazuo` — the provider node, and the buyer-side `kazuo run`. Published to npm. |
+| `packages/cli` | `kazuo` — the provider node, and the buyer-side `kazuo run`. Publish-ready (`@kazuo/cli`), not on npm yet. |
 | `packages/mcp` | `@kazuo/mcp` — Kazuo as an MCP server, so an agent can buy capacity. |
 | `services/broker` | Registry, matcher, x402 resource server, self-hosted facilitator, KazuoLog audit writer, SQLite. |
 | `apps/app` | The job board. |
@@ -199,9 +199,19 @@ deployment block — does not run *slowly*, it **errors**, and the natural place
 catch that error renders the audit trail as empty. An empty audit log looks like
 a working feature with nothing in it yet.
 
-So the reader walks backwards from the head in 9,000-block windows and stops as
-soon as it has enough entries. Recent entries are the common case, so the usual
-cost is a single RPC call.
+The first reader walked backwards from the head in 9,000-block windows. It could
+not reach receipts more than about two days old — the contract is six million
+blocks back — and a page load plus a landing page polling it rate-limited the
+public RPC into 502s. So the broker now keeps a **forward index**
+(`services/broker/src/log-index.ts`) in SQLite: it seeds from receipt
+transactions it published itself, scans forward from `KAZUO_LOG_FROM_BLOCK` one
+window at a time with a persisted cursor (a restart resumes, it does not start
+over), follows the head once caught up, and serves `/api/receipts` and
+`/api/log/:kind` from the index. It makes **no RPC call while the broker is
+writing** — a settlement or an audit entry — because Arc's public endpoint has one
+small rate budget and a backfill that spent all of it once made registration and
+heartbeat writes fail. RPC clients retry "limit exceeded" with a 1 s doubling
+backoff for the same reason.
 
 ### Bundlers
 
@@ -243,7 +253,7 @@ payload stays private while the record stays verifiable.
 
 ## Testing
 
-295 tests, none of which need credentials or a network.
+347 tests (protocol 55 · broker 129 · cli 130 · mcp 8 · app 25), none of which need credentials or a network.
 
 - **Unit** — money math against hand-computed integers, key parsing,
   the two views of one USDC balance, the matcher's ordering rules, the job state

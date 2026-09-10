@@ -6,11 +6,13 @@ export const BROKER_URL = (
 export const APP_URL = process.env.NEXT_PUBLIC_KAZUO_APP_URL ?? "http://localhost:3002";
 export const LOOM_URL = "https://loompad.tech";
 export const X402_URL = "https://x402.org";
-export const ARC_URL = "https://www.circle.com/arc";
+/** Arc's own site. `circle.com/arc` looks right and answers 404. */
+export const ARC_URL = "https://www.arc.io/";
 export const CIRCLE_URL = "https://www.circle.com";
 export const WORLD_AGENTKIT_URL = "https://docs.world.org/agents/agent-kit/integrate";
 export const PRIVY_URL = "https://www.privy.io";
-export const NPM_URL = "https://www.npmjs.com/package/@kazuo/cli";
+/** The CLI isn't on npm yet; this is the build-from-source guide. */
+export const INSTALL_URL = `${REPO_URL}#quickstart`;
 
 /**
  * The live testnet ids this site links to.

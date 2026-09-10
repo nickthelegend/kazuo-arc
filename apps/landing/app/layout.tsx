@@ -9,7 +9,9 @@ const inter = Inter({
   weight: ["300", "400", "500", "600", "700", "800"],
 });
 
-const SITE = "https://kazuo.network";
+// The canonical, Open Graph and JSON-LD URLs all derive from this, so it must be
+// a domain that resolves: it was `kazuo.network`, which does not exist.
+const SITE = "https://kazuo-arc.vercel.app";
 const TITLE = "Kazuo — rent out your idle AI subscription, get paid in USDC";
 const DESCRIPTION =
   "Kazuo is a decentralized AI capacity network. Share the Claude, Codex or Grok quota you already pay for, run jobs from anyone on the network, and get paid per job in USDC over x402 on Arc.";

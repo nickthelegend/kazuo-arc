@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Reveal } from "@/components/ui/reveal";
 import { LiveDot, Section, SectionHeading } from "@/components/ui/kit";
-import { BROKER_URL, CHAIN } from "@/lib/links";
+import { ARC_URL, BROKER_URL, CHAIN } from "@/lib/links";
 
 /**
  * The public ledger.
@@ -89,7 +89,7 @@ export function Ledger() {
             [
               ["Audit log", CHAIN.log, CHAIN.logUrl],
               ["USDC", CHAIN.usdc, CHAIN.usdcUrl],
-              ["Network", `Arc testnet · chain ${CHAIN.chainId}`, "https://www.circle.com/arc"],
+              ["Network", `Arc testnet · chain ${CHAIN.chainId}`, ARC_URL],
             ] as const
           ).map(([label, value, href]) => (
             <div key={label} className="flex items-center justify-between gap-4 py-3.5">

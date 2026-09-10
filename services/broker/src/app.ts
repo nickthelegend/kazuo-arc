@@ -60,6 +60,14 @@ import type { Hub } from "./hub.js";
 import { JobStore, type Quote } from "./jobs.js";
 import { Registry } from "./registry.js";
 import { bodyLimit, rateLimit, requestLog } from "./guards.js";
+import { x402Client, x402HTTPClient } from "@x402/core/client";
+import { wrapFetchWithPayment } from "@x402/fetch";
+import { registerExactEvmScheme } from "@x402/evm/exact/client";
+import { toClientEvmSigner } from "@x402/evm";
+import { accountFor as demoAccountFor, readClient as demoReadClient } from "@kazuo/protocol";
+
+/** The most the demo account pays for one job, in micro-USD. Anyone can press the button. */
+const DEMO_MAX_USD_MICROS = 250_000;
 import { Metrics } from "./metrics.js";
 import { AGENTKIT_HEADER, createAgentKitGate, type AgentKitGate } from "./agentkit.js";
 import type { Context } from "hono";
@@ -262,6 +270,7 @@ export function createApp(deps: AppDeps) {
   // thing to abuse. The paid route needs no limit of its own: it costs money.
   app.use("/api/quotes", rateLimit({ limit: 30, windowMs: 60_000 }));
   app.use("/api/providers/register", rateLimit({ limit: 10, windowMs: 60_000 }));
+  app.use("/api/demo/pay", rateLimit({ limit: 10, windowMs: 60_000 }));
 
   app.get("/metrics", (c) =>
     c.text(
@@ -401,6 +410,11 @@ export function createApp(deps: AppDeps) {
   app.get("/api/worldid/status", (c) => {
     const subject = c.req.query("subject") ?? "";
     const purpose: WorldPurpose = c.req.query("purpose") === "buyer" ? "buyer" : "provider";
+    // Same rule as minting a request: a status for "abc" is not "not verified",
+    // it is a malformed question, and answering 200 hides a caller's bug.
+    if (!isAccountAddress(subject)) {
+      return c.json({ error: "subject must be an EVM address", code: "invalid_subject" }, 400);
+    }
     const verification = worldId?.status(purpose, subject) ?? null;
     return c.json({
       enabled: Boolean(worldId?.enabled),
@@ -534,6 +548,61 @@ export function createApp(deps: AppDeps) {
   // -------------------------------------------------------------------------
   // Quotes — free, and the thing a payment is pinned to
   // -------------------------------------------------------------------------
+
+  /**
+   * Pay a quote from the deployment's demo account, for a visitor with no wallet.
+   *
+   * The job board used to hold this key itself, as a hosting secret. Here it
+   * never leaves the machine the broker runs on, and the payment is still the
+   * genuine article: the same x402 client any third party would use, against
+   * this broker's own paid route, settling a real transfer on Arc. Capped per
+   * job and rate limited, because anyone can press the button.
+   */
+  app.post("/api/demo/pay", async (c) => {
+    const payerKey = process.env.KAZUO_DEMO_PAYER_KEY?.trim();
+    if (!payerKey) {
+      return c.json(
+        { error: "No demo payer configured on this broker. Set KAZUO_DEMO_PAYER_KEY — see .env.example." },
+        501,
+      );
+    }
+    const body = (await c.req.json().catch(() => ({}))) as { quoteId?: string };
+    const quoteId = body.quoteId?.trim();
+    if (!quoteId) return c.json({ error: "quoteId is required" }, 400);
+    const quote = jobs.getQuote(quoteId);
+    if (!quote) return c.json({ error: "quote not found or expired — request a new one" }, 404);
+    if (quote.priceUsdMicros > DEMO_MAX_USD_MICROS) {
+      return c.json(
+        {
+          error: `the demo account pays for jobs up to $${(DEMO_MAX_USD_MICROS / 1_000_000).toFixed(2)} — sign in with a wallet for this one`,
+        },
+        403,
+      );
+    }
+
+    try {
+      const payer = demoAccountFor(payerKey);
+      const client = new x402Client();
+      registerExactEvmScheme(client, { signer: toClientEvmSigner(payer, demoReadClient(config.network)) });
+      const paidFetch = wrapFetchWithPayment(fetch, client);
+      const res = await paidFetch(`http://127.0.0.1:${config.port}/api/jobs/${quoteId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      const payload = (await res.json().catch(() => ({}))) as { jobId?: string; error?: string };
+      if (!res.ok || !payload.jobId) {
+        const error = payload.error ?? `payment failed (${res.status})`;
+        if (res.status === 409) return c.json({ error }, 409);
+        if (res.status === 404) return c.json({ error }, 404);
+        return c.json({ error }, 502);
+      }
+      const settlement = new x402HTTPClient(client).getPaymentSettleResponse((name) => res.headers.get(name));
+      return c.json({ jobId: payload.jobId, payer: payer.address, transaction: settlement?.transaction ?? null });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    }
+  });
 
   app.post("/api/quotes", async (c) => {
     const body = (await c.req.json()) as JobRequest;
@@ -818,6 +887,10 @@ export function createApp(deps: AppDeps) {
     jobs.addEvent(job.id, { at: Date.now(), kind: "status", text: reason });
     jobs.fail(job.id, reason);
     metrics.inc("kazuo_jobs_cancelled_total");
+    // The payment already settled, so the audit trail still records it — as a
+    // failed job. The provider's own late "failed" report is ignored (see
+    // finishJobFailed), so this is the one place the receipt goes out.
+    void publishReceiptWhenReady(job.id, jobs.runtimeMs(job), false);
 
     return c.json({ ok: true, jobId: job.id, status: "failed", refunded: false });
   });
@@ -1043,6 +1116,10 @@ export function createApp(deps: AppDeps) {
     result: string,
     durationMs: number,
   ): Promise<void> {
+    // A terminal job stays terminal: a result racing a cancel must not turn a
+    // cancelled job back into a completed one.
+    const current = jobs.get(jobId);
+    if (!current || current.status === "completed" || current.status === "failed") return;
     const hash = sha256(result);
     const job = jobs.complete(jobId, result, hash);
     if (!job) return;
@@ -1114,11 +1191,16 @@ export function createApp(deps: AppDeps) {
   ): Promise<void> {
     const job = jobs.get(jobId);
     if (!job) return;
+    // A provider reports "failed" after a buyer cancels — its adapter was killed.
+    // Accepting that report overwrote the real reason ("cancelled by the buyer")
+    // with the adapter's generic one, counted the failure against the provider a
+    // second time, and even tried to reassign a job the buyer had stopped.
+    if (job.status === "completed" || job.status === "failed") return;
     registry.jobFinished(providerId, { ok: false, durationMs });
     metrics.inc('kazuo_jobs_failed_total');
 
     // One free retry elsewhere before the poster is told it failed.
-    if (job.status !== "completed" && reassign(job)) return;
+    if (reassign(job)) return;
 
     jobs.fail(jobId, error);
     await publishReceiptWhenReady(jobId, durationMs, false);
@@ -1138,6 +1220,17 @@ export function createApp(deps: AppDeps) {
     return token ? registry.byAuthToken(token) : undefined;
   }
 
+  /**
+   * How long a node may be gone before its in-flight jobs are failed over.
+   *
+   * Short enough that a buyer whose provider process died hears about it in a
+   * minute rather than at the ten-minute job ceiling; long enough that a node on
+   * flaky wifi reconnects, or delivers over the HTTP fallback, before anyone
+   * gives up on it.
+   */
+  const DISCONNECT_GRACE_MS = 60_000;
+  const disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
   return {
     app,
     hubHandlers: {
@@ -1156,10 +1249,28 @@ export function createApp(deps: AppDeps) {
       onConnect: (providerId: string) => {
         const provider = registry.get(providerId);
         console.log(`[broker] node connected: ${provider?.label ?? providerId}`);
+        clearTimeout(disconnectTimers.get(providerId));
+        disconnectTimers.delete(providerId);
       },
       onDisconnect: (providerId: string) => {
         const provider = registry.get(providerId);
         console.log(`[broker] node disconnected: ${provider?.label ?? providerId}`);
+        // Before this, a job whose provider died simply waited out the ten-minute
+        // ceiling while its buyer — who had already paid — watched "Running".
+        clearTimeout(disconnectTimers.get(providerId));
+        const timer = setTimeout(() => {
+          disconnectTimers.delete(providerId);
+          if (deps.getHub()?.isConnected(providerId)) return;
+          for (const job of jobs.list({ limit: 500, providerId })) {
+            if (job.status !== "assigned" && job.status !== "running") continue;
+            console.log(
+              `[broker] ${job.id}: provider gone for ${DISCONNECT_GRACE_MS / 1000}s — failing it over`,
+            );
+            void finishJobFailed(job.id, providerId, "provider disconnected mid-job", jobs.runtimeMs(job));
+          }
+        }, DISCONNECT_GRACE_MS);
+        timer.unref?.();
+        disconnectTimers.set(providerId, timer);
       },
     },
     /** Fail jobs that have run past the ceiling; called on a timer. */

@@ -6,7 +6,7 @@
  * opinion from a different model, a long mechanical refactor you would rather
  * not spend your own context on, a job at 2am when your own plan is rate
  * limited. `/kazuo <task>` sends that work to somebody else's machine and pays
- * them for it — a real USDC transfer on Hedera, per job, no account, no key
+ * them for it — a real USDC transfer on Arc, per job, no account, no key
  * exchange, no invoice.
  *
  * That is the part worth showing. Everything else in Kazuo is a marketplace;

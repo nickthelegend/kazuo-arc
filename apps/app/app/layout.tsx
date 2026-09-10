@@ -1,7 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
-import { Providers } from "@/components/providers";
-import { Shell } from "@/components/shell";
 import "./globals.css";
 
 const inter = Inter({
@@ -22,11 +20,8 @@ export const viewport: Viewport = { themeColor: "#000000", colorScheme: "dark" }
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={inter.variable}>
-      <body className="antialiased">
-        <Providers>
-          <Shell>{children}</Shell>
-        </Providers>
-      </body>
+      {/* Providers and the shell live in app/(board)/layout.tsx — see there for why. */}
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

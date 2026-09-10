@@ -16,8 +16,10 @@ export function Cta() {
             starts taking jobs.
           </p>
 
-          <div className="mx-auto mt-9 max-w-sm text-left">
-            <Command>npm i -g @kazuo/cli &amp;&amp; kazuo init</Command>
+          {/* Not on npm yet, so the install is a clone — the same steps the README gives. */}
+          <div className="mx-auto mt-9 max-w-md space-y-2.5 text-left">
+            <Command>git clone https://github.com/nickthelegend/kazuo-arc && cd kazuo-arc</Command>
+            <Command>pnpm install && pnpm build && node packages/cli/dist/index.js init</Command>
           </div>
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2.5">

@@ -57,7 +57,9 @@ export function Earn() {
 
         <Reveal delay={0.06}>
           <div className="space-y-2.5">
-            <Command>npm i -g @kazuo/cli</Command>
+            <Command>git clone https://github.com/nickthelegend/kazuo-arc && cd kazuo-arc</Command>
+            <Command>pnpm install && pnpm build</Command>
+            <Command>alias kazuo="node $PWD/packages/cli/dist/index.js"</Command>
             <Command>kazuo init</Command>
             <Command>kazuo start</Command>
           </div>

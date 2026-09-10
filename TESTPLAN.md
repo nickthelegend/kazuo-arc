@@ -12,10 +12,10 @@
 |---|---|
 | Landing | https://kazuo-arc.vercel.app (production) |
 | Job board | https://kazuo-arc-app.vercel.app (production) |
-| Railway broker | `https://broker-production-03b2.up.railway.app` — **down**: needs `KAZUO_OPERATOR_KEY`, which the session may not push to an external service |
-| Broker under test | The same broker build, run locally with the real `.env` (real operator key, real Arc testnet, real SQLite `data/kazuo.db`), exposed through a Cloudflare tunnel so the deployed frontends reach it. The key never leaves this machine. |
-| Frontends under test | Vercel deployments of the same commits, with `NEXT_PUBLIC_KAZUO_BROKER_URL` pointed at the tunnel |
-| Provider | `kazuo start` from this repo, scratch `KAZUO_HOME`, payout = demo provider `0xff21…489B`, adapters echo + codex (`KAZUO_SANDBOX=none`, documented) |
+| Railway broker | `https://broker-production-03b2.up.railway.app` — **not serving**: answers "Application not found"; the service needs `KAZUO_OPERATOR_KEY`, which the session may not push to an external service |
+| Broker under test | The same broker build, run locally with the real `.env` (real operator key, real Arc testnet, real SQLite `data/kazuo.db`), exposed through a Cloudflare tunnel so the deployed frontends reach it — since the 15:34 reboot `https://surround-ports-prime-audience.trycloudflare.com`. The key never leaves this machine. |
+| Frontends under test | Vercel deployments of the same commits, with `NEXT_PUBLIC_KAZUO_BROKER_URL` pointed at the tunnel (verified in the served JS) |
+| Provider | `kazuo start` from this repo, `KAZUO_HOME=~/.kazuo-arc-demo/provider`, key from `.env` via `KAZUO_PRIVATE_KEY`, payout = demo provider `0xff21…489B`, adapters echo + codex (`KAZUO_SANDBOX=none`, documented) |
 | Buyer (CLI/MCP) | demo payer `0x0329…9F36` (16.3 USDC on Arc testnet) |
 | Chain | Arc testnet `eip155:5042002`, USDC `0x3600…0000`, KazuoLog `0x383f5153…65eef3`; World Chain mainnet AgentBook `0xA23aB271…b944dA` |
 
@@ -31,6 +31,9 @@
 | L6 | FAQ | Each question toggles its answer open and closed | **PASS** — 14:56, real mouse clicks at the button's screen position: clicking question 3 opened it and closed question 1 (single-open accordion; state `false,false,true,…`, answer rendered); clicking it again closed it (all `aria-expanded` false); 0 console errors. Two earlier attempts missed only because the hidden tab stalls smooth scrolling / the collapse animation, so the click landed off the moving button; the passing run waited for layout to be stable for 1 s. Note: the closing *animation* itself is rAF-driven and paused in a hidden tab — the state closes immediately |
 | L7 | Copy + footer | No "Xorv", "Hedera", "HBAR" or "HashScan" anywhere in rendered text; footer Build column includes World AgentKit and Privy links; footer shows `eip155:5042002` | **PASS** — 13:57: 0 matches for xorv|hedera|hbar|hashscan in rendered text; footer Build column has World AgentKit + Privy; footer shows eip155:5042002 |
 | L8 | Mobile (375px) | No horizontal scroll; the nav menu opens and its links work | **PASS** — 16:15 at 375×812 with mobile emulation (in the desktop app's Browser pane: the Chrome window here is maximized and ignores resize, `innerWidth` stayed 1920): page `scrollWidth` 375, the only element wider than the viewport is the comparison table inside its own `overflow-x` container; "Open menu" opens the menu (`aria-label` → "Close menu") listing How it works / The network / Earn / Adapters / Receipts / Security / FAQ / GitHub / Open app; tapping Receipts sets `#ledger`, closes the menu and brings the section to top 0; 0 console errors |
+| L9 | Section content | Each section renders its heading and its content: `#how` (the numbered steps), `#bento` (the network facts), `#earn` (the earning flow), `#adapters` (Claude Code, Codex, Grok, OpenCode, OpenAI-compatible named), `#ledger` (contract, USDC, network rows), `#security` (the sandbox story), `#faq` (questions), CTA; no section empty, no "undefined"/"NaN"/"[object Object]" text | NOT RUN |
+| L10 | Outbound links | Every distinct external `href` on the page answers HTTP < 400 when fetched | NOT RUN |
+| L11 | Unknown route | `/this-page-does-not-exist` → HTTP 404 with a not-found page; no uncaught exception | NOT RUN |
 
 ## 2. Job board — kazuo-arc-app.vercel.app
 
@@ -56,6 +59,10 @@
 | A18 | Expired / unknown quote at pay time | Paying a quote id the broker doesn't know → error "quote not found or expired — request a new one" shown; no navigation | **Broker behaviour PASS (B5); in-browser display UNTESTED** — the broker returns 404 with exactly that message for an unknown or expired quote (B5, 16:14). Reaching it from the job board needs a browser that can pay, and without `KAZUO_DEMO_PAYER_KEY` on Vercel the pay route stops at 501 first (A10), same dependency as A9/A12 |
 | A19 | Pay the same quote twice | Second attempt → 409 "this quote has already been paid" shown | **Broker behaviour PASS; in-browser display UNTESTED.** 16:18: a real echo job paid with `kazuo run` (quote `qte_1Gl6GEYrhdxT`, job `job_J386WaMK0o0e`, settlement `0xbcf23234…0d8b`), then `POST /api/jobs/qte_1Gl6GEYrhdxT` again — both with no payment and with a payment header — → 409 `{"error":"this quote has already been paid","jobId":"job_J386WaMK0o0e"}`. Showing that message in the job board needs a browser that can pay, which needs either `KAZUO_DEMO_PAYER_KEY` on Vercel (a private key the session may not push; user action) or a Privy email login with an OTP sent to a real inbox |
 | A20 | Mobile (375px) | Drawer opens from the hamburger, closes on route change; no horizontal scroll | **FAIL → fixed → PASS.** 16:05 FAIL: at 375 px "Recent jobs" was 537 px wide and the layout viewport grew to 557 px (horizontal scroll; the drawer tap on Providers missed because of it) — root cause and fix in the 16:08 log entry. 16:15 re-run on production `dpl_H2YrccYnu3gm32C1LPkcCEG2LCcW`, same 375×812 emulation, 8 job rows rendered: `innerWidth` = `clientWidth` = `scrollWidth` = 375, no element wider than the viewport; hamburger opens the drawer ("Close navigation"; Jobs / Providers / Network); tapping Providers routes to `/providers` and the drawer closes ("Open navigation"), still 375 wide; that page's own resource timing: 8 broker calls all 200, 0 failures |
+| A21 | Unknown route | `/this-page-does-not-exist` → HTTP 404 with a not-found page; no uncaught exception | NOT RUN |
+| A22 | Live job stream | Job page opened while a real Codex job is running shows a non-terminal status, connects `GET /api/jobs/<id>/stream` (200, `text/event-stream`), and without a reload turns `Completed` with the model's answer and the receipt panel | NOT RUN |
+| A23 | Broker drops and returns mid-session | With the job board open: broker stopped → sidebar "broker offline" and "Can't reach the broker" within one poll; broker restarted → sidebar back to "1 provider(s) live" and lists repopulate **without a reload**; no uncaught exception | NOT RUN |
+| A24 | Job page while the broker is down | `/jobs/<a real id>` with the broker stopped renders (HTTP 200, no 500) with a not-found/unreachable message; no uncaught exception | NOT RUN |
 
 ## 3. Broker API (exercised from the browser)
 
@@ -74,6 +81,15 @@
 | B11 | CORS | Response to the app origin carries `Access-Control-Allow-Origin` = that origin and exposes `PAYMENT-REQUIRED` | **PASS** — 15:45: preflight 204 and the 402 both carry `access-control-allow-origin: https://kazuo-arc-app.vercel.app`; expose-headers include `PAYMENT-REQUIRED`/`payment-required` and `PAYMENT-RESPONSE`; allow-headers include `agentkit` and `PAYMENT-SIGNATURE` |
 | B12 | `humanBackedOnly` with no human-backed node | 503 "no human-backed provider matches that request under $X" | **PASS** — 15:45: 503 `{"error":"no human-backed provider matches that request under $0.5000","providersLive":1}` |
 | B13 | Rate limit | 31st `POST /api/quotes` within a minute from one client → 429 | **PASS** — 16:17, 33 sequential quote requests through the public tunnel: 1–30 → 200, 31–33 → 429 `{"error":"rate limit exceeded — 30 requests per 60s","retryAfterSeconds":51}` (client identified by the proxied address, `KAZUO_TRUST_PROXY=1`) |
+| B14 | `GET /api/jobs` | 200 `{jobs:[…]}`, newest first by `createdAt`, each with `id` and `status`; no `token`/`humanId` fields | NOT RUN |
+| B15 | `GET /api/jobs/:id` | Known id → 200 `{job}` with `events`, `payment`, `resultHash`; unknown → 404 `{"error":"not found"}` | NOT RUN |
+| B16 | `GET /api/jobs/:id/stream` | Completed job → 200 `text/event-stream` emitting `event: snapshot` then `event: done`, then the stream closes; unknown → 404 | NOT RUN |
+| B17 | `GET /api/log/:kind` | `registry`, `heartbeat`, `receipts` → 200 `{log, entries, sync}` with entries of that kind only; `bogus` → 404 `unknown log stream "bogus"` | NOT RUN |
+| B18 | `POST /api/providers/register` validation | Missing label → 400 "label is required"; bad address → 400 "address must be an EVM address…"; no nodeId → 400 "nodeId is required"; no capabilities → 400 "at least one capability is required"; price 0 → 400 `capability "x" needs a positive priceUsdMicros` | NOT RUN |
+| B19 | Heartbeat auth | No token or a wrong token → 401 `{"error":"unauthorized"}` | NOT RUN |
+| B20 | Provider callbacks auth | `POST /api/jobs/<id>/events` and `/result` without a provider token → 401 | NOT RUN |
+| B21 | `POST /api/jobs/:id/cancel` | Unknown → 404; completed job → 409 "job is already completed"; a running Codex job → 200 `{ok:true, status:"failed", refunded:false}`, the node logs the cancel, the job page shows Failed "cancelled by the buyer" | NOT RUN |
+| B22 | `GET /api/worldid/status` validation | Non-address subject → 400 `invalid_subject` | NOT RUN |
 
 ## 4. On-chain
 
@@ -84,6 +100,7 @@
 | C3 | Registration entry | On `kazuo start`, a KazuoLog kind-1 entry for the node (or the recorded publish error if the RPC refuses) | **PASS** — 16:06, after the RPC-starvation fix: the broker restart made the node re-register as `prv_Lrp1iDVzYtSd`, and Arc holds KazuoLog kind 1, seq 67, block 61,877,199, tx `0x530bcd9f…1520`, author = operator, payload `{providerId prv_Lrp1iDVzYtSd, label kazuo-proof-node, address 0xff21…489B, capabilities [echo, codex]}`, followed by heartbeat kind 2 seq 68. `/api/network` went from `registry 0, heartbeat 0` + a rate-limit `logLastError` (before the fix) to `registry 1, heartbeat 1, lastError null` |
 | C4 | AgentBook read | Contract `0xA23aB271…b944dA` has bytecode on World Chain; `lookupHuman` returns real values | **PASS** (13:44 — 3,569 bytes; direct `readContract` → 0 for unregistered addresses) |
 | C5 | Settlement on World Chain Sepolia | A job settles on `eip155:4801` | **UNTESTED** — facilitator has 0 ETH on World Chain Sepolia; faucets need a human |
+| C6 | Reassignment on provider failure | A paid job whose provider fails is re-dispatched to another live provider at no extra charge and completes | NOT RUN |
 
 ## 5. Provider, CLI and MCP flows
 
@@ -96,6 +113,11 @@
 | P5 | `pnpm m1` zero-gas proof | Script completes and asserts buyer gas = 0 wei | **PASS** — 16:04: verify `isValid:true`; settle `success:true` tx `0xbc95f083…4d12`; provider received 1000 units (expected 1000); payer native drop = payment + gas 0; "payer paid in gas 0 wei — must be 0"; "✔ M1 PASSED — a buyer holding only USDC paid, and never sent a transaction." |
 | P6 | `kazuo agentkit status` | Prints "not registered" for the demo provider (matches C4) | **PASS** — 15:41: "looking 0xff212ecb…489B up in AgentBook on World Chain… ✖ not registered — the broker will treat this node as anonymous / register with: kazuo agentkit register" |
 | P7 | Provider signs AgentKit proof on register | Broker accepts the proof (no 401) and reports `humanBacked:false` for the unregistered address | **PASS** — 16:16, provider on the rebuilt CLI: broker log "register 0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B: agentkit proof verified — no human in AgentBook" then `POST /api/providers/register → 200` (1.49 s, including the live AgentBook read on World Chain); `/api/providers` reports the node `humanBacked:false, humanProof:null`; registration on chain tx `0xcd8c4961…d727`. (Before 16:08 the broker kept no record of whether a proof was sent, so this was not checkable — see log) |
+| P8 | CLI surface | `doctor` ends "nothing broken"; `status`, `earnings`, `jobs`, `wallet`, `price`, `logs`, `completion` exit 0 with real data; `test --adapter echo` "every capability works"; `pause` then `resume` both succeed and the node stays online; `config --json` prints no private key | NOT RUN |
+| P9 | `/kazuo` skill command | The exact command the skill runs, `kazuo run --json --yes --max 0.30 "<task>"`, through the public broker → `status:"completed"` with a settlement transaction | NOT RUN |
+| P10 | `--human-backed-only` from the CLI | With no human-backed node: refuses before paying with "no human-backed provider matches that request under $X"; no settlement | NOT RUN |
+| P11 | Provider dies mid-job | Provider process stopped while a paid Codex job runs → the buyer gets a terminal `failed` (no hang), the job page shows Failed, a receipt with `ok:false` is published; the restarted node re-registers and goes back online | NOT RUN |
+| N1 | Node's local status server | `localhost:8411/health` → 200 JSON `{ok:true, connected:true, providerId}`; `/info` → 200 JSON with label, address, capabilities and no private key; `/` → 200 status page that shows the node live (not "reconnecting"), 0 console errors | NOT RUN |
 
 ## 5b. World ID — Selfie Check (added 14:15 at the user's request, modelled on `_references/comitment-issues`)
 
@@ -158,3 +180,91 @@
   - **Receipts index resumed from SQLite** (cursor 61,678,361, 62 entries), not from the deployment block.
   - **Re-verified on the recovered stack**, each with 0 failing requests in the page's own resource timing and 0 console errors: **L1/L4** landing (broker calls go to the new host, 200; 6 receipt rows; not offline); **A1** home (9 jobs, provider Online, "1 provider(s) live"); **A16** providers (Online, Echo (test) · Codex, beat 13 s ago); **A17** network (7 settled, $0.8550, 9 chain receipts); **P2-equivalent** paid echo job `job_udztt_-re1Ti` via `kazuo run` (settlement `0x8d77bd8c…c60a`, receipt `0x748f671b…2512`, provider registration tx `0x1d575561…5769`); **A14** its job page links exactly those two txs. **T2** app 25/25, **T5** mcp 8/8 (build clean) — the two suites the restart had interrupted.
 - 15:47 IST (machine clock) — **Provider control-channel stability, 8-minute watch on the recovered stack:** node `/health` and broker `/api/providers` sampled every 5 s — 96 samples, 0 not connected, no state change after the first sample, and no close logged on either side (both ends now log the WebSocket close code). The single 1.5 s idle drop seen earlier did not recur; if it does, the logged code will name the cause.
+
+## 8. Run 3 — full plan, top to bottom, after the reboot (16:12–17:15 IST, machine clock)
+
+Environment: broker at `https://surround-ports-prime-audience.trycloudflare.com` (restarted three times on successive fixes), landing and job board on Vercel production (final app deploy `dpl_gCGYazuzC7LeF7eCPrGERmkwxW4Y`), provider `kazuo-proof-node` (echo + codex), demo payer `0x0329…9F36`. Every browser item ran in Claude in Chrome against production; mobile items at 375×812 in the desktop app's Browser pane (Chrome's window here ignores resizing). Console and network were checked on every item; network status comes from each page's own Resource Timing, because the extension's network list shows probe requests the page never makes (see the 16:10 log entry).
+
+**Nine defects found and fixed at the root in this run, plus one gap closed (10); every one re-verified live after its fix:**
+
+| # | Item | What was wrong | Fix |
+|---|---|---|---|
+| 1 | B22 | `GET /api/worldid/status?subject=abc` answered 200 "not verified" | Route validates the subject; 400 `invalid_subject`, same rule as minting a request (`services/broker/src/app.ts`) |
+| 2 | L2 / L10 | Arc sponsor link `circle.com/arc` returned 404; canonical, Open Graph and JSON-LD URLs pointed at `kazuo.network`, which does not resolve | `ARC_URL` → `https://www.arc.io/`; `SITE` → `https://kazuo-arc.vercel.app`; landing redeployed |
+| 3 | A21 | Unknown job-board URLs logged two console errors ("Error checking Cross-Origin-Opener-Policy: HTTP error! status: 404") from the Coinbase Wallet SDK inside Privy, whose start-up HEAD request hit the 404 | Pages moved into an `app/(board)` route group that owns the wallet providers and shell; a provider-free `app/not-found.tsx` |
+| 4 | A24 | A real job page with the broker unreachable said "Job not found — It may have expired", and after the broker returned it never recovered (an HTTP error closes an `EventSource` for good) | The page tells "unreachable" from "not found"; the stream re-fetches the job and reopens after a closed stream (`app/(board)/jobs/[id]/page.tsx`, `components/job-view.tsx`) |
+| 5 | A2 | After a node stopped, "Live providers" listed it as Offline for ten minutes, hiding the empty state while the sidebar said "0 provider(s) live" | Provider lists show only online/busy nodes (`components/live-lists.tsx`) |
+| 6 | A22 | A running job's page threw React hydration error #418: its "took" timer was read from `Date.now()` during render | The live timer exists only after mount and ticks each second |
+| 7 | B21 | Cancelling a running job: the provider's late "failed" report overwrote "cancelled by the buyer", counted a second failure against the provider and tried to reassign the cancelled job | Results for terminal jobs are ignored; the cancel route publishes the failed receipt itself |
+| 8 | P11 | A provider killed mid-job left its paid buyer waiting for the ten-minute job ceiling | A 60 s disconnect grace, then in-flight jobs fail over through the normal path (reassign when another node exists) |
+| 9 | P7 | After the reboot the node registered with **no** AgentKit proof and nothing said why: its key came through a launcher step that produced an empty `KAZUO_PRIVATE_KEY`, and the CLI skipped the proof silently | CLI now logs every reason a proof is not sent (`packages/cli/src/agentkit.ts`, `node.ts`); the demo node keeps its key in its 0600 config like `kazuo init` does |
+| 10 | A9 / A10 / A18 / A19 | Not a crash but a gap: the no-wallet "Pay and run" worked only with the demo payer's private key copied into Vercel's environment, so four items could not run in a browser at all | New `POST /api/demo/pay` on the broker pays through its own public x402 route with the key it already holds (quote id validated, $0.25 ceiling, 10 requests/min, 501 without a key); `/api/pay` on Vercel relays to it when Vercel has no key. Four new integration tests (broker 129) |
+
+**Final status of every item (Run 3):**
+
+| ID | Status | Evidence in this run |
+|---|---|---|
+| L1 | PASS | Title exact, document 200, 0 failing requests, 0 console errors (re-run on the final state) |
+| L2 | PASS (after fix 2) | Arc → `arc.io`, World AgentKit → docs.world.org, Privy → privy.io, "Post a job" → job board; canonical/OG = kazuo-arc.vercel.app |
+| L3 | PASS | Seven real clicks on the header links: each hash set, each section at top 0 |
+| L4 | PASS | `/api/receipts` + `/api/network` 200, live receipt rows, contract link |
+| L5 | PASS | Broker down: "live feed offline — the contract above is still readable on ArcScan", 2 ArcScan links, no exception |
+| L6 | PASS | Real clicks: Q2 closed, Q3 opened (single-open accordion), answer shown |
+| L7 | PASS | 0 Xorv/Hedera/HBAR/HashScan; footer World AgentKit + Privy + `eip155:5042002` |
+| L8 | PASS | 375 px: no overflow; menu opens; tap Receipts → `#ledger`, menu closes |
+| L9 | PASS | All sections have headings and content; adapters list names all five; no undefined/NaN |
+| L10 | **FAIL — owner action** | After fix 2 every link answers 200 except two that no code change can fix: `github.com/nickthelegend/kazuo-arc` (404, repository not public) and the npm package page (registry 404, not published) |
+| L11 | PASS | 404 with Next's not-found page, no exception |
+| A1 | PASS | Composer, jobs, provider Online, "1 provider(s) live", Privy config 200, 0 failing, 0 console errors |
+| A2 | PASS (after fix 5) | "No providers online" + hint on home and Providers page. Jobs-empty: a second real broker on a fresh SQLite file (not a deletion of the real jobs) → "No jobs yet — Post one above — it settles on Arc in about a second.", 0 console errors |
+| A3 | PASS | Broker down: "broker offline", "Can't reach the broker" ×2, no exception |
+| A4 | PASS | Max `0` and `abc` → "Set a maximum price above zero.", 0 `/api/quotes` requests |
+| A5 | PASS | Provider down: 503, "no providers are online right now — start one with `kazuo start`" |
+| A6 | PASS | 200; body `adapter:"echo"`; card: node, "Echo (test)", pays → provider address, $0.0010 |
+| A7 | PASS | Max 0.0005 → 503 "no online provider matches that request under $0.0005" |
+| A8 | PASS | Picker lists all seven options; Echo selected → "Model: Echo" |
+| A9 | PASS (after change 10) | Real click on "Pay and run" with no wallet → `/jobs/job_AQ8QgUyjAd4v` Completed: payer `0x03294Ce27e…`, paid to `0xff21…489B`, 1000 µUSDC, transfer `0xf3d78946…`, receipt `0x55e41449…`; broker log `POST /api/jobs/qte_thoK_D25A-no → 200`; 0 console errors |
+| A10 | PASS (after change 10) | Broker started without a demo key: `/api/pay` relays 501 "No demo payer configured on this broker. Set KAZUO_DEMO_PAYER_KEY — see .env.example.", the page stays on the quote |
+| A11 | PASS | Privy modal with email + wallet, app config 200, closes cleanly |
+| A12 | UNTESTED | Needs a Privy email login (one-time code to a real inbox) |
+| A13 | UNTESTED | Same dependency as A12 |
+| A14 | PASS | Completed Codex job page: result, provider/receipt panels, ArcScan transfer + receipt links, sha256 |
+| A15 | PASS | "Job not found" for an id that never existed, 200, no exception |
+| A16 | PASS | Node Online, capabilities, address, heartbeat, no human badge |
+| A17 | PASS | Network facts, audit counts, 22 receipts read from KazuoLog |
+| A18 | PASS (after change 10) | Browser: a quote issued by a broker that then went away, paid from the page → 404 "quote not found or expired — request a new one" shown on the quote card, no navigation, no exception. Broker: same 404 (B5) |
+| A19 | PASS (after change 10) | Browser: Back from the paid job no longer offers the quote card; the page's own `POST /api/pay` for the paid `qte_thoK_D25A-no` → 409 "this quote has already been paid"; `fetch` native, 0 failing resources, 0 console errors on a fresh load. Broker: 409 with and without a payment header |
+| A20 | PASS | 375 px with 16 jobs: no overflow; drawer opens; tap Providers routes and closes it |
+| A21 | PASS (after fix 3) | 404 "This page doesn't exist", no Privy scripts, 0 console errors |
+| A22 | PASS (after fix 6) | Page opened on a Running Codex job; timer ticked 6.8 s → 9.8 s; same document turned Completed with answer and receipt; `/stream` 200 in the broker log; 0 console errors |
+| A23 | PASS | Broker stopped and restarted with the page open: offline → "1 provider(s) live", 15 jobs, same document |
+| A24 | PASS (after fix 4) | Broker down: "Can't reach the broker — The job may still exist…"; broker back: same document loaded the Completed job |
+| B1–B12, B14–B20 | PASS | 23/23 API checks on the final broker build (health, network, providers without secrets, quote validation, 402 header + CORS, AgentKit challenge + garbage header, metrics, receipts, human-backed-only, job list/detail/stream, log streams, register validation, heartbeat and callback auth) |
+| B13 | PASS | Requests 1–30 → 200, 31st → 429 "rate limit exceeded — 30 requests per 60s" |
+| B21 | PASS (after fix 7) | Running Codex job cancelled → 200 `{status:"failed", refunded:false}`; error stays "cancelled by the buyer"; failed receipt `0xd81bab80…`; second cancel 409 |
+| B22 | PASS (after fix 1) | `abc` → 400 `invalid_subject`; valid address → 200 |
+| C1 | PASS | Codex settlement `0x18e180cd…`: one Transfer payer → provider 200000, sent by the operator |
+| C2 | PASS | Receipt seq 84: jobId, resultHash and settlement match |
+| C3 | PASS | Current node's registration entry seq 81, echo + codex |
+| C4 | PASS | AgentBook 3,569 bytes on World Chain (chain 480) |
+| C5 | UNTESTED | No ETH on World Chain Sepolia; faucets need a human |
+| C6 | PASS | Two real nodes: original killed mid-job → "reassigned to kazuo-proof-node-b at no extra charge" → completed; one settlement `0xc95a7db3…`, receipt `0xf0b578d0…` |
+| N1 | PASS | `/health` connected, `/info` without key material, status page "connected to the network" |
+| P1 | PASS | Restarted node Online on `/providers` within one heartbeat |
+| P2 | PASS | Echo job `job_WllqrCDkkGs9` completed and settled |
+| P3 | PASS | Codex job `job_XkZRVWOq3s2o`, $0.20, model-written answer |
+| P4 | PASS | MCP: five tools, `kazuo_run_job` paid with transaction and receipt |
+| P5 | PASS | M1 PASSED, buyer gas 0 wei |
+| P6 | PASS | "not registered" in AgentBook |
+| P7 | PASS (after fix 9) | "agentkit proof verified — no human in AgentBook" on first registration and on re-registration after two broker restarts |
+| P8 | PASS | doctor "nothing broken"; status/earnings/jobs/wallet/price/logs/completion exit 0; test echo healthy; pause/resume; config redacts the key |
+| P9 | PASS | The `/kazuo` skill's exact command completed through the public broker |
+| P10 | PASS | `--human-backed-only` refused before paying |
+| P11 | PASS (after fix 8) | Provider killed mid-job → buyer got "failed — provider disconnected mid-job" 61 s later; failed receipt published; restarted node re-registered |
+| W1 | PASS | RP signature recovers to `0xd4F041AB…9b78Dc`; actions, signal, preset; bad subject 400 |
+| W2 | PASS | Unknown nonce 403 before World is called; malformed 400 |
+| W3 | UNTESTED | Needs a person to scan with World App |
+| W4 | Before PASS; after UNTESTED | `verified:false`, no nullifier; the "after" half needs W3 |
+| W5 | UNTESTED | Depends on W3 |
+| W6 | Unverified half PASS; verified half UNTESTED | Unverified payer → `buyerHumanBacked:false`; the verified half needs a World App scan |
+| T1–T5 | PASS | protocol 55, broker 125, cli 130, mcp 8, app 25; `tsc` clean |

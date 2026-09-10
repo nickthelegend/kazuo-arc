@@ -134,7 +134,14 @@ export class ProviderNode extends EventEmitter<ProviderNodeEvents> {
         return null;
       }
     })();
-    const proof = key ? await agentkitProof(this.brokerUrl, "register", key) : null;
+    const skipped = (reason: string): void =>
+      this.log("warn", `registering without an AgentKit proof: ${reason}`);
+    // Without the payout key there is nothing to sign with. That used to skip
+    // the proof in silence, so a node started without its key simply lost its
+    // human-backed label and nothing said why.
+    const proof = key
+      ? await agentkitProof(this.brokerUrl, "register", key, skipped)
+      : (skipped("no payout key available (set KAZUO_PRIVATE_KEY or run kazuo init)"), null);
     if (proof) headers.agentkit = proof;
 
     const res = await fetch(`${this.brokerUrl}/api/providers/register`, {
