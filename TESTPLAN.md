@@ -185,7 +185,7 @@
 
 Environment: broker at `https://surround-ports-prime-audience.trycloudflare.com` (restarted three times on successive fixes), landing and job board on Vercel production (final app deploy `dpl_gCGYazuzC7LeF7eCPrGERmkwxW4Y`), provider `kazuo-proof-node` (echo + codex), demo payer `0x0329…9F36`. Every browser item ran in Claude in Chrome against production; mobile items at 375×812 in the desktop app's Browser pane (Chrome's window here ignores resizing). Console and network were checked on every item; network status comes from each page's own Resource Timing, because the extension's network list shows probe requests the page never makes (see the 16:10 log entry).
 
-**Nine defects found and fixed at the root in this run, plus one gap closed (10); every one re-verified live after its fix:**
+**Nine defects found and fixed at the root in this run, then three more changes (10–12) while closing the last untested and failing items (17:05–17:55 IST); every one re-verified live after its fix:**
 
 | # | Item | What was wrong | Fix |
 |---|---|---|---|
@@ -199,6 +199,8 @@ Environment: broker at `https://surround-ports-prime-audience.trycloudflare.com`
 | 8 | P11 | A provider killed mid-job left its paid buyer waiting for the ten-minute job ceiling | A 60 s disconnect grace, then in-flight jobs fail over through the normal path (reassign when another node exists) |
 | 9 | P7 | After the reboot the node registered with **no** AgentKit proof and nothing said why: its key came through a launcher step that produced an empty `KAZUO_PRIVATE_KEY`, and the CLI skipped the proof silently | CLI now logs every reason a proof is not sent (`packages/cli/src/agentkit.ts`, `node.ts`); the demo node keeps its key in its 0600 config like `kazuo init` does |
 | 10 | A9 / A10 / A18 / A19 | Not a crash but a gap: the no-wallet "Pay and run" worked only with the demo payer's private key copied into Vercel's environment, so four items could not run in a browser at all | New `POST /api/demo/pay` on the broker pays through its own public x402 route with the key it already holds (quote id validated, $0.25 ceiling, 10 requests/min, 501 without a key); `/api/pay` on Vercel relays to it when Vercel has no key. Four new integration tests (broker 129) |
+| 11 | L10 | The landing linked to a GitHub repository that was not public and to an npm package that was never published | Owner approved publishing: every commit scanned for each `.env` secret and key pattern (none found), public `nickthelegend/kazuo-arc` created with `main`; the footer's "CLI on npm" became "Install the CLI" (README Quickstart) and both install blocks now clone and build from the repository |
+| 12 | L8 | Found by the re-run after fix 11: at 375 px the new clone command widened the page to 601 px — the "earn" grid's implicit `auto` track (and its `1fr` desktop tracks) grew to the command's full length instead of letting it truncate | Zero-minimum tracks: `grid-cols-1` and `lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]` (`components/sections/earn.tsx`) |
 
 **Final status of every item (Run 3):**
 
@@ -211,9 +213,9 @@ Environment: broker at `https://surround-ports-prime-audience.trycloudflare.com`
 | L5 | PASS | Broker down: "live feed offline — the contract above is still readable on ArcScan", 2 ArcScan links, no exception |
 | L6 | PASS | Real clicks: Q2 closed, Q3 opened (single-open accordion), answer shown |
 | L7 | PASS | 0 Xorv/Hedera/HBAR/HashScan; footer World AgentKit + Privy + `eip155:5042002` |
-| L8 | PASS | 375 px: no overflow; menu opens; tap Receipts → `#ledger`, menu closes |
+| L8 | PASS (after fix 12) | Menu opens; tap Receipts → `#ledger`, menu closes. Layout re-measured on the final deploy in a true 375 px frame (the pane's emulation reports a 601 px window, so it can't prove 375): page 365 px, earn grid one 317 px track, 0 of 7 commands past the edge, long ones truncate; at 1024 px two 443 px tracks, no overflow |
 | L9 | PASS | All sections have headings and content; adapters list names all five; no undefined/NaN |
-| L10 | **FAIL — owner action** | After fix 2 every link answers 200 except two that no code change can fix: `github.com/nickthelegend/kazuo-arc` (404, repository not public) and the npm package page (registry 404, not published) |
+| L10 | PASS (after change 11) | Was FAIL: the GitHub repository did not exist publicly and the "CLI on npm" link pointed at an unpublished package. With the owner's approval the history was scanned for every `.env` secret and key pattern (none present) and published as the public `nickthelegend/kazuo-arc`; the landing's install steps and footer link now build from it (landing `dpl_A3boqGFLwkSPYxHpfAYzmsPwyCwS`, then `dpl_AxEURuJnR2h6wTeZHfFuxPa59N5B` with fix 12, re-checked). All 18 external links on the deployed page answer 200; 0 npm links; GitHub renders the README in Chrome; 0 failing resources, 0 console errors |
 | L11 | PASS | 404 with Next's not-found page, no exception |
 | A1 | PASS | Composer, jobs, provider Online, "1 provider(s) live", Privy config 200, 0 failing, 0 console errors |
 | A2 | PASS (after fix 5) | "No providers online" + hint on home and Providers page. Jobs-empty: a second real broker on a fresh SQLite file (not a deletion of the real jobs) → "No jobs yet — Post one above — it settles on Arc in about a second.", 0 console errors |
@@ -234,7 +236,7 @@ Environment: broker at `https://surround-ports-prime-audience.trycloudflare.com`
 | A17 | PASS | Network facts, audit counts, 22 receipts read from KazuoLog |
 | A18 | PASS (after change 10) | Browser: a quote issued by a broker that then went away, paid from the page → 404 "quote not found or expired — request a new one" shown on the quote card, no navigation, no exception. Broker: same 404 (B5) |
 | A19 | PASS (after change 10) | Browser: Back from the paid job no longer offers the quote card; the page's own `POST /api/pay` for the paid `qte_thoK_D25A-no` → 409 "this quote has already been paid"; `fetch` native, 0 failing resources, 0 console errors on a fresh load. Broker: 409 with and without a payment header |
-| A20 | PASS | 375 px with 16 jobs: no overflow; drawer opens; tap Providers routes and closes it |
+| A20 | PASS | 375 px with 16 jobs: no overflow; drawer opens; tap Providers routes and closes it. Re-measured on the final state in a true 375 px frame: page 365 px, nothing past the edge |
 | A21 | PASS (after fix 3) | 404 "This page doesn't exist", no Privy scripts, 0 console errors |
 | A22 | PASS (after fix 6) | Page opened on a Running Codex job; timer ticked 6.8 s → 9.8 s; same document turned Completed with answer and receipt; `/stream` 200 in the broker log; 0 console errors |
 | A23 | PASS | Broker stopped and restarted with the page open: offline → "1 provider(s) live", 15 jobs, same document |
@@ -267,4 +269,4 @@ Environment: broker at `https://surround-ports-prime-audience.trycloudflare.com`
 | W4 | Before PASS; after UNTESTED | `verified:false`, no nullifier; the "after" half needs W3 |
 | W5 | UNTESTED | Depends on W3 |
 | W6 | Unverified half PASS; verified half UNTESTED | Unverified payer → `buyerHumanBacked:false`; the verified half needs a World App scan |
-| T1–T5 | PASS | protocol 55, broker 125, cli 130, mcp 8, app 25; `tsc` clean |
+| T1–T5 | PASS | protocol 55, broker 129, cli 130, mcp 8, app 25 (347/347); `tsc` clean in all six workspaces, including the job board after linking its Privy and IDKit packages locally and regenerating Next's route types |

@@ -135,8 +135,8 @@ A judge will find these anyway, and finding them undisclosed is worse than readi
   Sepolia, so no job has settled there. Arc is the settlement network that is proven.
 - **Privy server wallets and policies (the B2B track) are not built.** The app secret available was rejected
   by Privy's API.
-- **The CLI, MCP server and protocol package are not on npm yet**, and the GitHub repository is not public at
-  the time of writing; both are the owner's call.
+- **The CLI, MCP server and protocol package are not on npm yet.** Every install path builds from the public
+  repository, https://github.com/nickthelegend/kazuo-arc, and the landing page says so.
 - **Claude Code is installed but not sold by the demo node**, because its OAuth token expires daily and a paid
   job would fail after settlement. The real-model proof uses Codex. `kazuo doctor` reports each adapter.
 - **Codex runs with `KAZUO_SANDBOX=none` on the demo node**, because Codex and OpenCode cannot start under

@@ -33,7 +33,8 @@ const CLAIMS = [
 export function Earn() {
   return (
     <Section id="earn" className="border-t border-[var(--line)]">
-      <div className="grid gap-14 lg:grid-cols-[1fr_1fr] lg:items-start lg:gap-20">
+      {/* Zero-minimum tracks: a `1fr`/auto track grows to its longest command instead of truncating it. */}
+      <div className="grid grid-cols-1 gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start lg:gap-20">
         <div>
           <Reveal>
             <h2 className="display-sm text-balance">
