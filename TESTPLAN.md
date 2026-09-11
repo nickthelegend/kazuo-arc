@@ -270,3 +270,27 @@ Environment: broker at `https://surround-ports-prime-audience.trycloudflare.com`
 | W5 | UNTESTED | Depends on W3 |
 | W6 | Unverified half PASS; verified half UNTESTED | Unverified payer → `buyerHumanBacked:false`; the verified half needs a World App scan |
 | T1–T5 | PASS | protocol 55, broker 129, cli 130, mcp 8, app 25 (347/347); `tsc` clean in all six workspaces, including the job board after linking its Privy and IDKit packages locally and regenerating Next's route types |
+
+## 9. Run 4 — completion re-measure (18:00–18:45 IST, machine clock)
+
+Measuring completion again, against the project's own claims rather than this plan, found four things the plan did not cover: GitHub CI was red on the public repository, Railway's broker deployment had failed, Claude Code had never sold a paid job, and Codex could not run under the sandbox, so the demo node ran every job unsandboxed.
+
+| # | What was wrong | Fix | Verified |
+|---|---|---|---|
+| 13 | CI failed on every push: typecheck ran before the build that produces `@kazuo/protocol`'s types, and the Node-floor job filtered on the pre-rename package name, then ran a CLI it never built | Build before typecheck; `--filter @kazuo/cli` (`.github/workflows/ci.yml`) | All four jobs green on `db12c50` and `eaa9cbd`. A fresh clone of the public repository installs, builds, typechecks, builds both frontends and passes every test |
+| 14 | Under seatbelt Codex exited before reading its prompt — it must write `~/.codex` — and its own seatbelt layer cannot nest inside ours (`sandbox_apply: Operation not permitted`, exit 71) | `~/.codex` writable with its config, instructions, prompts, skills and rules still read-only; Codex's own sandbox off only while ours contains it (`packages/cli/src/sandbox.ts`, `adapters/codex.ts`); six tests, three of them live under seatbelt | `kazuo test --adapter codex` passes under seatbelt. **A paid Codex job under it is unproven**: the demo account's Codex usage limit is spent until 12 Oct 2026 |
+| 15 | The paid Codex job that hit that limit (`job_aDSA7n2vmveY`, $0.20 settled) reported the tail of stderr — warnings about an unrelated skill file — instead of the reason | The adapter throws Codex's own error event | Test drives a fake `codex` that emits the event |
+| 16 | The demo node sold Codex with `KAZUO_SANDBOX=none` | It sells Echo and Claude Code under seatbelt | No-wallet purchase on the production job board, `job_ytLeQpol5gve`, $0.23: settlement `0x6f660f95…4acf` decoded on Arc — one USDC `Transfer` payer → provider for 230000, sent by the facilitator; receipt `0x25f8871f…1123` carries the job id and result hash; 0 failing resources, 0 console errors. First proof on a separate node: `job_5OCuFYQhCMkX` (`0x87f1a826…a5cf`) |
+
+The whole project re-measured on the final state:
+
+- Suites 354/354 (protocol 55, broker 129, cli 137, mcp 8, app 25); typecheck clean in all six workspaces.
+- CLI echo job `job_dznBTjcm8JW6` completed; `pnpm m1` PASSED with buyer gas 0 wei (`0x0e378716…9bbf`).
+- MCP over stdio with a real client: five tools; `kazuo_run_job` paid (`0x8d8287aa…`, receipt `0xcacaf014…`).
+- Unpaid job → 402 with `payment-required`; a just-paid quote reused → 409 on `/api/demo/pay` and on the x402 route; 31st quote in a minute → 429; `--human-backed-only` refused before paying; AgentBook lookup on World Chain answers "not registered".
+- Broker health, network, metrics, receipts, jobs 200; providers carry no secrets; World ID bad subject 400; AgentKit challenge 200; demo-pay validation 400/404.
+- SQLite `data/kazuo.db` holds 29 jobs across restarts.
+- Job board providers and network pages and the landing: 200, 0 failing resources, 0 console errors; the network page lists today's receipts read from `KazuoLog`.
+- Privy: "Sign in" opens the Privy modal on production ("Sign in to Kazuo", email, "Continue with a wallet"); 0 failing resources, 0 console errors.
+- Mock/stub sweep of shipped source: only comments about test seams.
+- Railway: the image builds and pushes; the container exits `Missing KAZUO_OPERATOR_KEY` — an owner credential this session does not push.
