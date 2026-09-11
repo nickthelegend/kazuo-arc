@@ -129,6 +129,29 @@ describe("the profile", () => {
     expect(profile).toContain(fs.realpathSync(jobDir));
   });
 
+  it("lets Codex write its own home, which it cannot start without", () => {
+    const profile = seatbeltProfile(jobDir, "/Users/x", "codex");
+    const allow = profile.slice(profile.indexOf("(allow file-write*"));
+    expect(allow).toContain('(subpath "/Users/x/.codex")');
+  });
+
+  it("keeps the files that steer Codex's next run unwritable, after the allow so they win", () => {
+    // Otherwise a job could plant config or instructions that run in the
+    // operator's own, unsandboxed session.
+    const profile = seatbeltProfile(jobDir, "/Users/x", "codex");
+    for (const f of ["config.toml", "AGENTS.md", "prompts", "skills", "rules"]) {
+      const rule = `(deny file-write* (subpath "/Users/x/.codex/${f}"))`;
+      expect(profile).toContain(rule);
+      expect(profile.indexOf(rule)).toBeGreaterThan(profile.indexOf("(allow file-write*"));
+    }
+  });
+
+  it("gives every other adapter nothing beyond the job directory", () => {
+    for (const adapter of ["claude-code", "echo", undefined]) {
+      expect(seatbeltProfile(jobDir, "/Users/x", adapter)).not.toContain(".codex");
+    }
+  });
+
   it("caps cpu, file size and processes", () => {
     const preamble = limitsPreamble(DEFAULT_LIMITS);
     expect(preamble).toContain(`ulimit -t ${DEFAULT_LIMITS.cpuSeconds}`);
@@ -212,5 +235,38 @@ describe.runIf(onMac)("under seatbelt, a hostile job", () => {
     const { status } = run("echo result > out.txt");
     expect(status).toBe(0);
     expect(fs.readFileSync(path.join(jobDir, "out.txt"), "utf8").trim()).toBe("result");
+  });
+
+  describe.runIf(fs.existsSync(path.join(os.homedir(), ".codex", "config.toml")))("running Codex", () => {
+    /** `touch` only: if a rule were wrong it changes a timestamp, never a file's contents. */
+    function asCodex(script: string): number | null {
+      const w = wrapCommand("/bin/sh", ["-c", script], { jobDir, adapter: "codex" });
+      const r = spawnSync(w.cmd, w.args, { cwd: jobDir, env: sandboxEnv(), encoding: "utf8" });
+      w.cleanup?.();
+      return r.status;
+    }
+
+    it("can write the session state Codex needs to start", () => {
+      const probe = path.join(os.homedir(), ".codex", `.kazuo-sandbox-probe-${process.pid}`);
+      try {
+        expect(asCodex(`touch ${JSON.stringify(probe)}`)).toBe(0);
+        expect(fs.existsSync(probe)).toBe(true);
+      } finally {
+        fs.rmSync(probe, { force: true });
+      }
+    });
+
+    it("cannot change Codex's config", () => {
+      const config = path.join(os.homedir(), ".codex", "config.toml");
+      const before = fs.statSync(config).mtimeMs;
+      expect(asCodex(`touch ${JSON.stringify(config)}`)).not.toBe(0);
+      expect(fs.statSync(config).mtimeMs).toBe(before);
+    });
+
+    it("still cannot write the rest of the home directory", () => {
+      const escape = path.join(os.homedir(), `kazuo-escape-codex-${process.pid}.txt`);
+      expect(asCodex(`touch ${JSON.stringify(escape)}`)).not.toBe(0);
+      expect(fs.existsSync(escape)).toBe(false);
+    });
   });
 });

@@ -137,10 +137,13 @@ A judge will find these anyway, and finding them undisclosed is worse than readi
   by Privy's API.
 - **The CLI, MCP server and protocol package are not on npm yet.** Every install path builds from the public
   repository, https://github.com/nickthelegend/kazuo-arc, and the landing page says so.
-- **Claude Code is installed but not sold by the demo node**, because its OAuth token expires daily and a paid
-  job would fail after settlement. The real-model proof uses Codex. `kazuo doctor` reports each adapter.
-- **Codex runs with `KAZUO_SANDBOX=none` on the demo node**, because Codex and OpenCode cannot start under
-  macOS seatbelt. `kazuo test` and `kazuo doctor` say which adapters work under which sandbox.
+- **The demo node sells Claude Code, not Codex, since 18:20 IST on 13 Sep.** The demo account's Codex usage limit
+  is spent until 12 Oct 2026, and a paid Codex job failed after settlement because of it (`job_aDSA7n2vmveY`).
+  Claude Code runs under the macOS seatbelt sandbox and has a paid proof. It reads its login from the keychain
+  for each job, so a lapsed token fails a job; `kazuo test` catches that before a node sells it.
+- **Codex under the sandbox is fixed but not proven by a paid job**, for the same quota reason. It used to exit
+  before reading its prompt under seatbelt; now it passes `kazuo test` there. OpenCode and Grok are unproven under
+  seatbelt; `kazuo test` and `kazuo doctor` say which adapters work under which sandbox.
 - **A buyer whose only matched provider fails is not refunded.** Payment settles before the job runs because
   an EIP-3009 authorization expires; the protection is free reassignment, which needs a second provider.
 - **The audit log costs gas.** Heartbeats are sampled hourly because every entry costs $0.00088 and the broker

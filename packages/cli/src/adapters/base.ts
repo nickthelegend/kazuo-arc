@@ -174,6 +174,7 @@ export function runChild(opts: {
         jobDir: opts.cwd,
         tier: opts.sandbox,
         limits: DEFAULT_LIMITS,
+        adapter: opts.adapter,
       });
     } catch (err) {
       reject(err instanceof Error ? err : new Error(String(err)));

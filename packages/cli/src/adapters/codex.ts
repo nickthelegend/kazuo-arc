@@ -20,6 +20,22 @@ import {
   type JobAdapter,
   type RunInput,
 } from "./base.js";
+import { detectSandbox } from "../sandbox.js";
+
+/**
+ * Codex's own sandbox mode for the shell commands it runs.
+ *
+ * On macOS Codex contains those commands with seatbelt, and seatbelt cannot be
+ * applied from inside a process already running under a profile: with Kazuo's
+ * active, every command failed with `sandbox_apply: Operation not permitted`
+ * (exit 71). So under Kazuo's profile Codex's own layer is off and ours is the
+ * boundary — writes confined to the job directory, credentials unreadable.
+ * Safe mode stays read-only either way; commands failing is what it asks for.
+ */
+function codexSandboxMode(): string {
+  if (safeMode()) return "read-only";
+  return process.platform === "darwin" && detectSandbox() === "seatbelt" ? "danger-full-access" : "workspace-write";
+}
 
 function codexBin(): string | null {
   if (process.env.KAZUO_CODEX_BIN) return process.env.KAZUO_CODEX_BIN;
@@ -50,19 +66,20 @@ export class CodexAdapter implements JobAdapter {
       "-C",
       input.cwd,
       "-s",
-      // read-only in safe mode; otherwise writes are scoped to the job cwd.
-      safeMode() ? "read-only" : "workspace-write",
+      codexSandboxMode(),
     ];
     if (input.model) args.push("-m", input.model);
     args.push(input.prompt);
 
     let finalText = "";
+    let failure = "";
 
     const result = await runChild({
       cmd: bin,
       args,
       cwd: input.cwd,
       signal: input.signal,
+      adapter: this.kind,
       onLine: (line) => {
         const trimmed = line.trim();
         if (!trimmed.startsWith("{")) return;
@@ -90,14 +107,20 @@ export class CodexAdapter implements JobAdapter {
           }
         } else if (event.type === "thread.started") {
           input.emit({ kind: "status", text: "codex thread started" });
-        } else if (event.type === "error") {
-          input.emit({ kind: "error", text: String(event.message ?? "codex error") });
+        } else if (event.type === "error" || event.type === "turn.failed") {
+          const nested = (event.error ?? {}) as Record<string, unknown>;
+          failure = String(nested.message ?? event.message ?? "codex error");
+          input.emit({ kind: "error", text: failure });
         }
       },
     });
 
     if (result.code !== 0 && !finalText) {
-      throw new Error(`codex exited ${result.code}: ${result.stderr.slice(-400)}`);
+      // Codex says why it stopped — a spent quota, a rejected login — in a JSON
+      // event. stderr tends to end in unrelated warnings (a malformed skill file
+      // elsewhere on the machine), which is what a buyer saw instead of
+      // "You've hit your usage limit". It stays as the fallback.
+      throw new Error(failure ? `codex: ${failure}` : `codex exited ${result.code}: ${result.stderr.slice(-400)}`);
     }
     if (!finalText.trim()) throw new Error("codex produced no output");
     return clampResult(finalText);

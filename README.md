@@ -66,8 +66,8 @@ Then the live proof, all on Arc testnet and all openly readable:
 | ✅ MCP: an agent buying capacity | Verified over stdio |
 | ✅ Survives a broker restart | SQLite — jobs, receipts index and cursor survived a full machine reboot (MongoDB mirror is optional and not configured) |
 | ✅ OS-level job sandbox | Seatbelt / bubblewrap / container — a hostile prompt cannot read the payout key |
-| ⚠️ Claude Code, paid | Its OAuth token had expired on this host; the paid attempt failed *after* settlement. `kazuo doctor` names it exactly. Codex was used for the proof instead |
-| ⚠️ Three of five adapters under the sandbox | Codex and OpenCode can't start under seatbelt, Grok returns empty. `kazuo test` catches all three before a node goes live. The real-model proof above ran with `KAZUO_SANDBOX=none` |
+| ✅ Claude Code, paid, under the sandbox | $0.23 job under macOS seatbelt: settlement [`0x87f1a826…a5cf`](https://testnet.arcscan.app/tx/0x87f1a826837d4a01efddb61e47acad1ea68eaf4aad25c772add892a74ca5a5cf), receipt [`0xbd747ce4…ed31`](https://testnet.arcscan.app/tx/0xbd747ce411cf0de519b3237a31e979a302ca35b2d6d866a99a66590974aced31). The demo node now sells it. Its login is read from the keychain per job, so a lapsed token fails a job — `kazuo test` catches that first |
+| ⚠️ Codex under the sandbox | Fixed: Codex used to exit under seatbelt before reading its prompt; it now gets its own home (config stays read-only) and passes `kazuo test`. Not proven by a paid job — the demo account's Codex quota is spent until 12 Oct 2026. OpenCode and Grok are unproven under seatbelt. The earlier Codex proofs above ran with `KAZUO_SANDBOX=none` |
 | ✅ Landing + job board deployed | [kazuo-arc.vercel.app](https://kazuo-arc.vercel.app), [kazuo-arc-app.vercel.app](https://kazuo-arc-app.vercel.app) — built and typechecked on Vercel |
 | ✅ Public receipts feed | The job board's Network page and the landing page read real `KazuoLog` receipts from a persisted forward index |
 | ⚠️ Broker hosting | Live for judging through a Cloudflare tunnel to a broker on the builder's machine. The Railway image builds, but the service needs its operator key before it serves |

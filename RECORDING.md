@@ -61,10 +61,12 @@ Readiness check:
 kazuo doctor
 ```
 
-It should end `nothing broken`. On this Mac it shows Codex and Echo `signed in ·
-selling`; Claude Code, Grok and OpenCode are installed but not sold (`kazuo init`
-to add them). **Do not sell Claude Code on camera unless `claude` was run in the
-last day** — its OAuth token expires, and a paid job then fails after settlement.
+It should end `nothing broken`. On this Mac it shows Claude Code and Echo `signed in ·
+selling`; Codex, Grok and OpenCode are installed but not sold. **Run `claude` once
+shortly before recording** — the node reads Claude Code's login from the keychain
+for each job, and a lapsed token fails a paid job after settlement (`kazuo test
+--adapter claude-code` confirms it). Codex is out of quota until 12 Oct 2026; don't
+sell it on camera.
 
 ---
 
@@ -102,7 +104,7 @@ kazuo doctor
 
 Point at three lines:
 
-> "Sandbox — it names the mechanism, macOS seatbelt. Codex — signed in, selling; it
+> "Sandbox — it names the mechanism, macOS seatbelt. Claude Code — signed in, selling; it
 > checks the CLI is actually authenticated, not just installed. And the last line:
 > nothing broken."
 
@@ -129,7 +131,7 @@ If you set up Privy: **Sign in** → the Privy modal (email or wallet).
 > away — what it signs is an EIP-3009 authorization, typed data, never broadcast.
 > The facilitator relays it and pays the fee. No gas, no extension."
 
-In the composer, pick **Codex** in the model picker and type:
+In the composer, pick **Claude Code** in the model picker, set max to `0.25`, and type:
 
 ```
 Write a Python one-liner that reverses a string. Just the code, nothing else.
@@ -143,7 +145,7 @@ Click the arrow. **Stop on the quote card.**
 Pay (Privy wallet or demo payer), or in the terminal:
 
 ```bash
-kazuo run --adapter codex --max 0.25 "Write a Python one-liner that reverses a string. Just the code, nothing else."
+kazuo run --adapter claude-code --max 0.25 "Write a Python one-liner that reverses a string. Just the code, nothing else."
 ```
 
 Watch the job page: status, execution log, the answer, then the **On-chain

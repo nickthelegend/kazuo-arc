@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { CodexAdapter } from "../src/adapters/codex.js";
 import { EchoAdapter } from "../src/adapters/echo.js";
 import { allAdapters, createAdapter, detectAvailable } from "../src/adapters/index.js";
 import {
@@ -85,6 +86,43 @@ describe("EchoAdapter", () => {
     });
     setTimeout(() => controller.abort(), 10);
     await expect(promise).rejects.toThrow(/cancel/i);
+  });
+});
+
+describe("CodexAdapter", () => {
+  it("reports Codex's own reason for stopping, not the tail of stderr", async () => {
+    // What a buyer saw when the provider's Codex quota ran out: the last 400
+    // bytes of stderr, which were warnings about an unrelated skill file.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "kazuo-codex-test-"));
+    const bin = path.join(dir, "codex");
+    fs.writeFileSync(
+      bin,
+      [
+        "#!/bin/sh",
+        `echo '{"type":"error","message":"You have hit your usage limit."}'`,
+        `echo '{"type":"turn.failed","error":{"message":"You have hit your usage limit."}}'`,
+        "echo 'ERROR failed to load skill /elsewhere/SKILL.md: invalid YAML' >&2",
+        "exit 1",
+      ].join("\n"),
+      { mode: 0o755 },
+    );
+    process.env.KAZUO_CODEX_BIN = bin;
+    const { events, emit } = collector();
+    try {
+      await expect(
+        new CodexAdapter().run({
+          prompt: "hi",
+          cwd: dir,
+          timeoutMs: 10_000,
+          signal: new AbortController().signal,
+          emit,
+        }),
+      ).rejects.toThrow("codex: You have hit your usage limit.");
+      expect(events.some((e) => e.kind === "error" && e.text.includes("usage limit"))).toBe(true);
+    } finally {
+      delete process.env.KAZUO_CODEX_BIN;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

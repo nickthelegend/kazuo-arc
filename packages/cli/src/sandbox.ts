@@ -26,7 +26,9 @@
  * `claude` needs `~/.claude`, `codex` needs `~/.codex`. Those stay readable, so
  * a hostile prompt can still read the provider's *agent session*. It cannot
  * read their payout key, SSH keys, cloud credentials, or browser profile, and
- * it cannot write outside its job directory.
+ * it cannot write outside its job directory — except Codex's own home, which
+ * Codex cannot start without; the files there that steer a later run stay
+ * read-only (see `agentStatePaths`).
  *
  * Closing that last gap needs a container, which is why `container` exists and
  * why `kazuo doctor` names the active tier rather than saying "sandboxed".
@@ -263,7 +265,7 @@ export function resetSandboxCache(): void {
  * gets switched off. This denies every secret we can name and confines writes
  * to the job directory.
  */
-export function seatbeltProfile(jobDir: string, home = os.homedir()): string {
+export function seatbeltProfile(jobDir: string, home = os.homedir(), adapter?: string): string {
   const deny = secretPaths(home)
     .map((p) => `  (deny file-read* (subpath ${JSON.stringify(p)}))`)
     .join("\n");
@@ -274,6 +276,19 @@ export function seatbeltProfile(jobDir: string, home = os.homedir()): string {
   // working directory. Both spellings are allowed because the process may open
   // either one.
   const writable = new Set<string>([jobDir, realpath(jobDir), realpath(os.tmpdir()), os.tmpdir()]);
+
+  const agent = agentStatePaths(adapter, home);
+  for (const p of agent.writable) {
+    writable.add(p);
+    writable.add(realpath(p));
+  }
+  // Seatbelt lets a later rule override an earlier one, so these come after
+  // the allow above and win over it.
+  const locked = agent.locked.length
+    ? `\n; --- the agent's own config: stays read-only inside its writable home ------\n${agent.locked
+        .map((p) => `(deny file-write* (subpath ${JSON.stringify(p)}))`)
+        .join("\n")}\n`
+    : "";
 
   return `(version 1)
 (allow default)
@@ -287,10 +302,39 @@ ${deny}
 (allow file-write*
 ${[...writable].map((p) => `  (subpath ${JSON.stringify(p)})`).join("\n")}
   (subpath "/dev"))
-
+${locked}
 ; --- process control ---------------------------------------------------------
 (deny mach-priv-task-port)
 `;
+}
+
+/**
+ * The part of an agent CLI's own home a job must be able to write.
+ *
+ * Codex will not start without writing to `~/.codex` — its session log, a state
+ * database, the PATH aliases it creates at launch. Under a profile that allowed
+ * only the job directory every Codex job exited before reading its prompt
+ * ("failed to initialize in-process app-server client: Operation not
+ * permitted"), so the demo node had to run Codex with no sandbox at all.
+ *
+ * The home is writable; the files in it that decide what the agent does *next*
+ * time — its config, instructions, prompts, skills and rules — are not.
+ * Otherwise a job could plant something that runs in the operator's own,
+ * unsandboxed Codex session. Claude Code needs nothing here: its token is
+ * handed in (see `agentCredentials`) and it runs without writing its home.
+ */
+export function agentStatePaths(
+  adapter: string | undefined,
+  home = os.homedir(),
+): { writable: string[]; locked: string[] } {
+  if (adapter !== "codex") return { writable: [], locked: [] };
+  const dir = path.join(home, ".codex");
+  return {
+    writable: [dir],
+    locked: ["config.toml", "AGENTS.md", "AGENTS.override.md", "prompts", "skills", "rules"].map((f) =>
+      path.join(dir, f),
+    ),
+  };
 }
 
 /** Resolve symlinks, tolerating a path that does not exist yet. */
@@ -337,7 +381,13 @@ export interface WrappedCommand {
 export function wrapCommand(
   cmd: string,
   args: string[],
-  opts: { jobDir: string; tier?: SandboxTier; limits?: SandboxLimits },
+  opts: {
+    jobDir: string;
+    tier?: SandboxTier;
+    limits?: SandboxLimits;
+    /** The adapter being run, for the part of its own home it must write. */
+    adapter?: string;
+  },
 ): WrappedCommand {
   const tier = opts.tier ?? detectSandbox();
   const limits = opts.limits ?? DEFAULT_LIMITS;
@@ -370,7 +420,7 @@ export function wrapCommand(
 
   if (tier === "seatbelt") {
     const profilePath = path.join(opts.jobDir, ".sandbox.sb");
-    fs.writeFileSync(profilePath, seatbeltProfile(opts.jobDir), { mode: 0o600 });
+    fs.writeFileSync(profilePath, seatbeltProfile(opts.jobDir, os.homedir(), opts.adapter), { mode: 0o600 });
     return {
       cmd: "/bin/sh",
       args: [
