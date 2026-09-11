@@ -35,11 +35,13 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Typecheck
-        run: pnpm typecheck
-
+      # Build first: workspace packages resolve each other through their built
+      # `dist` types, so a typecheck before the build can't find @kazuo/protocol.
       - name: Build
         run: pnpm build
+
+      - name: Typecheck
+        run: pnpm typecheck
 
       # Every test in the repo runs with no credentials and no network:
       # the two pieces that would touch the chain — the facilitator and the
@@ -65,7 +67,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @kazuo/protocol build
-      - run: pnpm --filter kazuo build
+      - run: pnpm --filter @kazuo/cli build
       # The floor that matters for `npm i -g @kazuo/cli`: it has to at least start.
       - run: node packages/cli/dist/index.js --version
 
