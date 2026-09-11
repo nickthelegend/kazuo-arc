@@ -570,7 +570,11 @@ export function createApp(deps: AppDeps) {
     const quoteId = body.quoteId?.trim();
     if (!quoteId) return c.json({ error: "quoteId is required" }, 400);
     const quote = jobs.getQuote(quoteId);
-    if (!quote) return c.json({ error: "quote not found or expired — request a new one" }, 404);
+    if (!quote) {
+      const paidJobId = jobs.paidJobIdForQuote(quoteId);
+      if (paidJobId) return c.json({ error: "this quote has already been paid", jobId: paidJobId }, 409);
+      return c.json({ error: "quote not found or expired — request a new one" }, 404);
+    }
     if (quote.priceUsdMicros > DEMO_MAX_USD_MICROS) {
       return c.json(
         {
@@ -744,8 +748,11 @@ export function createApp(deps: AppDeps) {
     // Guard before the payment middleware, so an expired quote is a clean 404
     // rather than a 402 quoting a price nobody can pay.
     if (c.req.method !== "POST") return next();
-    const quote = jobs.getQuote(c.req.param("quoteId") ?? "");
+    const quoteId = c.req.param("quoteId") ?? "";
+    const quote = jobs.getQuote(quoteId);
     if (!quote) {
+      const paidJobId = jobs.paidJobIdForQuote(quoteId);
+      if (paidJobId) return c.json({ error: "this quote has already been paid", jobId: paidJobId }, 409);
       return c.json({ error: "quote not found or expired — request a new one" }, 404);
     }
     if (quote.jobId) {

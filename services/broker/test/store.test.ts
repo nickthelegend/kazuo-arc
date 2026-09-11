@@ -153,6 +153,16 @@ describe("jobs survive a restart", () => {
     expect(second.getQuote(quote.id)).toBeUndefined();
   });
 
+  it("still refuses a paid quote after a restart, from the job it bought", () => {
+    const first = new JobStore(store());
+    const quote = first.createQuote(quoteInput());
+    const job = first.createJob(quote);
+
+    const second = new JobStore(store());
+    expect(second.getQuote(quote.id)).toBeUndefined();
+    expect(second.paidJobIdForQuote(quote.id)).toBe(job.id);
+  });
+
   it("updates a job in place rather than accumulating rows", () => {
     const first = new JobStore(store());
     const job = first.createJob(first.createQuote(quoteInput()));

@@ -158,6 +158,12 @@ export interface Job {
   request: JobRequest;
   status: JobStatus;
   createdAt: number;
+  /**
+   * The quote this job paid for. Kept on the job, which is persisted, because
+   * the quote itself expires and is never restored: a retry of an old payment
+   * must still be told it already bought this job, not to request a new quote.
+   */
+  quoteId?: string | null;
   /** Provider the quote was pinned to; set as soon as the job is quoted. */
   providerId?: string | null;
   providerLabel?: string | null;

@@ -58,6 +58,24 @@ describe("quotes", () => {
     expect(store.getQuote(quote.id)!.jobId).toBe(job.id);
   });
 
+  it("still knows a paid quote after it expires, so a late retry is refused rather than re-quoted", () => {
+    // A retry after the TTL used to be told "request a new one" — an invitation
+    // to pay a second time for the job the buyer had already bought.
+    vi.useFakeTimers();
+    const quote = store.createQuote(quoteInput());
+    const job = store.createJob(quote);
+    vi.advanceTimersByTime(301_000);
+    expect(store.getQuote(quote.id)).toBeUndefined();
+    expect(store.paidJobIdForQuote(quote.id)).toBe(job.id);
+    expect(store.paidJobIdForQuote("qte_nope")).toBeUndefined();
+    vi.useRealTimers();
+  });
+
+  it("does not treat an unpaid quote as paid", () => {
+    const quote = store.createQuote(quoteInput());
+    expect(store.paidJobIdForQuote(quote.id)).toBeUndefined();
+  });
+
   it("carries the EIP-712 domain the buyer has to sign against", () => {
     // x402's EVM scheme fills this in only for networks in its built-in
     // stablecoin registry, and Arc is not one of them, so the quote must.

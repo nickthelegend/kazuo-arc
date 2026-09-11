@@ -294,3 +294,116 @@ The whole project re-measured on the final state:
 - Privy: "Sign in" opens the Privy modal on production ("Sign in to Kazuo", email, "Continue with a wallet"); 0 failing resources, 0 console errors.
 - Mock/stub sweep of shipped source: only comments about test seams.
 - Railway: the image builds and pushes; the container exits `Missing KAZUO_OPERATOR_KEY` — an owner credential this session does not push.
+
+## 10. Run 5 — the plan as it stands for the final state (definitions updated before testing, 18:35 IST)
+
+Sections 1–6 remain the plan. Since Run 3 the product changed — the demo node sells Echo and Claude Code under seatbelt, the no-wallet payment goes through the broker, the landing installs from GitHub, and CI exists on a public repository — so these definitions replace the originals, and these items are new. Every item in §1–§6 plus these is executed again in Run 5.
+
+**Environment for Run 5.** Provider `kazuo-proof-node`: Echo (test) $0.0010 and Claude Code $0.2300, `KAZUO_SANDBOX=seatbelt`, key in its 0600 config. Broker and tunnel unchanged. Railway: latest deployment FAILED at its healthcheck because the container exits `Missing KAZUO_OPERATOR_KEY`.
+
+| ID | Correct means (replaces or adds) |
+|---|---|
+| L2 | As before, with the Arc sponsor link → `https://www.arc.io/` (the old `circle.com/arc` 404s) |
+| L10 | Every distinct external `href` answers HTTP < 400, including the public GitHub repository; no link to an unpublished npm package |
+| A2 | As before, and the "No providers online" hint names an install that works today (build from the public repository), not an unpublished npm package |
+| A9 | No wallet: "Pay and run" → `POST /api/pay` (relayed to the broker's `/api/demo/pay`) 200 `{jobId, payer, transaction}`; the browser lands on `/jobs/<id>`; the job completes; the receipt panel shows payer, paid to, amount, network and working ArcScan links |
+| A10 | Broker running without `KAZUO_DEMO_PAYER_KEY`: "Pay and run" → 501 "No demo payer configured on this broker. Set KAZUO_DEMO_PAYER_KEY — see .env.example." shown under the quote; no navigation |
+| A18 | A quote the serving broker doesn't know, paid from the page → 404 "quote not found or expired — request a new one" shown on the quote card; no navigation |
+| A19 | The page's own `POST /api/pay` for an already-paid quote → 409 "this quote has already been paid"; returning from the paid job does not re-offer that quote |
+| A22 | As before, on a real **Claude Code** job |
+| B21 | Unknown → 404; completed → 409 "job is already completed"; a **running** job → 200 `{ok:true, status:"failed", refunded:false}`, error stays "cancelled by the buyer" after the provider's late report, a failed receipt is published, second cancel 409 |
+| C6 | Two real nodes selling the same capability; the one running a paid job is killed → after the disconnect grace the job is reassigned "at no extra charge" to the other and completes; exactly one settlement |
+| P1 | As before, with capabilities Echo (test) · Claude Code |
+| P3 | `kazuo run --adapter claude-code` → completed with a model-written answer; settled on chain; ran under seatbelt |
+| P11 | Provider killed while a paid job runs → the buyer gets terminal `failed` "provider disconnected mid-job" within ~60 s (not the 10-minute ceiling); a failed receipt is published; the restarted node re-registers and is Online |
+| P12 | New — `kazuo run --adapter codex` under seatbelt → completed with a model-written answer that ran a shell command; settled |
+| T6 | New — GitHub Actions CI green on the final commit (all four jobs) |
+| T7 | New — a fresh clone of `github.com/nickthelegend/kazuo-arc` runs `pnpm install --frozen-lockfile && pnpm build && pnpm typecheck && pnpm test` clean |
+| R1 | New — the Railway broker serves `/health` 200 |
+
+## 11. Run 5 — results (18:35–19:22 IST, machine clock)
+
+Every browser item ran in Claude in Chrome against production (landing, job board deploy `dpl_9vsWuva2jGDADJB19Gzvxa6XvqJy`), with console and failing resources checked on each; true-375 px layout was measured in a same-origin 375 px frame, because the pane's viewport emulation reports a 601 px window. Broker, chain and CLI items ran against the live broker through the public tunnel and against Arc testnet and World Chain directly.
+
+**Two defects found and fixed at the root, each re-verified live:**
+
+| # | Item | What was wrong | Fix | Re-verified |
+|---|---|---|---|---|
+| 13 | A2 | The job board's "No providers online" hint told people to run `npm i -g @kazuo/cli`, a package that does not exist | The hint builds from the public repository (`apps/app/components/live-lists.tsx`); deployed | Provider stopped: home and Providers page both show "Clone github.com/nickthelegend/kazuo-arc, run pnpm install && pnpm build, then node packages/cli/dist/index.js init…", no npm text |
+| 14 | A19 / DP | A paid quote answered 404 "quote not found or expired — request a new one" once its five-minute TTL passed or the broker restarted — an invitation to pay twice for a job already bought. Quotes are never restored, and the 409 read the job id off the quote | The job keeps its `quoteId` (persisted with the job); both the x402 route and `/api/demo/pay` answer 409 "this quote has already been paid" with the job id when the quote is gone but a job bought it (`services/broker/src/jobs.ts`, `app.ts`, `packages/protocol/src/types.ts`); three tests, one across a real SQLite restart | `qte_yfwZXv34hTi-` (job `job_T41FOYM91Yez`): 409 on both routes at 18:51 (just paid), 18:58 (after TTL) and 19:13 (after a broker restart); the browser's own `POST /api/pay` for the A9 quote → 409 |
+
+Also changed, not counted as a fix: `kazuo run` now falls back to polling a job when its event stream is cut (three tests). It was written while chasing what looked like an empty `--json` result after a provider died; the real cause was the test script reading the output file before the buyer had finished — the unchanged CLI printed `failed · provider disconnected mid-job` correctly.
+
+Test-harness mistakes found and corrected during the run (the product was right each time): W1 passed the RP nonce as hex instead of bytes; B21 matched jobs on a field the list doesn't carry; P11's first kill passed three pids as one argument and `wait` returned early; A22's first job finished before the page opened; P2/P9's first run raced P8's `pause`; L8's first tap hit the footer's Receipts link instead of the menu's.
+
+**Every item, final state:**
+
+| ID | Status | Evidence in Run 5 |
+|---|---|---|
+| L1 | PASS | 200, exact title, 0 failing resources, 0 console errors |
+| L2 | PASS | Headline, "Live on Arc testnet", Arc → `arc.io`, World AgentKit → docs.world.org, Privy → privy.io, "Post a job" ×2 → job board |
+| L3 | PASS | All seven header links set their hash and bring the section to top 0 (scroll-behavior set to auto for the hidden tab, as in Run 3) |
+| L4 | PASS | `/api/receipts` and `/api/network` 200; 6 live receipt rows with job ids; contract link |
+| L5 | PASS | Broker stopped: "live feed offline — the contract above is still readable on ArcScan", 2 ArcScan links, 0 console errors |
+| L6 | PASS | 7 questions; opening one closes the other; clicking an open one closes it; answer rendered |
+| L7 | PASS | 0 Xorv/Hedera/HBAR/HashScan; footer World AgentKit, Privy, Install the CLI, `eip155:5042002` |
+| L8 | PASS | 375 px: no overflow; "Open menu" → "Close menu"; menu Receipts → `#ledger` at top 0, menu closes |
+| L9 | PASS | Seven sections with headings and content; five adapters named; no undefined/NaN; 6 ledger rows |
+| L10 | PASS | 18/18 external links 200, including the public repository; 0 npm links |
+| L11 | PASS | 404 not-found page, 0 console errors |
+| A1 | PASS | Composer, recent jobs, live provider (Echo · Claude Code), "1 provider(s) live", broker calls 200 |
+| A2 | PASS (after fix 13) | Providers empty (home + Providers page, new hint, "0 provider(s) live"); jobs empty on a broker with a fresh database: "No jobs yet — Post one above — it settles on Arc in about a second." |
+| A3 | PASS | Broker stopped with the page open: "broker offline", "Can't reach the broker" ×2, start hint, same document, 0 console errors |
+| A4 | PASS | Empty prompt → button disabled; max `0` and `abc` → "Set a maximum price above zero.", 0 quote requests |
+| A5 | PASS | Provider stopped: 503, "no providers are online right now — start one with `kazuo start`", stays on `/` |
+| A6 | PASS | Quote card: kazuo-proof-node, "Echo (test)", $0.0010, pays → `0xff21…489B`, no-gas note; request body `adapter:"echo"` |
+| A7 | PASS | Max 0.0005 → 503 "no online provider matches that request under $0.0005" |
+| A8 | PASS | Seven options listed; choosing Echo → "Model: Echo" and `adapter:"echo"` in the request |
+| A9 | PASS | No wallet: `/api/pay` 200 → `/jobs/job_baw0dwpYgD06` Completed; payer, paid to, 1000 µUSDC, network; transfer and on-chain receipt links to real txs |
+| A10 | PASS | Broker without the demo key: 501 "No demo payer configured on this broker. Set KAZUO_DEMO_PAYER_KEY — see .env.example." under the card, stays on `/` |
+| A11 | PASS | Privy modal "Sign in to Kazuo" with email field and "Continue with a wallet"; Privy app config 200 |
+| A12 | UNTESTED | Needs a Privy email login — a one-time code sent to a real inbox |
+| A13 | UNTESTED | Same dependency as A12 |
+| A14 | PASS | Claude Code job `job_acj1f6PRWRDL`: 5,885-char answer, execution log, provider panel, receipt panel, both ArcScan links, sha256 |
+| A15 | PASS | "Job not found — It may have expired, or the broker restarted." |
+| A16 | PASS | kazuo-proof-node Online, Echo (test) · Claude Code, address, heartbeat, no human badge |
+| A17 | PASS | Network facts, fee payer, USDC and KazuoLog links, 42 receipts read from the chain |
+| A18 | PASS | Card quoted by a different broker, paid after the swap → 404 "quote not found or expired — request a new one" on the card, same document |
+| A19 | PASS (after fix 14) | Back from the paid job offers no quote card; the page's `POST /api/pay` for the paid quote → 409 "this quote has already been paid" |
+| A20 | PASS | Final deploy, 375 px: no overflow; drawer opens; tapping Providers routes and closes it |
+| A21 | PASS | 404 "This page doesn't exist", no Privy scripts |
+| A22 | PASS | Page opened on a running Claude Code job (timer 12.8 s → 14.8 s); same document turned Completed with the answer and receipt; broker log `GET /api/jobs/job_acj1f6PRWRDL/stream → 200` |
+| A23 | PASS | Broker restarted (on the fixed build) with the page open: back to "1 provider(s) live", 15 jobs, no reload |
+| A24 | PASS | Broker down: "Can't reach the broker — The job may still exist…"; broker back: same document showed the Completed job |
+| B1–B12, B14–B20, B22 | PASS | Automated sweep on the fixed broker, every assertion exact (quote validation, 402 header fields, AgentKit challenge, CORS, metrics, receipts, jobs list/detail/stream, log streams, register validation, heartbeat and callback auth, World ID status) |
+| B13 | PASS | 30 quote requests in the minute allowed, the next → 429 "rate limit exceeded — 30 requests per 60s" |
+| B21 | PASS | Unknown 404; completed 409; running Claude Code job → 200 `{status:"failed", refunded:false}`; error stays "cancelled by the buyer"; failed receipt `0xcc2d90ef…` (kind 3, `ok:false`); second cancel 409 |
+| C1 | PASS | `0x6f660f95…`: one USDC Transfer payer → provider 230000, sent by the operator |
+| C2 | PASS | Receipt `0x25f8871f…`: KazuoLog kind 3 with the job id and the page's result hash |
+| C3 | PASS | Registration `0x3577f721…`: kind 1 naming the node, its address, echo and claude-code |
+| C4 | PASS | AgentBook bytecode on World Chain: 3,569 bytes |
+| C5 | UNTESTED | No ETH on World Chain Sepolia; faucets need a human |
+| C6 | PASS | Two nodes; kazuo-claude-node killed mid-job → "reassigned to kazuo-proof-node at no extra charge" → completed; one settlement `0x2f4b9917…` (one Transfer), receipt `0x2c25cd73…` (`ok:true`) |
+| P1 | PASS | Restarted node Online on the Providers page with Echo (test) · Claude Code |
+| P2 | PASS | `job_gKrNvIG8axcu` completed on the final CLI, settlement `0x596940ac…` |
+| P3 | PASS | Claude Code `job_o0AhUiSzjhVa`, $0.23, model-written answer, settlement `0x77b583ae…`, under seatbelt |
+| P4 | PASS | MCP over stdio: five tools; `kazuo_run_job` paid `0x60c1486f…` |
+| P5 | PASS | M1 PASSED, buyer gas 0 wei, `0xf7c4cacb…` |
+| P6 | PASS | "not registered — the broker will treat this node as anonymous" |
+| P7 | PASS | Broker log after each restart: "agentkit proof verified — no human in AgentBook" |
+| P8 | PASS | doctor "nothing broken"; status, earnings, jobs, wallet, price, logs, completion, test echo exit 0; config shows no key; pause/resume keep the node online |
+| P9 | PASS | `kazuo run --json --yes --max 0.30 …` → `job_l2Xt1u7t280B` completed, `0xf904ad47…` |
+| P10 | PASS | Refused before paying: "no human-backed provider matches that request under $0.0100" |
+| P11 | PASS | Node killed mid-job: buyer's JSON `failed · provider disconnected mid-job` after 59.6 s; broker failed it at 61 s; failed receipt `0x75019027…` (`ok:false`); node restarted and Online |
+| P12 | UNTESTED | The demo account's Codex usage limit is spent until 12 Oct 2026; Codex passes `kazuo test` under seatbelt but cannot answer a paid job |
+| N1 | PASS | `/health` connected; `/info` and the status page carry no key; page "connected to the network", 0 console errors |
+| W1 | PASS | Request fields exact; the signature recovers (EIP-191 over the RP message bytes, as idkit signs) to the registered signer `0xd4F041AB…`; bad subject 400 |
+| W2 | PASS | Unminted nonce 403 `unknown_nonce`; empty body 400 `invalid_result` |
+| W3 | UNTESTED | Needs a person to complete a Selfie Check in World App |
+| W4 | Before PASS; after UNTESTED | `verified:false`, no nullifier; the after-scan half needs W3 |
+| W5 | UNTESTED | Depends on W3 |
+| W6 | Unverified PASS; verified UNTESTED | Unverified payer → `buyerHumanBacked:false`; the verified half needs a World App scan |
+| T1–T5 | PASS | protocol 55, broker 132, cli 140, mcp 8, app 25 (360/360); typecheck clean in six workspaces |
+| T6 | Recorded below after the push | GitHub Actions on the final commit |
+| T7 | Recorded below after the push | Fresh clone of the public repository |
+| R1 | UNTESTED | Railway's image builds; the container exits `Missing KAZUO_OPERATOR_KEY`, an owner credential this session does not push |

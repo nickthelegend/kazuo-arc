@@ -126,6 +126,23 @@ export class JobStore {
     return quote;
   }
 
+  /**
+   * The job an already-paid quote bought, even once the quote itself is gone.
+   *
+   * Quotes expire after their TTL and are never restored after a restart, so
+   * `getQuote` alone told a buyer retrying an old payment to "request a new
+   * one" — an invitation to pay twice for a job they already had. The job keeps
+   * its quote id and is persisted, so the answer survives both.
+   */
+  paidJobIdForQuote(quoteId: string): string | undefined {
+    const live = this.quotes.get(quoteId)?.jobId;
+    if (live) return live;
+    for (const job of this.jobs.values()) {
+      if (job.quoteId === quoteId) return job.id;
+    }
+    return undefined;
+  }
+
   // -- jobs -----------------------------------------------------------------
 
   createJob(quote: Quote): Job {
@@ -134,6 +151,7 @@ export class JobStore {
       request: quote.request,
       status: "paid",
       createdAt: Date.now(),
+      quoteId: quote.id,
       providerId: quote.providerId,
       providerLabel: quote.providerLabel,
       providerAddress: quote.providerAddress,

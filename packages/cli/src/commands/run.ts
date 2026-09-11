@@ -360,58 +360,110 @@ interface JobView {
   receiptTxHash?: string | null;
 }
 
+/** A job the broker has finished with, one way or the other. */
+function isTerminal(job: JobView | null): boolean {
+  return job?.status === "completed" || job?.status === "failed";
+}
+
 /**
  * Follow the job's server-sent event stream to completion.
  *
  * Parsed by hand rather than with EventSource, which Node still doesn't expose
  * on the global in every supported version — and a hand-rolled reader is a
  * dozen lines against a dependency and a polyfill.
+ *
+ * The stream is a convenience, not the source of truth. A connection can be cut
+ * mid-job — a proxy or tunnel between here and the broker, a laptop lid — and
+ * the job goes on without it. When the provider died mid-job, a buyer's
+ * `kazuo run --json` exited before the broker had even failed the job, and
+ * printed nothing at all. So a stream that errors or ends without a verdict
+ * falls back to polling the job until it has one.
  */
-async function watchJob(brokerUrl: string, jobId: string, quiet: boolean): Promise<JobView | null> {
-  const res = await fetch(`${brokerUrl}/api/jobs/${jobId}/stream`, {
-    headers: { Accept: "text/event-stream" },
-  });
-  if (!res.ok || !res.body) return null;
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
+export async function watchJob(
+  brokerUrl: string,
+  jobId: string,
+  quiet: boolean,
+  pollMs = 2_000,
+): Promise<JobView | null> {
   let last: JobView | null = null;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
+  try {
+    const res = await fetch(`${brokerUrl}/api/jobs/${jobId}/stream`, {
+      headers: { Accept: "text/event-stream" },
+    });
+    if (res.ok && res.body) {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
 
-    const frames = buffer.split("\n\n");
-    buffer = frames.pop() ?? "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
 
-    for (const frame of frames) {
-      const eventLine = frame.split("\n").find((l) => l.startsWith("event:"));
-      const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
-      if (!dataLine) continue;
-      const name = eventLine?.slice(6).trim();
-      let payload: unknown;
-      try {
-        payload = JSON.parse(dataLine.slice(5).trim());
-      } catch {
-        continue;
-      }
+        const frames = buffer.split("\n\n");
+        buffer = frames.pop() ?? "";
 
-      if (name === "event" && !quiet) {
-        const event = payload as { kind: string; text: string };
-        printEvent(event.kind, event.text);
-      } else if (name === "job" || name === "snapshot" || name === "done") {
-        last = payload as JobView;
-        // Terminal on the snapshot too: the job can finish before this stream
-        // is even opened, and waiting for a `done` that already fired would
-        // hang the command forever.
-        if (name === "done" || last.status === "completed" || last.status === "failed") {
-          reader.cancel().catch(() => {});
-          return last;
+        for (const frame of frames) {
+          const eventLine = frame.split("\n").find((l) => l.startsWith("event:"));
+          const dataLine = frame.split("\n").find((l) => l.startsWith("data:"));
+          if (!dataLine) continue;
+          const name = eventLine?.slice(6).trim();
+          let payload: unknown;
+          try {
+            payload = JSON.parse(dataLine.slice(5).trim());
+          } catch {
+            continue;
+          }
+
+          if (name === "event" && !quiet) {
+            const event = payload as { kind: string; text: string };
+            printEvent(event.kind, event.text);
+          } else if (name === "job" || name === "snapshot" || name === "done") {
+            last = payload as JobView;
+            // Terminal on the snapshot too: the job can finish before this stream
+            // is even opened, and waiting for a `done` that already fired would
+            // hang the command forever.
+            if (name === "done" || isTerminal(last)) {
+              reader.cancel().catch(() => {});
+              return last;
+            }
+          }
         }
       }
     }
+  } catch {
+    // The connection was cut. The job is still the broker's to finish.
+  }
+
+  return pollJob(brokerUrl, jobId, last, pollMs);
+}
+
+/**
+ * Poll a job until the broker gives it a verdict.
+ *
+ * Bounded above the broker's own ceiling — a job that outlives it is failed
+ * there — so this cannot wait forever on a broker that has gone for good.
+ */
+async function pollJob(
+  brokerUrl: string,
+  jobId: string,
+  last: JobView | null,
+  pollMs: number,
+  ceilingMs = 12 * 60_000,
+): Promise<JobView | null> {
+  const deadline = Date.now() + ceilingMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${brokerUrl}/api/jobs/${jobId}`, { signal: AbortSignal.timeout(8_000) });
+      if (res.ok) {
+        last = ((await res.json()) as { job: JobView }).job;
+        if (isTerminal(last)) return last;
+      }
+    } catch {
+      /* the broker is unreachable for now; keep asking until the deadline */
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
   return last;
 }

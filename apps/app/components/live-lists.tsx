@@ -88,8 +88,10 @@ export function ProviderList() {
         title="No providers online"
         hint={
           <>
-            Run <span className="mono text-fg-3">npm i -g @kazuo/cli &amp;&amp; kazuo init</span> on any
-            machine with Claude Code, Codex or Grok installed.
+            Clone <span className="mono text-fg-3">github.com/nickthelegend/kazuo-arc</span>, run{" "}
+            <span className="mono text-fg-3">pnpm install &amp;&amp; pnpm build</span>, then{" "}
+            <span className="mono text-fg-3">node packages/cli/dist/index.js init</span> on any machine with
+            Claude Code, Codex or Grok installed.
           </>
         }
       />
