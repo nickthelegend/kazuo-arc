@@ -404,6 +404,6 @@ Test-harness mistakes found and corrected during the run (the product was right 
 | W5 | UNTESTED | Depends on W3 |
 | W6 | Unverified PASS; verified UNTESTED | Unverified payer → `buyerHumanBacked:false`; the verified half needs a World App scan |
 | T1–T5 | PASS | protocol 55, broker 132, cli 140, mcp 8, app 25 (360/360); typecheck clean in six workspaces |
-| T6 | Recorded below after the push | GitHub Actions on the final commit |
-| T7 | Recorded below after the push | Fresh clone of the public repository |
+| T6 | PASS | GitHub Actions run 34760963858 on `5bc45c7`: build-and-test (22.x) success, build-and-test (24.x) success, CLI runs on its minimum Node success, No keys in the tree success |
+| T7 | PASS | Fresh clone of `github.com/nickthelegend/kazuo-arc` at `5bc45c7`: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm typecheck` clean, `pnpm test` 360/360 |
 | R1 | UNTESTED | Railway's image builds; the container exits `Missing KAZUO_OPERATOR_KEY`, an owner credential this session does not push |
