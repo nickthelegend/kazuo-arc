@@ -81,11 +81,6 @@ export function JobView({
       if (next.events) setEvents(next.events);
       source.close();
       setStreaming(false);
-      // The on-chain receipt is written a beat after settlement, so one delayed
-      // refetch turns "publishing…" into a real link without polling forever.
-      setTimeout(() => {
-        void api.job(jobId).then(setJob).catch(() => {});
-      }, 6_000);
     });
     // EventSource retries a dropped connection on its own, but an HTTP error —
     // what a tunnel answers while the broker is down — closes it for good. The
@@ -116,6 +111,31 @@ export function JobView({
       clearTimeout(retry);
     };
   }, [jobId, terminal, streamEpoch]);
+
+  // The on-chain receipt is an audit-log transaction written after the job
+  // finishes, when the stream has already closed. A single refetch six seconds
+  // later left "receipt publishing…" on screen for good whenever that write took
+  // longer, so a finished, paid job without a receipt asks again until it has
+  // one — for up to two minutes, so a broker that never writes it can't keep a
+  // tab polling forever.
+  const awaitingReceipt = terminal && Boolean(job?.payment) && !job?.receiptTxHash;
+  useEffect(() => {
+    if (!awaitingReceipt) return;
+    const deadline = Date.now() + 120_000;
+    const timer = setInterval(() => {
+      if (Date.now() > deadline) {
+        clearInterval(timer);
+        return;
+      }
+      void api
+        .job(jobId)
+        .then((fresh) => {
+          if (fresh.receiptTxHash) setJob(fresh);
+        })
+        .catch(() => {});
+    }, 3_000);
+    return () => clearInterval(timer);
+  }, [awaitingReceipt, jobId]);
 
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
