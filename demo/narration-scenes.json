@@ -1,0 +1,5 @@
+[
+  { "id": "explain_attack", "text": "Why World matters here. A bot farm can spin up hundreds of nodes, and each can sign a proof. But AgentBook finds no human behind them, so human-backed nodes win ties, and a buyer can require them." },
+  { "id": "explain_receipts", "text": "So this one job left two transactions on Arc. The settlement moves the USDC from buyer to provider. The receipt records the job and the hash of its answer. One pays, and one proves what was paid for." },
+  { "id": "explain_path", "text": "Here is the whole path. The wallet signs, the broker checks the payment, the facilitator settles it on Arc, the provider runs the job, and the receipt lands in Kazuo Log." }
+]

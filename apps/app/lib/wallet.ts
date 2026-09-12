@@ -106,9 +106,13 @@ export function sessionForProvider(
       // v4 specifically: earlier versions hash arrays and nested structs
       // differently, so a v3 signature over the same EIP-3009 authorization
       // verifies against nothing and reports only "invalid signature".
+      // x402 builds the EIP-3009 message with bigint amounts and timestamps, and
+      // JSON.stringify throws on a bigint ("Do not know how to serialize a
+      // BigInt"), so every browser-wallet payment failed before a signature was
+      // even requested. EIP-712 JSON carries uint256 values as decimal strings.
       const signature = await p.request({
         method: "eth_signTypedData_v4",
-        params: [account, JSON.stringify(message)],
+        params: [account, JSON.stringify(message, (_key, value) => (typeof value === "bigint" ? value.toString() : value))],
       });
       return signature as `0x${string}`;
     },

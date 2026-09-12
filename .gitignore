@@ -53,3 +53,7 @@ videos/*/audio_engine_meta.json
 
 # Hedera-specific agent skills, not part of this project
 .agents/
+demo/take*/
+demo/out/
+demo/scenes/
+demo/audio/

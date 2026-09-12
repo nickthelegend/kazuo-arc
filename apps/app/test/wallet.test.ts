@@ -215,6 +215,22 @@ describe("signTypedData", () => {
     expect(account).toBe(CHECKSUMMED);
     expect(JSON.parse(json).message.value).toBe("1000");
   });
+
+  it("serialises bigint fields, which is how x402 builds the authorization", async () => {
+    // A browser-wallet payment on the deployed job board failed with "Do not
+    // know how to serialize a BigInt" before any signature was requested.
+    const p = fakeProvider();
+    const session = await connectWallet();
+    await session.signTypedData({
+      domain: { name: "USDC", version: "2" },
+      types: {},
+      primaryType: "TransferWithAuthorization",
+      message: { value: 230000n, validAfter: 0n, validBefore: 1789309000n, nonce: "0x01" },
+    });
+    const call = p.calls.find((c) => c.method === "eth_signTypedData_v4");
+    const [, json] = call!.params as [string, string];
+    expect(JSON.parse(json).message).toEqual({ value: "230000", validAfter: "0", validBefore: "1789309000", nonce: "0x01" });
+  });
 });
 
 describe("switchToArc", () => {

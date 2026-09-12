@@ -1,0 +1,18 @@
+[
+  { "id": "intro", "text": "This is Kazuo. It turns the AI subscriptions people already pay for into a network that sells compute by the job, with every job paid in USDC on Arc." },
+  { "id": "landing", "text": "Most of the day, a Claude or Codex subscription sits idle. Kazuo lets its owner run a node, and lets anyone else buy a single job from it." },
+  { "id": "receipts", "text": "Every paid job leaves a receipt on chain. This list is read straight from the Kazuo Log contract on Arc." },
+  { "id": "contract", "text": "Here is that contract on the Arc explorer, with registrations, heartbeats and receipts written to it as events." },
+  { "id": "board", "text": "The job board is where a buyer posts work. It shows recent jobs, and the provider nodes that are live right now." },
+  { "id": "providers", "text": "This node sells Echo and Claude Code at a fixed price per job. It proved its key with World AgentKit, and it is not yet backed by a verified human." },
+  { "id": "privy", "text": "Signing in uses Privy. A person can use an email, or connect an existing wallet. Here we connect a testnet wallet, which signs a sign-in message." },
+  { "id": "selfie", "text": "With the wallet connected, World ID Selfie Check can prove a real person stands behind it. World App scans this code to complete the check." },
+  { "id": "compose", "text": "Now we post a job. We pick Claude Code, describe the task, and ask for a quote. The quote names the node, the price, and the address that gets paid." },
+  { "id": "pay", "text": "Paying signs a USDC authorization from the wallet, and a transaction is being signed and settled on chain on Arc. The buyer spends no gas." },
+  { "id": "job", "text": "The job runs on the provider's machine inside a sandbox, and the answer streams back to this page, with the payment and the result hash beside it." },
+  { "id": "settlement", "text": "On the Arc explorer, this is the settlement from this job: one USDC transfer, from the buyer straight to the provider." },
+  { "id": "receipt", "text": "And this is the job's receipt on chain, recorded in the Kazuo Log contract with the hash of the answer." },
+  { "id": "network", "text": "The network page shows how settlement works. The facilitator relays the signed authorization and pays the fee, and receipts are read back from Arc." },
+  { "id": "node", "text": "On the provider's side, the node shows its earnings and what it sells, and it stays connected to the network waiting for the next job." },
+  { "id": "outro", "text": "That is Kazuo: idle AI capacity, sold one job at a time, settled on Arc, with World and Privy in the loop. Thanks for watching." }
+]
