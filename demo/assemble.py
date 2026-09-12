@@ -48,7 +48,11 @@ if raw.stat().st_mtime < beats_log.stat().st_mtime - 5:
 if txs.get("outcome") != "complete":
     raise SystemExit(f"REJECT: take outcome {txs.get('outcome')}: {txs.get('error')}")
 
-plan = [row.split("|")[1].strip() for row in (HERE / "recording.md").read_text().splitlines() if re.match(r"^\| [a-z]+ \|", row)]
+plan = [
+    row.split("|")[1].strip()
+    for row in (HERE / "recording.md").read_text().splitlines()
+    if re.match(r"^\| [a-z]+ \|", row) and row.split("|")[1].strip() != "id"
+]
 marks = []
 for text in beats_log.read_text().splitlines():
     m = re.match(r"DEMO_LINE (\d+) (\S+)(?: (\S+))?", text)
@@ -67,6 +71,23 @@ for key in ("settlement", "receipt", "jobId"):
 if txs.get("consoleErrors"):
     print("NOTE console errors in take:", json.dumps(txs["consoleErrors"])[:600])
 
+# The recorder's clock is not the driver's: Playwright's video starts before the driver's t0 and runs at
+# a slightly different rate. Marks are mapped through a fit measured from real screen transitions in this
+# take (take/video-map.json) and cut from a seekable H.264 copy, never from the index-less WebM.
+map_path = TAKE / "video-map.json"
+if not map_path.exists():
+    raise SystemExit("NO_VIDEO_MAP: measure the video-to-driver clock before cutting")
+video_map = json.loads(map_path.read_text())
+if video_map["worst_residual"] > 1.0:
+    raise SystemExit(f"REJECT: video map worst residual {video_map['worst_residual']:.2f}s")
+seekable = TAKE / "raw-seekable.mp4"
+if not seekable.exists() or seekable.stat().st_mtime < raw.stat().st_mtime:
+    raise SystemExit("STALE_SOURCE: seekable copy missing or older than the raw take")
+raw = seekable
+to_video = lambda driver_s: video_map["a"] + video_map["b"] * driver_s
+for m in marks:
+    m["video"] = to_video(m["ms"] / 1000)
+
 raw_duration = probe_duration(raw)
 durations = json.loads((HERE / "durations.json").read_text())
 scene_durations = json.loads((HERE / "scene-durations.json").read_text())
@@ -74,8 +95,8 @@ print(f"APPROVE checks passed: {len(marks)} marks, raw {raw_duration:.1f}s, sett
 
 # frames to look at: one per beat, mid-span
 for i, mark in enumerate(marks):
-    end = marks[i + 1]["ms"] if i + 1 < len(marks) else raw_duration * 1000
-    t = (mark["ms"] + end) / 2000
+    end = marks[i + 1]["video"] if i + 1 < len(marks) else raw_duration
+    t = (mark["video"] + end) / 2
     run(["ffmpeg", "-y", "-v", "error", "-ss", f"{t:.2f}", "-i", str(raw), "-frames:v", "1", "-vf", "scale=720:-1", str(OUT / "frames" / f"{i:02d}-{mark['id']}.jpg")])
 
 
@@ -126,6 +147,7 @@ def cue_png(text, path):
 narration = {l["id"]: l["text"] for l in json.loads((HERE / "narration.json").read_text())}
 narration.update({l["id"]: l["text"] for l in json.loads((HERE / "narration-scenes.json").read_text())})
 mark_index = {m["id"]: i for i, m in enumerate(marks)}
+SEGMENTS = json.loads((TAKE / "segments.json").read_text()) if (TAKE / "segments.json").exists() else {}
 
 ORDER = [
     ("scene", "intro", "intro"),
@@ -159,22 +181,37 @@ for n, (kind, source, audio_id) in enumerate(ORDER):
     clip = OUT / "clips" / f"{n:02d}-{audio_id}.mp4"
     if kind == "beat":
         i = mark_index[source]
-        start = marks[i]["ms"] / 1000
-        end = marks[i + 1]["ms"] / 1000 if i + 1 < len(marks) else raw_duration
+        start = marks[i]["video"]
+        end = marks[i + 1]["video"] if i + 1 < len(marks) else raw_duration
         span = end - start
+        scale = f"fps={FPS},scale={W}:{H}:flags=lanczos"
+        seg = SEGMENTS.get(source)
+        if seg and start < seg["fast_forward_until_video_s"] < end:
+            ff_span = seg["fast_forward_until_video_s"] - start
+            ff_len = seg["fast_forward_to_s"]
+            rest_span = end - seg["fast_forward_until_video_s"]
+            rest_target = max(0.5, target - ff_len)
+        else:
+            ff_span, ff_len, rest_span, rest_target = 0.0, 0.0, span, target
         speed = 1.0
-        if span > target:
-            speed = min(span / target, RAMP_CAP)
-            if span / speed > target + 5:
-                speed = span / (target + 5)
-        length = span / speed
-        pad = max(0.0, target - length)
-        vf = f"setpts=(PTS-STARTPTS)/{speed:.4f},fps={FPS},scale={W}:{H}:flags=lanczos,tpad=stop_mode=clone:stop_duration={pad:.3f},format=yuv420p"
+        if rest_span > rest_target:
+            speed = min(rest_span / rest_target, RAMP_CAP)
+            if rest_span / speed > rest_target + 5:
+                speed = rest_span / (rest_target + 5)
+        length = rest_span / speed
+        pad = max(0.0, rest_target - length)
+        rest_vf = f"setpts=(PTS-STARTPTS)/{speed:.4f},{scale},tpad=stop_mode=clone:stop_duration={pad:.3f}"
+        if ff_span:
+            graph = (f"[0:v]split[a][b];[a]trim=0:{ff_span:.3f},setpts=(PTS-STARTPTS)/{ff_span / ff_len:.4f},{scale}[p1];"
+                     f"[b]trim={ff_span:.3f}:{span:.3f},{rest_vf}[p2];[p1][p2]concat=n=2:v=1:a=0,format=yuv420p[v]")
+        else:
+            graph = f"[0:v]{rest_vf},format=yuv420p[v]"
+        total_len = ff_len + length + pad
         run(["ffmpeg", "-y", "-v", "error", "-ss", f"{start:.3f}", "-t", f"{span:.3f}", "-i", str(raw), "-i", str(audio),
-             "-filter_complex", f"[0:v]{vf}[v];[1:a]aresample=48000,apad[a]", "-map", "[v]", "-map", "[a]",
-             "-t", f"{max(length + pad, target):.3f}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-r", str(FPS),
+             "-filter_complex", f"{graph};[1:a]aresample=48000,apad[a]", "-map", "[v]", "-map", "[a]",
+             "-t", f"{max(total_len, target):.3f}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-r", str(FPS),
              "-c:a", "aac", "-b:a", "192k", "-ac", "2", str(clip)])
-        note = f"span {span:.1f}s → {length + pad:.1f}s (x{speed:.2f}, hold {pad:.2f}s)"
+        note = f"span {span:.1f}s → {total_len:.1f}s (x{speed:.2f}, hold {pad:.2f}s" + (f", fast-forward {ff_span:.1f}s → {ff_len}s" if ff_span else "") + ")"
     else:
         src = SCENES / f"{source}.webm"
         if not src.exists():

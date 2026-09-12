@@ -3,19 +3,26 @@
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 
 const SCRATCH = "/private/tmp/claude-501/-Volumes-Extreme-SSD-Projects-xorv-arc/c503cf8b-a195-48c4-922d-de4468179288/scratchpad/video";
 const { chromium } = createRequire(`${SCRATCH}/package.json`)("playwright-core");
 const W = 1440;
 const H = 900;
 const [, , takeDir, outDir] = process.argv;
-const txsPath = path.join(takeDir, "txs.json");
-if (!fs.existsSync(txsPath)) throw new Error("NO_TAKE_TXS");
-const txs = JSON.parse(fs.readFileSync(txsPath, "utf8"));
-for (const k of ["settlement", "receipt", "jobId", "payer", "payTo", "resultHash"]) {
-  if (!txs[k]) throw new Error(`NO_TAKE_TXS missing ${k}`);
+const ONLY = process.env.ONLY ? process.env.ONLY.split(",") : null;
+const TX_SCENES = ["path", "receipts"];
+const wantsTx = !ONLY || ONLY.some((s) => TX_SCENES.includes(s));
+let txs = {};
+if (wantsTx) {
+  const txsPath = path.join(takeDir, "txs.json");
+  if (!fs.existsSync(txsPath)) throw new Error("NO_TAKE_TXS");
+  txs = JSON.parse(fs.readFileSync(txsPath, "utf8"));
+  for (const k of ["settlement", "receipt", "jobId", "payer", "payTo", "resultHash", "priceUsdMicros"]) {
+    if (!txs[k]) throw new Error(`NO_TAKE_TXS missing ${k}`);
+  }
 }
-const durations = JSON.parse(fs.readFileSync(path.join(takeDir, "..", "scene-durations.json"), "utf8"));
+const durations = JSON.parse(fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), "scene-durations.json"), "utf8"));
 fs.mkdirSync(outDir, { recursive: true });
 
 const short = (h) => `${h.slice(0, 10)}…${h.slice(-6)}`;
@@ -39,7 +46,7 @@ const scenes = {
       <div class="in" style="animation-delay:1.2s;font-size:34px;color:#9FB3C8;letter-spacing:-.01em">Idle AI subscriptions, sold one job at a time</div>
       <div style="display:flex;gap:16px;margin-top:22px">${["Arc · USDC over x402", "World AgentKit + World ID", "Privy wallets"].map((t, i) => `<div class="in" style="animation-delay:${1.8 + i * 0.25}s;padding:12px 22px;border:1px solid rgba(61,220,255,.35);border-radius:999px;font-size:22px;color:#CFE8FF">${t}</div>`).join("")}</div>
     </div>`,
-  path: `<div class="grid"></div>
+  path: () => `<div class="grid"></div>
     <div class="in" style="position:absolute;top:70px;width:100%;text-align:center;font-size:46px;font-weight:700;letter-spacing:-.03em">Where one job's money and data go</div>
     <div style="position:absolute;top:250px;left:70px;right:70px;display:flex;justify-content:space-between;align-items:center">
       ${[["Buyer wallet", "signs a USDC authorization"], ["Broker", "quotes, then checks the 402 payment"], ["Facilitator", "relays it and pays the gas"], ["Arc", "USDC moves buyer → provider"], ["Provider node", "runs the job in a sandbox"], ["KazuoLog", "receipt with the result hash"]].map(([t, s], i) => `
@@ -50,7 +57,7 @@ const scenes = {
     <div style="position:absolute;top:333px;left:266px;width:16px;height:16px;border-radius:50%;background:#3DDCFF;box-shadow:0 0 18px #3DDCFF;animation:travel 4.4s cubic-bezier(.45,0,.55,1) .9s forwards;opacity:0"></div>
     <style>@keyframes travel{0%{opacity:1;left:266px}100%{opacity:1;left:${W - 282}px}}</style>
     <div class="in mono" style="animation-delay:5s;position:absolute;bottom:130px;width:100%;text-align:center;font-size:22px;color:#9FB3C8">job ${txs.jobId} · paid ${(txs.priceUsdMicros / 1e6).toFixed(2)} USDC · ${short(txs.payer)} → ${short(txs.payTo)}</div>`,
-  receipts: `<div class="grid"></div>
+  receipts: () => `<div class="grid"></div>
     <div class="in" style="position:absolute;top:64px;width:100%;text-align:center;font-size:46px;font-weight:700;letter-spacing:-.03em">This job left two transactions on Arc</div>
     <div style="position:absolute;top:190px;left:90px;right:90px;display:grid;grid-template-columns:1fr 1fr;gap:40px">
       ${[
@@ -85,7 +92,9 @@ const scenes = {
 };
 
 const browser = await chromium.launch({ channel: "chrome", headless: true });
-for (const [name, html] of Object.entries(scenes)) {
+for (const [name, scene] of Object.entries(scenes)) {
+  if (ONLY && !ONLY.includes(name)) continue;
+  const html = typeof scene === "function" ? scene() : scene;
   const seconds = durations[name];
   if (!seconds) throw new Error(`NO_SCENE_DURATION ${name}`);
   const context = await browser.newContext({ viewport: { width: W, height: H }, recordVideo: { dir: path.join(outDir, name), size: { width: W, height: H } } });

@@ -1,0 +1,46 @@
+{
+  "a": -0.5724370118892779,
+  "b": 1.1406027095188198,
+  "edges": [
+    [
+      "contract\u2192board",
+      39.325,
+      44.25
+    ],
+    [
+      "overlay off",
+      101.693,
+      115.25
+    ],
+    [
+      "settlement\u2192receipt",
+      119.62,
+      136.75
+    ],
+    [
+      "receipt\u2192network",
+      127.788,
+      144.5
+    ]
+  ],
+  "residuals": [
+    [
+      "contract\u2192board",
+      -0.03
+    ],
+    [
+      "overlay off",
+      -0.17
+    ],
+    [
+      "settlement\u2192receipt",
+      0.88
+    ],
+    [
+      "receipt\u2192network",
+      -0.68
+    ]
+  ],
+  "worst_residual": 0.88,
+  "source": "take4/raw-seekable.mp4"
+}

@@ -1,0 +1,72 @@
+{
+  "wallet": "0x03294Ce27e218d1611B2ebc0b0ffdDb95F129F36",
+  "prompt": "Write a two-line haiku about idle GPUs finding work. Take 14:23:05",
+  "signInSignatures": 1,
+  "selfieQrShown": true,
+  "jobId": "job_S8bYCFx2NMJL",
+  "settlement": "0x9f3ec0a6aeef2aaa6203b64cb07cc52a358950bd83ee4819468ab6a0ca12fd3f",
+  "settlementBlock": 61911897,
+  "receipt": "0xfbd24160dadf072d72d65f9a819628a060aef4afbcbf475b36d4505d6ee91a90",
+  "resultHash": "47b2d17d233e983351cf95f42edddc33b6b3251dec17f62c28a34215c787672a",
+  "priceUsdMicros": 230000,
+  "provider": "kazuo-proof-node",
+  "payer": "0x03294Ce27e218d1611B2ebc0b0ffdDb95F129F36",
+  "payTo": "0xff212ecb82E3b06c0a2A7a9Ce343e0a1868c489B",
+  "outcome": "complete",
+  "rawVideo": "/Volumes/Extreme SSD/Projects/xorv-arc/demo/take4/video/89445ab280b8b848cfe6bf9b6c1304a7.webm",
+  "consoleErrors": [
+    {
+      "beat": "contract",
+      "text": "Failed to load resource: the server responded with a status of 404 ()"
+    },
+    {
+      "beat": "pay",
+      "text": "Failed to load resource: the server responded with a status of 402 ()"
+    },
+    {
+      "beat": "node",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    }
+  ],
+  "walletCalls": [
+    "eth_accounts",
+    "eth_accounts",
+    "eth_chainId",
+    "eth_chainId",
+    "eth_requestAccounts",
+    "eth_chainId",
+    "eth_accounts",
+    "eth_accounts",
+    "eth_accounts",
+    "eth_accounts",
+    "personal_sign",
+    "eth_chainId",
+    "eth_accounts",
+    "eth_accounts",
+    "eth_chainId",
+    "eth_chainId",
+    "eth_chainId",
+    "eth_signTypedData_v4",
+    "eth_accounts",
+    "eth_accounts",
+    "eth_chainId",
+    "eth_chainId",
+    "eth_chainId",
+    "eth_accounts",
+    "eth_accounts",
+    "eth_chainId",
+    "eth_chainId",
+    "eth_chainId"
+  ],
+  "signatures": [
+    {
+      "method": "personal_sign",
+      "at": 1789309455482
+    },
+    {
+      "method": "eth_signTypedData_v4",
+      "primaryType": "TransferWithAuthorization",
+      "at": 1789309482412
+    }
+  ]
+}
