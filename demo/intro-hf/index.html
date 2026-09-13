@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=1440, height=900" />
+<title>Kazuo on Arc — intro</title>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<style>
+  body { margin: 0; background: #000; color: #fff; font-family: "Inter", "Helvetica Neue", system-ui, sans-serif; }
+  #root { position: relative; width: 1440px; height: 900px; overflow: hidden; background: #000; }
+  .clip { position: absolute; left: 0; top: 0; width: 1440px; height: 900px; }
+  .mono { font-family: "SF Mono", Menlo, monospace; }
+  .label { font-size: 13px; letter-spacing: 0.2em; text-transform: uppercase; color: #6b7280; }
+  .green { color: #5bf08f; }
+  .muted { color: #6b7280; }
+  .card { position: absolute; background: #0b0e0d; border: 1px solid #1c2320; border-radius: 14px; box-sizing: border-box; }
+  .abs { position: absolute; }
+
+  /* s1 */
+  #clock { left: 90px; top: 90px; font-size: 44px; color: #9ca3af; letter-spacing: 0.06em; }
+  #price { left: 90px; top: 165px; font-size: 40px; letter-spacing: 0.08em; }
+  #idle { left: 0; top: 300px; width: 1440px; text-align: center; font-size: 300px; font-weight: 800; line-height: 1; color: #5bf08f; letter-spacing: -0.04em; }
+
+  /* s2 */
+  #divider { left: 719px; top: 0; width: 1px; height: 900px; background: #1f2937; }
+  .col { top: 250px; width: 560px; }
+  .col .who { font-size: 34px; font-weight: 700; color: #d1d5db; }
+  .bar { margin-top: 40px; width: 300px; height: 12px; border-radius: 6px; background: #1a1f1d; border: 1px solid #2a312e; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 8%; background: #9ca3af; }
+  .col .small { margin-top: 12px; font-size: 13px; letter-spacing: 0.2em; color: #6b7280; }
+  .col .big { margin-top: 70px; font-size: 64px; letter-spacing: 0.06em; }
+
+  /* s3 */
+  #term { left: 220px; top: 190px; width: 1000px; height: 420px; padding: 60px 56px; }
+  #term .dots { position: absolute; left: 20px; top: 16px; font-size: 14px; color: #374151; letter-spacing: 3px; }
+  .tline { font-size: 26px; height: 46px; white-space: pre; }
+  .row { font-size: 23px; height: 44px; white-space: pre; }
+
+  /* s4 */
+  #composer { left: 240px; top: 250px; width: 960px; height: 330px; padding: 30px 36px; }
+  #jobtext { font-size: 34px; margin-top: 26px; height: 120px; }
+  #pill { left: 36px; bottom: 28px; font-size: 18px; padding: 8px 14px; border: 1px solid #2a312e; border-radius: 8px; color: #d1d5db; }
+  #send { right: 36px; bottom: 28px; width: 44px; height: 44px; border: 1px solid #2a312e; border-radius: 8px; text-align: center; line-height: 44px; font-size: 22px; }
+  #big402 { left: 0; top: 250px; width: 1440px; text-align: center; }
+  #big402 .n { font-size: 260px; font-weight: 600; line-height: 1; }
+  #big402 .t { font-size: 22px; letter-spacing: 0.35em; color: #9ca3af; margin-top: 10px; }
+  #quote { left: 240px; top: 360px; width: 960px; height: 250px; padding: 34px 40px; }
+  #quote .pv { font-size: 44px; margin-top: 12px; }
+  #quote .pvsub { font-size: 20px; color: #6b7280; margin-top: 8px; }
+  #qprice { right: 40px; top: 34px; width: 340px; }
+  #qprice .p { font-size: 60px; margin-top: 8px; }
+  #unpaid { left: 40px; bottom: 26px; font-size: 18px; color: #6b7280; }
+
+  /* s5 */
+  #track { left: 250px; top: 520px; width: 940px; height: 2px; background: #2a312e; }
+  .node { width: 22px; height: 22px; border: 2px solid #4b5563; border-radius: 5px; box-sizing: border-box; background: #000; }
+  .addr { font-size: 30px; }
+  #token { left: 190px; top: 498px; font-size: 22px; padding: 8px 14px; background: #000; border: 1px solid #4b5563; border-radius: 6px; }
+  #settled { left: 1030px; top: 560px; width: 300px; text-align: center; }
+  #fac { left: 470px; top: 170px; width: 500px; text-align: center; }
+  #gasline { left: 719px; top: 250px; width: 2px; height: 270px; background: #2a312e; }
+  #zerogas { left: 0; top: 650px; width: 1440px; text-align: center; font-size: 96px; font-weight: 800; letter-spacing: 0.01em; }
+  #gaspaid { left: 150px; top: 590px; width: 300px; text-align: center; }
+
+  /* s6 */
+  #txcard { left: 70px; top: 200px; width: 880px; height: 430px; padding: 36px 40px; }
+  #hash { font-size: 20px; margin-top: 18px; height: 34px; white-space: pre; font-weight: 700; }
+  .kv { font-size: 24px; margin-top: 30px; white-space: pre; }
+  #rcard { left: 990px; top: 200px; width: 380px; height: 430px; padding: 36px 30px; }
+  #rcard .v { font-size: 22px; margin-top: 14px; }
+  #net { right: 70px; top: 70px; font-size: 15px; letter-spacing: 0.25em; color: #9ca3af; }
+
+  /* s7 */
+  .sp { top: 280px; width: 400px; height: 300px; padding: 36px 34px; }
+  .sp .name { font-size: 40px; font-weight: 700; margin-top: 18px; }
+  .sp .line { font-size: 22px; margin-top: 26px; color: #d1d5db; white-space: pre; }
+
+  /* s8 */
+  #grid { left: 0; top: 0; width: 1440px; height: 900px; background-image: linear-gradient(#101513 1px, transparent 1px), linear-gradient(90deg, #101513 1px, transparent 1px); background-size: 72px 72px; }
+  #brand { left: 0; top: 250px; width: 1440px; text-align: center; font-size: 140px; font-weight: 800; letter-spacing: -0.03em; }
+  .center { left: 0; width: 1440px; text-align: center; }
+
+  /* captions */
+  .chunk { position: absolute; left: 0; bottom: 44px; width: 1440px; text-align: center; opacity: 0; }
+  .chunk span.plate { display: inline-block; background: rgba(12, 14, 13, 0.92); border-radius: 12px; padding: 10px 14px; }
+  .chunk b { display: inline-block; font-size: 32px; font-weight: 800; padding: 2px 8px; margin: 0 1px; border-radius: 6px; color: #fff; }
+  #fade { left: 0; top: 0; width: 1440px; height: 900px; background: #000; opacity: 0; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0" data-width="1440" data-height="900" data-duration="58">
+
+  <audio id="a-i1" src="audio/i1.wav" data-start="0.3" data-duration="4.08" data-track-index="20"></audio>
+  <audio id="a-i2" src="audio/i2.wav" data-start="4.8" data-duration="5.12" data-track-index="20"></audio>
+  <audio id="a-i3" src="audio/i3.wav" data-start="10.3" data-duration="7.15" data-track-index="20"></audio>
+  <audio id="a-i4" src="audio/i4.wav" data-start="17.85" data-duration="7.75" data-track-index="20"></audio>
+  <audio id="a-i5" src="audio/i5.wav" data-start="26.0" data-duration="8.28" data-track-index="20"></audio>
+  <audio id="a-i6" src="audio/i6.wav" data-start="34.7" data-duration="8.67" data-track-index="20"></audio>
+  <audio id="a-i7" src="audio/i7.wav" data-start="43.8" data-duration="8.13" data-track-index="20"></audio>
+  <audio id="a-i8" src="audio/i8.wav" data-start="52.35" data-duration="4.76" data-track-index="20"></audio>
+
+  <section id="s1" class="clip" data-start="0" data-duration="4.8" data-track-index="1">
+    <div id="clock" class="abs mono">09:14</div>
+    <div id="price" class="abs mono">$200 <span class="muted">/ MONTH</span></div>
+    <div id="idle" class="abs">idle</div>
+  </section>
+
+  <section id="s2" class="clip" data-start="4.8" data-duration="5.5" data-track-index="1">
+    <div id="divider" class="abs"></div>
+    <div id="you" class="abs col" style="left:120px">
+      <div class="who">you</div>
+      <div class="bar"><i></i></div>
+      <div class="small">8% USED</div>
+      <div class="big mono">$200 <span class="muted">/ MONTH</span></div>
+    </div>
+    <div id="them" class="abs col" style="left:840px">
+      <div class="who">them</div>
+      <div class="bar"><i style="width:4%"></i></div>
+      <div class="small">NEEDS 1 JOB</div>
+      <div class="big mono">$200 <span class="muted">/ MONTH</span></div>
+    </div>
+  </section>
+
+  <section id="s3" class="clip" data-start="10.3" data-duration="7.55" data-track-index="1">
+    <div id="term" class="card mono">
+      <div class="dots">● ● ●</div>
+      <div class="tline"><span class="muted">$ </span><span id="cmd"></span></div>
+      <div style="height:22px"></div>
+      <div id="r1" class="row"><span class="green">✔</span> claude-code   <span class="muted">Claude Code · signed in · selling</span></div>
+      <div id="r2" class="row"><span class="green">✔</span> node          <span class="muted">status page up</span></div>
+      <div id="r3" class="row"><span class="green">✔</span> registered    <span class="muted">kazuo-proof-node</span></div>
+      <div id="r4" class="row"><span class="green">⛓</span> on chain      <span class="muted">KazuoLog 0x383f…eef3 · Arc testnet</span></div>
+    </div>
+  </section>
+
+  <section id="s4" class="clip" data-start="17.85" data-duration="8.15" data-track-index="1">
+    <div id="composer" class="card">
+      <div class="label">New job</div>
+      <div id="jobtext"></div>
+      <div id="pill" class="abs">✳ Claude Code</div>
+      <div id="send" class="abs">↑</div>
+    </div>
+    <div id="big402" class="abs"><div class="n">402</div><div class="t">PAYMENT REQUIRED</div></div>
+    <div id="quote" class="card">
+      <div class="label">Provider</div>
+      <div class="pv">kazuo-proof-node</div>
+      <div class="pvsub">Claude Code · human-backed</div>
+      <div id="qprice" class="abs">
+        <div class="label">Price</div>
+        <div class="p green mono">$0.2300</div>
+        <div class="mono muted" style="font-size:18px;margin-top:6px">pays → 0xff21…489B</div>
+      </div>
+      <div id="unpaid" class="abs">nothing has been paid</div>
+    </div>
+  </section>
+
+  <section id="s5" class="clip" data-start="26" data-duration="8.7" data-track-index="1">
+    <div class="abs label" style="left:70px;top:60px">Settlement · Arc testnet</div>
+    <div class="abs label" style="right:70px;top:60px">0.2300 USDC</div>
+    <div id="track" class="abs"></div>
+    <div id="buyer" class="abs" style="left:110px;top:420px;width:300px;text-align:center">
+      <div class="addr mono">0x0329…9F36</div>
+      <div class="label" style="margin-top:8px">Buyer</div>
+    </div>
+    <div class="abs node" style="left:239px;top:509px"></div>
+    <div id="prov" class="abs" style="left:1030px;top:420px;width:300px;text-align:center">
+      <div class="addr mono">0xff21…489B</div>
+      <div class="label" style="margin-top:8px">Provider</div>
+    </div>
+    <div id="pnode" class="abs node" style="left:1179px;top:509px"></div>
+    <div id="token" class="abs mono">0.2300 USDC</div>
+    <div id="settled" class="abs">
+      <div class="mono" style="font-size:26px">+0.2300 USDC</div>
+      <div class="label green" style="margin-top:8px">Settled</div>
+    </div>
+    <div id="auth" class="abs center mono muted" style="top:560px;font-size:18px">EIP-3009 transferWithAuthorization</div>
+    <div id="gasline" class="abs"></div>
+    <div id="fac" class="abs">
+      <div class="mono" style="font-size:24px">facilitator 0xeEE4…B51E</div>
+      <div class="label" style="margin-top:8px">pays the gas</div>
+    </div>
+    <div id="gaspaid" class="abs">
+      <div class="mono" style="font-size:22px;text-decoration:line-through;color:#9ca3af">0.0000 gas</div>
+    </div>
+    <div id="zerogas" class="abs">BUYER PAID ZERO GAS</div>
+  </section>
+
+  <section id="s6" class="clip" data-start="34.7" data-duration="9.1" data-track-index="1">
+    <div id="net" class="abs"><span class="green">●</span> ARC TESTNET</div>
+    <div id="txcard" class="card">
+      <div class="label">Settlement transaction</div>
+      <div id="hash" class="mono"></div>
+      <div id="k1" class="kv mono"><span class="muted">payment    </span>0.2300 <span class="muted">USDC</span></div>
+      <div id="k2" class="kv mono"><span class="muted">provider   </span>0xff212ecb…a0c489B</div>
+      <div id="k3" class="kv mono"><span class="muted">block      </span>61911897</div>
+      <div id="k4" class="kv mono"><span class="muted">job        </span>job_S8bYCFx2NMJL</div>
+    </div>
+    <div id="rcard" class="card">
+      <div class="label">KazuoLog receipt</div>
+      <div class="v mono">0xfbd24160…1a90</div>
+      <div class="label" style="margin-top:44px">Result sha-256</div>
+      <div class="v mono">47b2d17d233e…672a</div>
+      <div class="label" style="margin-top:44px">Contract</div>
+      <div class="v mono">0x383f…eef3</div>
+    </div>
+  </section>
+
+  <section id="s7" class="clip" data-start="43.8" data-duration="8.55" data-track-index="1">
+    <div id="c1" class="card sp" style="left:70px">
+      <div class="label">World</div>
+      <div class="name">World ID</div>
+      <div class="line"><span class="green">✔</span> AgentKit · human-backed</div>
+      <div class="line"><span class="green">✔</span> Selfie Check</div>
+    </div>
+    <div id="c2" class="card sp" style="left:520px">
+      <div class="label">Privy</div>
+      <div class="name">Sign in</div>
+      <div class="line"><span class="green">✔</span> email or wallet</div>
+      <div class="line"><span class="green">✔</span> signs x402 payments</div>
+    </div>
+    <div id="c3" class="card sp mono" style="left:970px">
+      <div class="label">MCP</div>
+      <div class="name" style="font-family:Inter,'Helvetica Neue',sans-serif">Agents</div>
+      <div class="line">→ kazuo_run_job</div>
+      <div class="line"><span class="green">←</span> accepted</div>
+    </div>
+  </section>
+
+  <section id="s8" class="clip" data-start="52.35" data-duration="5.65" data-track-index="1">
+    <div id="grid" class="abs"></div>
+    <div id="brand" class="abs">Kazuo</div>
+    <div id="tag" class="abs center" style="top:450px;font-size:30px;color:#d1d5db">idle AI subscriptions, turned into income</div>
+    <div id="url" class="abs center mono" style="top:520px;font-size:24px;color:#9ca3af">kazuo-arc-app.vercel.app</div>
+    <div id="live" class="abs center" style="top:590px;font-size:17px;letter-spacing:0.2em;color:#9ca3af"><span class="green">●</span> LIVE ON ARC TESTNET</div>
+  </section>
+
+  <div id="caps"></div>
+  <div id="fade" class="abs"></div>
+</div>
+<script>
+  const tl = gsap.timeline({ paused: true });
+  const q = (s) => document.querySelector(s);
+  const inn = (sel, at, y = 24, d = 0.5) => tl.fromTo(sel, { autoAlpha: 0, y }, { autoAlpha: 1, y: 0, duration: d, ease: "power3.out" }, at);
+  const out = (sel, at, d = 0.3) => tl.to(sel, { autoAlpha: 0, duration: d, ease: "power1.in" }, at);
+  const typeText = (el, text, at, dur) => {
+    const o = { p: 0 };
+    tl.to(o, { p: 1, duration: dur, ease: "none", onUpdate: () => { el.textContent = text.slice(0, Math.round(o.p * text.length)); } }, at);
+  };
+
+  // s1 — idle subscription
+  const clock = { v: 0 };
+  tl.to(clock, { v: 1, duration: 3.4, ease: "power1.inOut", onUpdate: () => {
+    const m = Math.round(554 + clock.v * (1061 - 554));
+    q("#clock").textContent = String(Math.floor(m / 60)).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0");
+  } }, 0.1);
+  inn("#clock", 0.05, 0, 0.3);
+  inn("#price", 1.1);
+  tl.fromTo("#idle", { autoAlpha: 0, scale: 0.85 }, { autoAlpha: 1, scale: 1, duration: 0.5, ease: "back.out(1.6)" }, 2.7);
+  tl.to("#idle", { opacity: 0.12, duration: 0.3 }, 4.45);
+
+  // s2 — you vs them
+  inn("#divider", 4.85, 0, 0.4);
+  inn("#you", 5.0);
+  inn("#them", 6.9);
+
+  // s3 — one command
+  inn("#term", 10.35, 30);
+  typeText(q("#cmd"), "kazuo start", 10.9, 0.7);
+  ["#r1", "#r2", "#r3", "#r4"].forEach((r, i) => inn(r, 12.3 + i * 0.95, 10, 0.35));
+  out("#term", 17.5);
+
+  // s4 — the 402 quote
+  inn("#composer", 17.9, 30);
+  typeText(q("#jobtext"), "Write a two-line haiku about idle GPUs finding work", 18.3, 2.0);
+  tl.fromTo("#send", { borderColor: "#2a312e" }, { borderColor: "#5bf08f", duration: 0.2 }, 20.4);
+  tl.to("#composer", { opacity: 0.18, duration: 0.3 }, 20.9);
+  tl.fromTo("#big402", { autoAlpha: 0, scale: 1.15 }, { autoAlpha: 1, scale: 1, duration: 0.45, ease: "power3.out" }, 20.9);
+  tl.to("#composer", { autoAlpha: 0, duration: 0.3 }, 22.9);
+  tl.to("#big402", { y: -190, scale: 0.32, duration: 0.6, ease: "power3.inOut" }, 22.9);
+  inn("#quote", 23.3, 30);
+  inn("#qprice", 23.9, 10);
+  inn("#unpaid", 24.7, 6);
+  out(["#quote", "#big402"], 25.65);
+
+  // s5 — settlement
+  inn(["#buyer", "#prov", "#track"], 26.05, 16);
+  inn("#token", 26.6, 0, 0.3);
+  inn("#auth", 26.8, 8);
+  tl.fromTo("#token", { x: 0 }, { x: 930, duration: 2.0, ease: "power2.inOut" }, 27.4);
+  tl.fromTo("#pnode", { backgroundColor: "#000000", borderColor: "#4b5563" }, { backgroundColor: "#5bf08f", borderColor: "#5bf08f", duration: 0.2 }, 29.4);
+  inn("#settled", 29.5, 10);
+  out("#auth", 29.6, 0.2);
+  inn("#gasline", 31.2, 0, 0.4);
+  inn("#fac", 31.2, -16);
+  inn("#gaspaid", 31.9, 6);
+  tl.fromTo("#zerogas", { autoAlpha: 0, scale: 0.9 }, { autoAlpha: 1, scale: 1, duration: 0.4, ease: "back.out(1.4)" }, 32.9);
+  out(["#buyer", "#prov", "#track", "#token", "#settled", "#gasline", "#fac", "#gaspaid", "#zerogas", "#pnode"], 34.35);
+
+  // s6 — the receipt on Arc
+  inn("#net", 34.8, 0);
+  inn("#txcard", 34.9, 30);
+  const hash = "0x9f3ec0a6aeef2aaa6203b64cb07cc52a358950bd83ee4819468ab6a0ca12fd3f";
+  const hx = { p: 0 };
+  tl.to(hx, { p: 1, duration: 1.8, ease: "none", onUpdate: () => {
+    const n = Math.floor(hx.p * hash.length), f = Math.floor(hx.p * 48), pool = "0123456789abcdef";
+    let s = hash.slice(0, n);
+    for (let i = n; i < Math.min(hash.length, n + 8); i++) s += pool[(i * 7 + f * 5) % 16];
+    q("#hash").textContent = s;
+  } }, 35.4);
+  ["#k1", "#k2", "#k3", "#k4"].forEach((k, i) => inn(k, 37.4 + i * 0.7, 8, 0.35));
+  inn("#rcard", 40.2, 30);
+  out(["#txcard", "#rcard", "#net"], 43.45);
+
+  // s7 — sponsors
+  inn("#c1", 44.0, 30);
+  inn("#c2", 46.8, 30);
+  inn("#c3", 48.9, 30);
+  out(["#c1", "#c2", "#c3"], 52.0);
+
+  // s8 — title
+  inn("#grid", 52.4, 0, 0.8);
+  tl.fromTo("#brand", { autoAlpha: 0, scale: 0.92 }, { autoAlpha: 1, scale: 1, duration: 0.6, ease: "power3.out" }, 52.5);
+  inn("#tag", 53.3, 12);
+  inn("#url", 54.0, 12);
+  inn("#live", 54.6, 12);
+  tl.to("#fade", { opacity: 1, duration: 0.5, ease: "power1.in" }, 57.45);
+
+  // word-by-word captions, timed proportionally across each measured narration line
+  const LINES = [
+    [0.3, 4.075, "You pay for Claude every month. Most of the day, it sits idle."],
+    [4.8, 5.12, "Someone else needs that exact capacity, and has to buy a whole plan to get it."],
+    [10.3, 7.147, "With Kazuo, one command turns your subscription into a provider node, selling work one job at a time."],
+    [17.85, 7.744, "A buyer describes the work. The network answers with a 402, and exactly what it costs. Nothing is paid yet."],
+    [26.0, 8.277, "The buyer signs one USDC authorization. It settles on Arc, straight to the provider, and the facilitator pays the gas."],
+    [34.7, 8.661, "Every job leaves a receipt in the KazuoLog contract on Arc testnet. The payment, the provider, and a hash of the result."],
+    [43.8, 8.128, "Providers prove they are human with World ID. People sign in with Privy, and AI agents buy over MCP."],
+    [52.35, 4.757, "Kazuo. Idle AI subscriptions, turned into income, on Arc."],
+  ];
+  const caps = q("#caps");
+  LINES.forEach(([start, dur, text]) => {
+    const words = text.split(" ");
+    const weights = words.map((w) => w.length + 2);
+    const total = weights.reduce((a, b) => a + b, 0);
+    let t = start;
+    const timed = words.map((w, i) => { const s = t; t += (dur * weights[i]) / total; return { w, s, e: t }; });
+    const chunks = [];
+    let cur = [];
+    timed.forEach((x) => { cur.push(x); if (cur.length === 4 || /[.,?]$/.test(x.w)) { chunks.push(cur); cur = []; } });
+    if (cur.length) chunks.push(cur);
+    chunks.forEach((chunk, ci) => {
+      const div = document.createElement("div");
+      div.className = "chunk";
+      const plate = document.createElement("span");
+      plate.className = "plate";
+      div.appendChild(plate);
+      caps.appendChild(div);
+      const end = ci + 1 < chunks.length ? chunks[ci + 1][0].s : chunk[chunk.length - 1].e + 0.25;
+      tl.set(div, { autoAlpha: 1 }, chunk[0].s);
+      tl.set(div, { autoAlpha: 0 }, end);
+      chunk.forEach((x) => {
+        const b = document.createElement("b");
+        b.textContent = x.w.toLowerCase();
+        plate.appendChild(b);
+        tl.set(b, { backgroundColor: "#5bf08f", color: "#000000" }, x.s);
+        tl.set(b, { backgroundColor: "rgba(0,0,0,0)", color: "#ffffff" }, x.e);
+      });
+    });
+  });
+
+  window.__timelines["main"] = tl;
+</script>
+</body>
+</html>

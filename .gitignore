@@ -57,3 +57,7 @@ demo/take*/
 demo/out/
 demo/scenes/
 demo/audio/
+demo/intro-hf/audio/
+demo/intro-hf/.tmp/
+demo/intro-hf/*.mp4
+demo/intro-hf/work-*/

@@ -1,0 +1,34 @@
+[
+ {
+  "id": "i1",
+  "text": "You pay for Claude every month. Most of the day, it sits idle."
+ },
+ {
+  "id": "i2",
+  "text": "Someone else needs that exact capacity, and has to buy a whole plan to get it."
+ },
+ {
+  "id": "i3",
+  "text": "With Kazuo, one command turns your subscription into a provider node, selling work one job at a time."
+ },
+ {
+  "id": "i4",
+  "text": "A buyer describes the work. The network answers with a four oh two, and exactly what it costs. Nothing is paid yet."
+ },
+ {
+  "id": "i5",
+  "text": "The buyer signs one USDC authorization. It settles on Arc, straight to the provider, and the facilitator pays the gas."
+ },
+ {
+  "id": "i6",
+  "text": "Every job leaves a receipt in the Kazuo Log contract on Arc testnet. The payment, the provider, and a hash of the result."
+ },
+ {
+  "id": "i7",
+  "text": "Providers prove they are human with World ID. People sign in with Privy, and AI agents buy over MCP."
+ },
+ {
+  "id": "i8",
+  "text": "Kazuo. Idle AI subscriptions, turned into income, on Arc."
+ }
+]

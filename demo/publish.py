@@ -20,6 +20,8 @@ CHAPTERS = [
     ("compose", "Quote a Claude Code job"),
     ("pay", "Pay with x402, settle on Arc"),
     ("settlement", "The transactions on ArcScan"),
+    ("terminal", "An agent pays from the terminal"),
+    ("earnings", "The provider's jobs and wallet"),
     ("explain_path", "How the payment flows"),
     ("network", "Network and the provider node"),
     ("outro", "Thanks for watching"),
@@ -28,7 +30,8 @@ start_of = {item["audio"]: item["start"] for item in tl}
 chapters = []
 for audio_id, title in CHAPTERS:
     if audio_id not in start_of:
-        raise SystemExit(f"NO_CHAPTER_ANCHOR {audio_id}")
+        print(f"chapter skipped, beat not in this cut: {audio_id}")
+        continue
     chapters.append((start_of[audio_id], title))
 chapters.sort()
 if chapters[0][0] > 0.5:
