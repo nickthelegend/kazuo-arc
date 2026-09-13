@@ -1,0 +1,38 @@
+[
+ {
+  "id": "intro_fix",
+  "text": "This is Kazuo. It turns the AI subscriptions people already pay for into a network that sells compute by the job, with every job paid in U S D C on Arc."
+ },
+ {
+  "id": "pay_fix",
+  "text": "Paying signs a U S D C authorization from the wallet, and a transaction is being signed and settled on chain on Arc. The buyer spends no gas."
+ },
+ {
+  "id": "settlement_fix",
+  "text": "On the Arc explorer, this is the settlement from this job: one U S D C transfer, from the buyer straight to the provider."
+ },
+ {
+  "id": "earnings_fix",
+  "text": "On the provider's machine, the same CLI lists the jobs this node has run, what each one earned, and the wallet that received the U S D C."
+ },
+ {
+  "id": "account_fix",
+  "text": "And here is that provider's address on the Arc explorer, with its U S D C balance and every incoming payment."
+ },
+ {
+  "id": "explain_receipts_fix",
+  "text": "So this one job left two transactions on Arc. The settlement moves the U S D C from buyer to provider. The receipt records the job and the hash of its answer. One pays, and one proves what was paid for."
+ },
+ {
+  "id": "earnings_fix",
+  "text": "On the provider's machine, the same CLI lists the jobs this node has run, what each one earned, and the wallet that received the U S D C."
+ },
+ {
+  "id": "account_fix",
+  "text": "And here is that provider's address on the Arc explorer, with its U S D C balance and every incoming payment."
+ },
+ {
+  "id": "i5_fix",
+  "text": "The buyer signs one U S D C authorization. It settles on Arc, straight to the provider, and the facilitator pays the gas."
+ }
+]
