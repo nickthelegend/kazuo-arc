@@ -152,6 +152,7 @@ SEGMENTS = json.loads((TAKE / "segments.json").read_text()) if (TAKE / "segments
 ORDER = [
     ("scene", "intro", "intro"),
     ("beat", "landing", "landing"),
+    ("beat", "adapters", "adapters"),
     ("beat", "receipts", "receipts"),
     ("beat", "contract", "contract"),
     ("beat", "board", "board"),
@@ -164,6 +165,9 @@ ORDER = [
     ("beat", "job", "job"),
     ("beat", "settlement", "settlement"),
     ("beat", "receipt", "receipt"),
+    ("beat", "terminal", "terminal"),
+    ("beat", "earnings", "earnings"),
+    ("beat", "account", "account"),
     ("scene", "receipts", "explain_receipts"),
     ("scene", "path", "explain_path"),
     ("beat", "network", "network"),
@@ -243,7 +247,7 @@ for item in timeline:
     clock += real
 
 concat = OUT / "concat.txt"
-concat.write_text("".join(f"file '{t['clip']}'\n" for t in timeline))
+concat.write_text("".join(f"file '{Path(t['clip']).resolve()}'\n" for t in timeline))
 clean = OUT / "kazuo-demo-clean.mp4"
 run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(concat), "-c", "copy", "-movflags", "+faststart", str(clean)])
 

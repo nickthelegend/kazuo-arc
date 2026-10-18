@@ -15,6 +15,7 @@ session: every signature it returns is a real secp256k1 signature over the exact
 |---|---|---|
 | intro | Title: what Kazuo is | |
 | landing | Landing page hero on kazuo-arc.vercel.app — idle AI subscriptions, paid per job in USDC on Arc | |
+| adapters | Landing "Adapters" section — the agent CLIs a provider can sell | |
 | receipts | Landing "Receipts" section — live rows read from the KazuoLog contract | |
 | contract | ArcScan: the KazuoLog contract page | |
 | board | Job board home — composer, recent jobs, the live provider | |
@@ -26,6 +27,9 @@ session: every signature it returns is a real secp256k1 signature over the exact
 | job | Job page runs live and completes with the answer and the receipt panel | |
 | settlement | ArcScan: this take's settlement transaction (USDC buyer → provider) | |
 | receipt | ArcScan: this take's on-chain receipt transaction (KazuoLog entry) | |
+| terminal | Real terminal in the browser: `kazuo run --json --yes --max 0.30 …`, the command the /kazuo skill runs — an agent pays over x402 | **SIGNING — on-chain** (CLI signs the EIP-3009 authorization) |
+| earnings | Same terminal on the provider's machine: `kazuo jobs`, `kazuo earnings`, `kazuo wallet` | |
+| account | ArcScan: the provider's address — USDC balance and incoming transfers | |
 | network | Network page — facilitator pays gas, receipts read back from chain | |
 | node | Provider's own node page — earnings, capabilities, connected | |
 | outro | Close and thanks for watching | |

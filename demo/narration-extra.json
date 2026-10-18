@@ -1,0 +1,6 @@
+[
+  { "id": "adapters", "text": "A provider sells whatever agent CLI is already installed and signed in: Claude Code, Codex, Grok, OpenCode, or a local model." },
+  { "id": "terminal", "text": "Agents can buy too. This is the exact command the Kazuo skill runs from Claude Code: it gets a quote, pays over x402, and prints the result with its transaction." },
+  { "id": "earnings", "text": "On the provider's machine, the same CLI lists the jobs this node has run, what each one earned, and the wallet that received the USDC." },
+  { "id": "account", "text": "And here is that provider's address on the Arc explorer, with its USDC balance and every incoming payment." }
+]
